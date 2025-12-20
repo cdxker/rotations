@@ -1,0 +1,137 @@
+---
+
+---
+
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="description" content="A curated collection of music links" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="stylesheet" href="/styles.css" />
+        <title>fm</title>
+    </head>
+    <body>
+        <main>
+            <h1>
+                <a class="path" href="/">fucking music</a><span style="margin: 0 1px;">/ </span>fm.
+            </h1>
+            <p>Might be a radio someday... for now. its just albums I like.</p>
+            <br />
+            <h3>Filter by tag</h3>
+            <nav class="tag-filter">
+                <button data-tag="all" class="active">all</button>
+                <button data-tag="vaporwave">#vaporwave</button>
+                <button data-tag="hiphop">#hiphop</button>
+                <button data-tag="electronic">#electronic</button>
+            </nav>
+            <br />
+            <h3>Albums</h3>
+            <hr />
+            <nav>
+                <ul>
+                    <li>
+                        <span class="bigger"></span><a
+                            href="https://barberarchive.bandcamp.com/album/the-era-of-information"
+                            target="_blank"
+                            rel="noopener">The Era of Information</a
+                        > Macroblank & slowerpace 音楽 <span class="secondary">#vaporwave</span>
+                    </li>
+                    <li>
+                        <span class="bigger"></span><a
+                            href="https://barberarchive.bandcamp.com/album/--5"
+                            target="_blank"
+                            rel="noopener">本能</a
+                        > Macroblank <span class="secondary">#vaporwave</span>
+                    </li>
+                    <li>
+                        <span class="bigger"></span><a href="#" target="_blank" rel="noopener"
+                            >MM..FOOD</a
+                        > MF DOOM <span class="secondary">#hiphop</span>
+                    </li>
+                    <li>
+                        <span class="bigger"></span><a href="#" target="_blank" rel="noopener"
+                            >Remember Last Summer</a
+                        > NxxxxxS <span class="secondary">#electronic</span>
+                    </li>
+                    <li>
+                        <span class="bigger"></span><a
+                            href="https://obliqueoccasions.bandcamp.com/album/better-than-me"
+                            target="_blank"
+                            rel="noopener">better than me</a
+                        > Oblique Occasions <span class="secondary">#vaporwave</span>
+                    </li>
+                    <li>
+                        <span class="bigger"></span><a href="#" target="_blank" rel="noopener"
+                            >don't look at me</a
+                        > Oblique Occasions <span class="secondary">#vaporwave</span>
+                    </li>
+                    <li>
+                        <span class="bigger"></span><a
+                            href="https://obliqueoccasions.bandcamp.com/album/v2-2"
+                            target="_blank"
+                            rel="noopener">圧倒的な魅力 v2</a
+                        > Oblique Occasions <span class="secondary">#vaporwave</span>
+                    </li>
+                    <li>
+                        <span class="bigger"></span><a href="#" target="_blank" rel="noopener"
+                            >Yeezus</a
+                        > Kanye West <span class="secondary">#hiphop</span>
+                    </li>
+                </ul>
+            </nav>
+        </main>
+        <script>
+            const buttons = document.querySelectorAll(".tag-filter button")
+            const albums = document.querySelectorAll("nav ul li")
+
+            buttons.forEach((button) => {
+                button.addEventListener("click", () => {
+                    buttons.forEach((b) => b.classList.remove("active"))
+                    button.classList.add("active")
+
+                    const tag = button.dataset.tag
+
+                    albums.forEach((album) => {
+                        if (tag === "all") {
+                            album.style.display = "list-item"
+                        } else {
+                            const albumTag = album.querySelector(".secondary")?.textContent
+                            album.style.display = albumTag === `#${tag}` ? "list-item" : "none"
+                        }
+                    })
+                })
+            })
+        </script>
+        <style>
+            /* .tag-filter { */
+            /* 	display: flex; */
+            /* 	gap: 10px; */
+            /* 	flex-wrap: wrap; */
+            /* } */
+            /*  */
+            /* .tag-filter button { */
+            /* 	background: none; */
+            /* 	border: 1px solid #666; */
+            /* 	color: #ccc; */
+            /* 	padding: 5px 15px; */
+            /* 	cursor: pointer; */
+            /* 	font-family: inherit; */
+            /* 	font-size: 14px; */
+            /* 	transition: all 0.2s; */
+            /* } */
+            /*  */
+            /* .tag-filter button:hover { */
+            /* 	border-color: #fff; */
+            /* 	color: #fff; */
+            /* } */
+            /*  */
+            /* .tag-filter button.active { */
+            /* 	background: #fff; */
+            /* 	color: #000; */
+            /* 	border-color: #fff; */
+            /* } */
+        </style>
+    </body>
+</html>

@@ -154,7 +154,7 @@ export const GET: APIRoute = async ({ url }) => {
         const html = await response.text()
 
         const extracted = extractBandcampData(html, bandcampUrl)
-        if (!extracted.success) {
+        if (extracted.success == false) {
             return new Response(JSON.stringify({ error: extracted.message }), {
                 status: 500,
                 headers: { "Content-Type": "application/json" },
