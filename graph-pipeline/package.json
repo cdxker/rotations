@@ -7,11 +7,14 @@
         "dev": "tsc --watch",
         "test": "vitest run",
         "format": "prettier --write .",
-        "lint": "eslint . && tsc --noEmit"
+        "lint": "eslint . && tsc --noEmit",
+        "serve": "node --import tsx src/server/index.ts"
     },
     "dependencies": {
+        "@hono/node-server": "^1.19.9",
         "better-sqlite3": "^12.6.2",
-        "dotenv": "^17.3.1"
+        "dotenv": "^17.3.1",
+        "hono": "^4.12.3"
     },
     "devDependencies": {
         "@eslint/js": "^9.39.2",
