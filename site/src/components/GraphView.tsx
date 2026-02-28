@@ -69,39 +69,58 @@ function GraphInner({
         return () => container.removeEventListener("mousemove", handleMouseMove)
     }, [sigma, onMouseMove])
 
-    // Load graph into Sigma when data is ready, auto-focus a random node
+    // Load graph into Sigma when data is ready, auto-focus a random node.
+    // Bootstrap reducers are set in the same tick as loadGraph so the graph
+    // never renders in the unhighlighted "all nodes visible" state.
     useEffect(() => {
         if (!graph) return
         loadGraph(graph)
 
         const nodes = graph.nodes()
-        if (nodes.length > 0) {
-            const randomKey = nodes[Math.floor(Math.random() * nodes.length)]!
-            const attrs = graph.getNodeAttributes(randomKey) as any
-            const neighbors: SelectedNode["neighbors"] = []
-            graph.forEachOutEdge(randomKey, (_edge, edgeAttrs, _source, target) => {
-                if (graph.hasNode(target)) {
-                    neighbors.push({
-                        key: target,
-                        attrs: graph.getNodeAttributes(target) as any,
-                        weight: edgeAttrs.weight,
-                        direction: "outgoing",
-                    })
-                }
-            })
-            graph.forEachInEdge(randomKey, (_edge, edgeAttrs, source) => {
-                if (graph.hasNode(source)) {
-                    neighbors.push({
-                        key: source,
-                        attrs: graph.getNodeAttributes(source) as any,
-                        weight: edgeAttrs.weight,
-                        direction: "incoming",
-                    })
-                }
-            })
-            neighbors.sort((a, b) => b.weight - a.weight)
-            onSelectNode({ key: randomKey, attrs, neighbors })
-        }
+        if (nodes.length === 0) return
+
+        const randomKey = nodes[Math.floor(Math.random() * nodes.length)]!
+        const attrs = graph.getNodeAttributes(randomKey) as any
+        const neighbors: SelectedNode["neighbors"] = []
+        graph.forEachOutEdge(randomKey, (_edge, edgeAttrs, _source, target) => {
+            if (graph.hasNode(target)) {
+                neighbors.push({
+                    key: target,
+                    attrs: graph.getNodeAttributes(target) as any,
+                    weight: edgeAttrs.weight,
+                    direction: "outgoing",
+                })
+            }
+        })
+        graph.forEachInEdge(randomKey, (_edge, edgeAttrs, source) => {
+            if (graph.hasNode(source)) {
+                neighbors.push({
+                    key: source,
+                    attrs: graph.getNodeAttributes(source) as any,
+                    weight: edgeAttrs.weight,
+                    direction: "incoming",
+                })
+            }
+        })
+        neighbors.sort((a, b) => b.weight - a.weight)
+        onSelectNode({ key: randomKey, attrs, neighbors })
+
+        // Set bootstrap reducers immediately so the first frame is already highlighted.
+        // GraphEvents will overwrite these once it processes the selection via props.
+        const neighborSet = new Set<string>()
+        graph.forEachNeighbor(randomKey, (n) => neighborSet.add(n))
+        const edgeSet = new Set<string>()
+        graph.forEachEdge(randomKey, (e) => edgeSet.add(e))
+
+        sigma.setSetting("nodeReducer", (node, data) => {
+            if (node === randomKey) return { ...data, highlighted: true, zIndex: 1 }
+            if (neighborSet.has(node)) return { ...data, zIndex: 0 }
+            return { ...data, color: "#333", label: "", zIndex: -1 }
+        })
+        sigma.setSetting("edgeReducer", (edge, data) => {
+            if (edgeSet.has(edge)) return { ...data, color: "rgba(255, 255, 255, 0.4)", zIndex: 1 }
+            return { ...data, hidden: true }
+        })
     }, [graph])
 
     // Configure Sigma settings for dark theme
