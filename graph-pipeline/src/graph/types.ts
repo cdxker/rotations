@@ -29,10 +29,7 @@ export type SongKey = `${string}::${string}`;
 export type TrackId = `track-${string}`;
 
 /** Data source that contributed a scrobble or track ordering. */
-export type ListeningSource =
-    | "lastfm"
-    | "spotify-recent"
-    | "spotify-playlist";
+export type ListeningSource = "lastfm" | "spotify-recent" | "spotify-playlist";
 
 /** A node in the listening graph representing a single song. */
 export interface GraphNode {
@@ -74,6 +71,9 @@ export interface GraphNode {
 
     /** Which data sources contributed plays for this song. */
     sources: ListeningSource[];
+
+    /** PageRank score, populated by the analysis phase. */
+    pageRank?: number;
 }
 
 /** Metadata about the graph export. */
