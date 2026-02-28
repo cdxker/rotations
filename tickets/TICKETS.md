@@ -39,3 +39,10 @@
 
 - [X] `01-CodebaseCleanup.md` — Consolidate dead code, merge redundant files, DRY up patterns
 - [X] `01-AlwaysFocusedView.md` — Always-focused single-node view, remove unfocused state
+
+## Phase 5 — Visual Refresh
+
+- [ ] `01-MonochromeBrightnessHierarchy.md` — Remove hue-based coloring; encode importance using brightness only
+- [ ] `01-NodeArtworkSupport.md` — Add image/artwork support to graph nodes (frontend + ingestion/data contract)
+- [ ] `01-SearchEnterNavigationFix.md` — Fix bug where pressing Enter in search does not navigate focus to the selected node
+- [ ] `02-ThreeLayerNeighborhoodDepthView.md` — Show children-of-children to depth 3 with fading by edge/commonness and optional 3D prototype

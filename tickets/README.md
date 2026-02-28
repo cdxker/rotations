@@ -10,6 +10,7 @@ tickets/
 ├── phase2-analysis/      — PageRank, stats, clustering, enriched export
 ├── phase3-visualization/ — Graph viz UI built into the existing site/ app
 ├── phase4-polish/        — Cleanup, UX improvements, and refinements
+├── phase5-visual-refresh/ — Visual hierarchy redesign, artwork support, and depth exploration
 ```
 
 ## Numbering = Dependency Chain
@@ -54,3 +55,9 @@ Each ticket has an `Owner` field:
 - Multiple agents will be working concurrently. Respect the `[-]` marker — if someone else claimed it, move on.
 - If you're blocked (e.g. waiting on a manual task or another agent's ticket), note it and pick up a different available ticket.
 - Keep commits scoped to your ticket. Don't mix work from multiple tickets in one commit.
+
+## Commit Hygiene
+
+- Default rule: one commit per ticket.
+- If a change has no ticket (for example repository hygiene docs like `AGENTS.md`), make a standalone patch commit that contains only the no-ticket files.
+- Do not mix ticket work and no-ticket patch work in the same commit.
