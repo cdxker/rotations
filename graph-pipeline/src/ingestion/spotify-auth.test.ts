@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { SpotifyAuth, type SpotifyTokens } from "./spotify-auth.js";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync } from "node:fs";
@@ -139,20 +139,23 @@ describe("SpotifyAuth", () => {
 
     describe("refreshAccessToken", () => {
         it("refreshes and saves new tokens", async () => {
-            vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
-                new Response(
-                    JSON.stringify({
-                        access_token: "refreshed-access",
-                        expires_in: 3600,
-                        scope: "user-read-recently-played",
-                    }),
-                    { status: 200 },
-                ),
+            vi.spyOn(globalThis, "fetch").mockImplementation(
+                async () =>
+                    new Response(
+                        JSON.stringify({
+                            access_token: "refreshed-access",
+                            expires_in: 3600,
+                            scope: "user-read-recently-played",
+                        }),
+                        { status: 200 },
+                    ),
             );
 
             const auth = createAuth();
             // Seed with expired tokens on disk
-            await auth.saveTokens(makeTokens({ expires_at: Date.now() - 1000 }));
+            await auth.saveTokens(
+                makeTokens({ expires_at: Date.now() - 1000 }),
+            );
 
             // getAccessToken should load expired tokens, then refresh
             const token = await auth.getAccessToken();
@@ -167,20 +170,23 @@ describe("SpotifyAuth", () => {
         });
 
         it("uses new refresh token when provided by Spotify", async () => {
-            vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
-                new Response(
-                    JSON.stringify({
-                        access_token: "refreshed-access",
-                        refresh_token: "new-refresh-token",
-                        expires_in: 3600,
-                        scope: "user-read-recently-played",
-                    }),
-                    { status: 200 },
-                ),
+            vi.spyOn(globalThis, "fetch").mockImplementation(
+                async () =>
+                    new Response(
+                        JSON.stringify({
+                            access_token: "refreshed-access",
+                            refresh_token: "new-refresh-token",
+                            expires_in: 3600,
+                            scope: "user-read-recently-played",
+                        }),
+                        { status: 200 },
+                    ),
             );
 
             const auth = createAuth();
-            await auth.saveTokens(makeTokens({ expires_at: Date.now() - 1000 }));
+            await auth.saveTokens(
+                makeTokens({ expires_at: Date.now() - 1000 }),
+            );
 
             const token = await auth.getAccessToken();
             expect(token).toBe("refreshed-access");
@@ -207,20 +213,23 @@ describe("SpotifyAuth", () => {
         });
 
         it("refreshes when token is about to expire (within 60s)", async () => {
-            vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
-                new Response(
-                    JSON.stringify({
-                        access_token: "refreshed",
-                        expires_in: 3600,
-                        scope: "user-read-recently-played",
-                    }),
-                    { status: 200 },
-                ),
+            vi.spyOn(globalThis, "fetch").mockImplementation(
+                async () =>
+                    new Response(
+                        JSON.stringify({
+                            access_token: "refreshed",
+                            expires_in: 3600,
+                            scope: "user-read-recently-played",
+                        }),
+                        { status: 200 },
+                    ),
             );
 
             const auth = createAuth();
             // Token expires in 30 seconds (within the 60s buffer)
-            await auth.saveTokens(makeTokens({ expires_at: Date.now() + 30_000 }));
+            await auth.saveTokens(
+                makeTokens({ expires_at: Date.now() + 30_000 }),
+            );
 
             const token = await auth.getAccessToken();
             expect(token).toBe("refreshed");
@@ -257,7 +266,9 @@ describe("loadSpotifyConfig", () => {
         process.env.SPOTIFY_CLIENT_SECRET = "test-secret";
 
         const { loadSpotifyConfig } = await import("../config.js");
-        expect(() => loadSpotifyConfig()).toThrow("SPOTIFY_CLIENT_ID is not set");
+        expect(() => loadSpotifyConfig()).toThrow(
+            "SPOTIFY_CLIENT_ID is not set",
+        );
     });
 
     it("throws when SPOTIFY_CLIENT_SECRET is missing", async () => {
@@ -265,6 +276,8 @@ describe("loadSpotifyConfig", () => {
         delete process.env.SPOTIFY_CLIENT_SECRET;
 
         const { loadSpotifyConfig } = await import("../config.js");
-        expect(() => loadSpotifyConfig()).toThrow("SPOTIFY_CLIENT_SECRET is not set");
+        expect(() => loadSpotifyConfig()).toThrow(
+            "SPOTIFY_CLIENT_SECRET is not set",
+        );
     });
 });

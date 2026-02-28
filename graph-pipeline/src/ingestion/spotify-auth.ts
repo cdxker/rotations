@@ -1,6 +1,8 @@
-import { createServer, type Server } from "node:http";
+import { createServer } from "node:http";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { exec } from "node:child_process";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { loadSpotifyConfig, type SpotifyConfig } from "../config.js";
 
@@ -20,9 +22,11 @@ export interface SpotifyTokens {
     scope: string;
 }
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_TOKEN_PATH = resolve(
-    process.cwd(),
-    "graph-pipeline",
+    __dirname,
+    "..",
+    "..",
     ".spotify-tokens.json",
 );
 
@@ -232,10 +236,8 @@ export class SpotifyAuth {
      */
     private waitForCallback(expectedState: string): Promise<string> {
         return new Promise<string>((resolve, reject) => {
-            let server: Server;
-
             const timeout = setTimeout(() => {
-                server?.close();
+                server.close();
                 reject(
                     new Error(
                         "OAuth callback timed out after 120 seconds. Please try again.",
@@ -243,8 +245,11 @@ export class SpotifyAuth {
                 );
             }, 120_000);
 
-            server = createServer((req, res) => {
-                const url = new URL(req.url ?? "/", `http://localhost:${this.config.redirectPort}`);
+            const server = createServer((req, res) => {
+                const url = new URL(
+                    req.url ?? "/",
+                    `http://localhost:${this.config.redirectPort}`,
+                );
 
                 if (url.pathname !== "/callback") {
                     res.writeHead(404);
@@ -267,7 +272,9 @@ export class SpotifyAuth {
 
                 if (state !== expectedState) {
                     res.writeHead(400);
-                    res.end("State mismatch — possible CSRF. Please try again.");
+                    res.end(
+                        "State mismatch — possible CSRF. Please try again.",
+                    );
                     clearTimeout(timeout);
                     server.close();
                     reject(new Error("OAuth state mismatch"));
@@ -313,7 +320,6 @@ export class SpotifyAuth {
 
     /** Try to open the URL in the user's default browser. */
     private openBrowser(url: string): void {
-        const { exec } = require("node:child_process") as typeof import("node:child_process");
         const command =
             process.platform === "darwin"
                 ? `open "${url}"`
@@ -324,7 +330,9 @@ export class SpotifyAuth {
         exec(command, (err) => {
             if (err) {
                 // Non-fatal — the user can manually open the URL
-                console.log("(Could not open browser automatically. Please open the URL above manually.)");
+                console.log(
+                    "(Could not open browser automatically. Please open the URL above manually.)",
+                );
             }
         });
     }
