@@ -49,17 +49,17 @@
 
 ## Phase 6 — PR Review Triage
 
-- [ ] `01-Triage-PipelineRerunDoublesData.md` — Triage whether reruns of `/pipeline/build` and `/pipeline/run` should be addressed for data doubling
-- [ ] `01-Triage-SpotifyFetchDoubleCall.md` — Triage whether `/pipeline/fetch/spotify` duplicate fetch behavior should be addressed
-- [ ] `01-Triage-TimestampSpreadOverflow.md` — Triage whether timestamp spread operations should be addressed for large datasets
-- [ ] `01-Triage-VitestDirnameInESM.md` — Triage whether `__dirname` usage in ESM Vitest config should be addressed
-- [ ] `01-Triage-ImportMetaDirnameUsage.md` — Triage whether `import.meta.dirname` portability should be addressed
-- [ ] `01-Triage-SearchNoEarlyExit.md` — Triage whether search O(N) scanning behavior should be addressed
-- [ ] `01-Triage-PathPanelStaleAsyncState.md` — Triage whether path panel async stale-state risk should be addressed
-- [ ] `01-Triage-GraphViewDoubleDataBuild.md` — Triage whether double graph data construction in GraphView should be addressed
-- [ ] `01-Triage-SourceBreakdownSemantics.md` — Triage whether `sourceBreakdown` semantics mismatch should be addressed
-- [ ] `01-Triage-ClusterModularityNormalization.md` — Triage whether modularity normalization formula should be corrected
-- [ ] `01-Triage-SpotifyPlayTypo.md` — Triage whether low-severity variable typo should be addressed
-- [ ] `01-Triage-RemoveCleanupPromptFile.md` — Triage whether `CLEANUP_PROMPT.md` should remain in the repository
+- [X] `01-Triage-PipelineRerunDoublesData.md` — Schedule: pipeline reruns double edge weights via additive upserts
+- [X] `01-Triage-SpotifyFetchDoubleCall.md` — Schedule: `fetchAll()` called twice per request (once explicit, once inside `exportToJson`)
+- [X] `01-Triage-TimestampSpreadOverflow.md` — Schedule: `Math.min(...arr)` crashes at >65k scrobbles
+- [X] `01-Triage-VitestDirnameInESM.md` — Closed (Invalid): Vitest injects CJS globals in config files; tests pass
+- [X] `01-Triage-ImportMetaDirnameUsage.md` — Closed (Not Planned): Node 22 supports `import.meta.dirname`; no older runtime requirement
+- [X] `01-Triage-SearchNoEarlyExit.md` — Closed (Invalid): both search implementations already early-exit at 20 matches
+- [X] `01-Triage-PathPanelStaleAsyncState.md` — Schedule: stale closure spreads `...state` in async callbacks
+- [X] `01-Triage-GraphViewDoubleDataBuild.md` — Closed (Invalid): `useGraphData()` called once with empty dep array; no StrictMode
+- [X] `01-Triage-SourceBreakdownSemantics.md` — Schedule: counts nodes per source but spec says scrobbles per source
+- [X] `01-Triage-ClusterModularityNormalization.md` — Schedule: divides by `m` instead of `2m`; score is 2x too large (clustering unaffected)
+- [X] `01-Triage-SpotifyPlayTypo.md` — Do Now: rename `responsBody` → `responseBody` (trivial one-liner)
+- [X] `01-Triage-RemoveCleanupPromptFile.md` — Do Now: delete `CLEANUP_PROMPT.md` (completed cleanup artifact)
 - [ ] `02-RunCleanupPrompt.md` — Execute `CLEANUP_PROMPT.md` and apply all approved cleanup actions
 - [ ] `03-BugBotCommentSweep.md` — Run BugBot comment pass on active PR and create follow-up tickets for later fixes

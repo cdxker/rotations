@@ -32,6 +32,20 @@ Dev
 
 - [ ] Add a `## Triage Decision` section with decision and evidence.
 
+## Triage Decision
+
+**Disposition: Do Now**
+
+**Evidence:**
+- `CLEANUP_PROMPT.md` is an internal operational prompt (135 lines) used to guide a code cleanup initiative that has already been completed (Phase 4 cleanup is marked `[X]`).
+- It is not product documentation — it contains step-by-step instructions for a developer task that is finished.
+- It references internal baseline metrics and specific file targets that are now outdated.
+- Keeping it adds repository clutter with no ongoing value.
+
+**Impact:** None. The cleanup work is already done.
+
+**Recommendation:** Delete `CLEANUP_PROMPT.md` from the repository.
+
 ## Notes
 
 - Triage only. No production fix in this ticket.

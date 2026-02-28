@@ -32,6 +32,19 @@ Dev
 
 - [ ] Add a `## Triage Decision` section with decision and evidence.
 
+## Triage Decision
+
+**Disposition: Schedule**
+
+**Evidence:**
+- In `app.ts` lines 247-248, the `/pipeline/fetch/spotify` route calls `client.fetchAll()` to get the dump, then calls `client.exportToJson()` which internally calls `fetchAll()` again (line 262 in `spotify-client.ts`).
+- This results in two full Spotify API fetch cycles per request (recently played + all playlists), doubling API calls and risking rate limits.
+- Fix: pass the already-fetched `dump` to `exportToJson()` or add an optional parameter to accept pre-fetched data.
+
+**Impact:** Doubles Spotify API calls on each fetch request. Spotify rate limits are generous but this is wasteful and could cause issues with large playlist collections.
+
+**Recommendation:** Schedule a quick fix to pass the existing `dump` to a write-only export function.
+
 ## Notes
 
 - Triage only. No production fix in this ticket.

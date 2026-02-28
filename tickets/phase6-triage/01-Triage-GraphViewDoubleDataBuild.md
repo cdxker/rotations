@@ -32,6 +32,19 @@ Dev
 
 - [ ] Add a `## Triage Decision` section with decision and evidence.
 
+## Triage Decision
+
+**Disposition: Close as Invalid**
+
+**Evidence:**
+- `useGraphData()` is called exactly once, in `GraphInner` (`GraphView.tsx:55`).
+- The hook uses an empty dependency array `[]`, so it runs once on mount.
+- The hook includes a `cancelled` flag cleanup pattern to handle unmount during async fetch.
+- No React StrictMode is configured (checked Astro config and all entry points).
+- No duplicate component instantiation — `GraphInner` is rendered once inside `SigmaContainer`.
+
+**Impact:** None. There is no double graph construction.
+
 ## Notes
 
 - Triage only. No production fix in this ticket.

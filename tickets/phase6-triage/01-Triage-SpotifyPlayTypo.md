@@ -32,6 +32,17 @@ Dev
 
 - [ ] Add a `## Triage Decision` section with decision and evidence.
 
+## Triage Decision
+
+**Disposition: Do Now**
+
+**Evidence:**
+- `site/src/pages/api/spotify/play.ts` line 45: `const responsBody = await playResponse.text()` — typo, should be `responseBody`.
+- The variable is local to the error handler (used only on line 46), so functionality is unaffected.
+- This is a trivial one-line rename with zero risk.
+
+**Impact:** None (readability only). No propagation to other files.
+
 ## Notes
 
 - Triage only. No production fix in this ticket.
