@@ -3,3 +3,7 @@ dist/
 package-lock.json
 .env
 .spotify-tokens.json
+data/
+*.db
+*.db-shm
+*.db-wal
