@@ -40,3 +40,11 @@ Dev
 ## Notes
 
 - These stats are useful both for Phase 3 visualization (display in a sidebar/panel) and for sanity-checking the graph.
+
+## Progress
+
+- [X] Per-node stats: inDegree, outDegree, weightedInDegree, weightedOutDegree, totalDegree
+- [X] Graph-level stats: totalNodes, totalEdges, totalScrobbles, dateRange, sourceBreakdown, averageDegree, medianDegree
+- [X] Rankings: mostPlayed, mostConnected, highestInDegree, highestOutDegree (configurable topN)
+- [X] Output as `StatsResult` with `graphStats`, `rankings`, and `nodeStats` Map
+- [X] 7 tests covering all stats, rankings, edge cases (empty graph), topN parameter
