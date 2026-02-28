@@ -37,17 +37,16 @@ export class LastfmClient {
 
         if (!response.ok) {
             const body = await response.text();
-            throw new Error(
-                `Last.fm API error (${response.status}): ${body}`,
-            );
+            throw new Error(`Last.fm API error (${response.status}): ${body}`);
         }
 
-        const data = (await response.json()) as T & { error?: number; message?: string };
+        const data = (await response.json()) as T & {
+            error?: number;
+            message?: string;
+        };
 
         if (data.error) {
-            throw new Error(
-                `Last.fm API error ${data.error}: ${data.message}`,
-            );
+            throw new Error(`Last.fm API error ${data.error}: ${data.message}`);
         }
 
         return data;

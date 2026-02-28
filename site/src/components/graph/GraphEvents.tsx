@@ -28,13 +28,17 @@ interface GraphEventsProps {
     onHoverEdge: (info: HoveredEdge | null) => void;
     hiddenClusters: Set<number>;
     focusedCluster: number | null;
+    /** Set of node keys in the active path (for path highlighting). */
+    pathNodes?: Set<string>;
+    /** Set of edge keys "source→target" in the active path. */
+    pathEdges?: Set<string>;
 }
 
 /**
  * Handles Sigma events and applies reducers for node highlighting.
  * Must be rendered inside a SigmaContainer.
  */
-export function GraphEvents({ onSelectNode, onHoverNode, onHoverEdge, hiddenClusters, focusedCluster }: GraphEventsProps) {
+export function GraphEvents({ onSelectNode, onHoverNode, onHoverEdge, hiddenClusters, focusedCluster, pathNodes, pathEdges }: GraphEventsProps) {
     const sigma = useSigma();
     const registerEvents = useRegisterEvents();
     const [selectedNode, setSelectedNode] = useState<string | null>(null);
@@ -162,12 +166,13 @@ export function GraphEvents({ onSelectNode, onHoverNode, onHoverEdge, hiddenClus
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [selectedNode, onSelectNode]);
 
-    // Apply node reducer for highlighting + cluster filtering
+    // Apply node reducer for highlighting + cluster filtering + path highlighting
     useEffect(() => {
         const activeNode = selectedNode ?? hoveredNode;
         const hasClusterFilter = hiddenClusters.size > 0 || focusedCluster !== null;
+        const hasPath = pathNodes && pathNodes.size > 0;
 
-        if (!activeNode && !hasClusterFilter) {
+        if (!activeNode && !hasClusterFilter && !hasPath) {
             sigma.setSetting("nodeReducer", null);
             sigma.setSetting("edgeReducer", null);
             return;
@@ -195,6 +200,14 @@ export function GraphEvents({ onSelectNode, onHoverNode, onHoverEdge, hiddenClus
                 return { ...data, color: "#333", label: "", zIndex: -1 };
             }
 
+            // Path highlighting
+            if (hasPath) {
+                if (pathNodes.has(node)) {
+                    return { ...data, highlighted: true, zIndex: 1 };
+                }
+                return { ...data, color: "#222", label: "", zIndex: -1 };
+            }
+
             // Focus mode: dim nodes not in the focused cluster
             if (focusedCluster !== null && clusterId !== focusedCluster) {
                 return { ...data, color: "#222", label: "", zIndex: -1 };
@@ -209,8 +222,10 @@ export function GraphEvents({ onSelectNode, onHoverNode, onHoverEdge, hiddenClus
 
         sigma.setSetting("edgeReducer", (edge, data) => {
             const graph = sigma.getGraph();
-            const sourceCluster = (graph.getNodeAttributes(graph.source(edge)) as NodeAttributes).clusterId ?? 0;
-            const targetCluster = (graph.getNodeAttributes(graph.target(edge)) as NodeAttributes).clusterId ?? 0;
+            const source = graph.source(edge);
+            const target = graph.target(edge);
+            const sourceCluster = (graph.getNodeAttributes(source) as NodeAttributes).clusterId ?? 0;
+            const targetCluster = (graph.getNodeAttributes(target) as NodeAttributes).clusterId ?? 0;
 
             // Hide edges connected to hidden clusters
             if (hiddenClusters.has(sourceCluster) || hiddenClusters.has(targetCluster)) {
@@ -221,6 +236,15 @@ export function GraphEvents({ onSelectNode, onHoverNode, onHoverEdge, hiddenClus
             if (activeNode) {
                 if (connectedEdges.has(edge)) {
                     return { ...data, color: "rgba(255, 255, 255, 0.4)", zIndex: 1 };
+                }
+                return { ...data, hidden: true };
+            }
+
+            // Path highlighting
+            if (hasPath && pathEdges) {
+                const edgeKey = `${source}→${target}`;
+                if (pathEdges.has(edgeKey)) {
+                    return { ...data, color: "rgba(255, 255, 255, 0.6)", size: 3, zIndex: 1 };
                 }
                 return { ...data, hidden: true };
             }
@@ -236,7 +260,7 @@ export function GraphEvents({ onSelectNode, onHoverNode, onHoverEdge, hiddenClus
 
             return data;
         });
-    }, [selectedNode, hoveredNode, sigma, getNeighborSet, getEdgeSet, hiddenClusters, focusedCluster]);
+    }, [selectedNode, hoveredNode, sigma, getNeighborSet, getEdgeSet, hiddenClusters, focusedCluster, pathNodes, pathEdges]);
 
     return null;
 }

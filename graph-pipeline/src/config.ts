@@ -35,7 +35,10 @@ export interface SpotifyConfig {
 export function loadSpotifyConfig(): SpotifyConfig {
     const clientId = process.env.SPOTIFY_CLIENT_ID;
     const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
-    const redirectPort = parseInt(process.env.SPOTIFY_REDIRECT_PORT ?? "8888", 10);
+    const redirectPort = parseInt(
+        process.env.SPOTIFY_REDIRECT_PORT ?? "8888",
+        10,
+    );
 
     if (!clientId) {
         throw new Error(

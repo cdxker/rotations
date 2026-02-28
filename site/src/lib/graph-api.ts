@@ -64,6 +64,40 @@ export function clearGraphCache(): void {
     cachedGraph = null;
 }
 
+/** A single step in a path result. */
+export interface PathStep {
+    songKey: string;
+    name: string;
+    artists: string[];
+    edgeWeight?: number;
+}
+
+/** Result of a path search between two songs. */
+export interface PathResult {
+    from: string;
+    to: string;
+    found: boolean;
+    algorithm: "shortest" | "strongest";
+    path: PathStep[];
+    hops: number;
+    totalWeight: number;
+    minEdgeWeight: number;
+}
+
+/** Fetch a path between two songs from the API. */
+export async function fetchPath(
+    from: string,
+    to: string,
+    algorithm: "shortest" | "strongest" = "shortest",
+): Promise<PathResult> {
+    const params = new URLSearchParams({ from, to, algorithm });
+    const response = await fetch(`${GRAPH_API_BASE}/graph/path?${params}`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch path: ${response.status} ${response.statusText}`);
+    }
+    return response.json();
+}
+
 /**
  * Filter graph nodes based on criteria.
  * Returns a new ListeningGraph with only matching nodes (and edges between them).

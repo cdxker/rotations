@@ -3,6 +3,13 @@ import { cors } from "hono/cors";
 import { GraphDatabase } from "../graph/database.js";
 import type { SongKey, GraphNode } from "../graph/types.js";
 import { enrichGraph } from "../analysis/enrich.js";
+import { shortestPath, strongestPath } from "../analysis/paths.js";
+import { LastfmClient } from "../ingestion/lastfm-client.js";
+import { fetchLastfmScrobbles } from "../ingestion/lastfm-fetcher.js";
+import { SpotifyAuth } from "../ingestion/spotify-auth.js";
+import { SpotifyClient } from "../ingestion/spotify-client.js";
+import { buildGraph } from "../graph/build-graph.js";
+import { loadLastfmConfig } from "../config.js";
 
 export interface ServerConfig {
     dbPath: string;
@@ -130,6 +137,195 @@ export function createApp(config: ServerConfig): Hono {
         const graph = db.loadGraph();
         const { summary } = enrichGraph(graph, { topN });
         return c.json(summary);
+    });
+
+    // GET /graph/path — find a path between two songs
+    app.get("/graph/path", (c) => {
+        const from = c.req.query("from");
+        const to = c.req.query("to");
+        const algorithm = c.req.query("algorithm") ?? "shortest";
+
+        if (!from || !to) {
+            return c.json({ error: "Both 'from' and 'to' query parameters are required" }, 400);
+        }
+
+        if (!from.includes("::") || !to.includes("::")) {
+            return c.json({ error: "Invalid songKey format. Expected: artist::track" }, 400);
+        }
+
+        if (algorithm !== "shortest" && algorithm !== "strongest") {
+            return c.json({ error: "Algorithm must be 'shortest' or 'strongest'" }, 400);
+        }
+
+        const graph = db.loadGraph();
+        const result = algorithm === "strongest"
+            ? strongestPath(graph, from as SongKey, to as SongKey)
+            : shortestPath(graph, from as SongKey, to as SongKey);
+
+        return c.json(result);
+    });
+
+    // ===== Pipeline Routes =====
+
+    // POST /pipeline/spotify/auth — Start Spotify OAuth flow (opens browser)
+    app.post("/pipeline/spotify/auth", async (c) => {
+        try {
+            const auth = new SpotifyAuth();
+            if (auth.hasTokens()) {
+                return c.json({ status: "already_authorized", message: "Spotify tokens already exist. Use /pipeline/spotify/refresh to refresh." });
+            }
+            // This opens a browser and waits for callback — will block until user completes auth
+            await auth.authorize();
+            return c.json({ status: "authorized", message: "Spotify OAuth completed successfully." });
+        } catch (err) {
+            return c.json({ error: `Spotify auth failed: ${err instanceof Error ? err.message : err}` }, 500);
+        }
+    });
+
+    // POST /pipeline/fetch/lastfm — Fetch scrobble history from Last.fm
+    app.post("/pipeline/fetch/lastfm", async (c) => {
+        try {
+            const config = loadLastfmConfig();
+            const client = new LastfmClient(config);
+            await client.verifyAuth();
+
+            const logs: string[] = [];
+            const scrobbles = await fetchLastfmScrobbles(client, {
+                onProgress: (msg) => logs.push(msg),
+            });
+
+            return c.json({
+                status: "complete",
+                scrobbleCount: scrobbles.length,
+                logs,
+            });
+        } catch (err) {
+            return c.json({ error: `Last.fm fetch failed: ${err instanceof Error ? err.message : err}` }, 500);
+        }
+    });
+
+    // POST /pipeline/fetch/spotify — Fetch recently played + playlists from Spotify
+    app.post("/pipeline/fetch/spotify", async (c) => {
+        try {
+            const auth = new SpotifyAuth();
+            if (!auth.hasTokens()) {
+                return c.json({ error: "Not authorized. Call POST /pipeline/spotify/auth first." }, 400);
+            }
+            const client = new SpotifyClient(auth);
+            const dump = await client.fetchAll();
+            await client.exportToJson("data/spotify-dump.json");
+
+            return c.json({
+                status: "complete",
+                recentlyPlayed: dump.recentlyPlayed.length,
+                playlistTracks: dump.playlistTracks.length,
+            });
+        } catch (err) {
+            return c.json({ error: `Spotify fetch failed: ${err instanceof Error ? err.message : err}` }, 500);
+        }
+    });
+
+    // POST /pipeline/build — Build graph from fetched data, enrich, and store in DB
+    app.post("/pipeline/build", async (c) => {
+        try {
+            const { readFile } = await import("node:fs/promises");
+            const { existsSync } = await import("node:fs");
+
+            const lastfmPath = "data/lastfm-scrobbles.json";
+            const spotifyPath = "data/spotify-dump.json";
+
+            if (!existsSync(lastfmPath) && !existsSync(spotifyPath)) {
+                return c.json({ error: "No data found. Fetch data first via /pipeline/fetch/lastfm or /pipeline/fetch/spotify" }, 400);
+            }
+
+            let lastfmScrobbles;
+            if (existsSync(lastfmPath)) {
+                lastfmScrobbles = JSON.parse(await readFile(lastfmPath, "utf-8"));
+            }
+
+            let spotifyDump;
+            if (existsSync(spotifyPath)) {
+                spotifyDump = JSON.parse(await readFile(spotifyPath, "utf-8"));
+            }
+
+            const lastfmConfig = (() => { try { return loadLastfmConfig(); } catch { return null; } })();
+
+            const graph = buildGraph({
+                lastfmScrobbles,
+                spotifyRecentTracks: spotifyDump?.recentlyPlayed,
+                spotifyPlaylistTracks: spotifyDump?.playlistTracks,
+                lastfmUsername: lastfmConfig?.username,
+            });
+
+            // Enrich with PageRank, stats, clusters
+            const { summary } = enrichGraph(graph);
+
+            // Save to database
+            db.saveGraph(graph);
+
+            const nodeCount = Object.keys(graph.nodes).length;
+            const edgeCount = Object.values(graph.nodes).reduce(
+                (sum, n) => sum + Object.keys(n.next).length, 0
+            );
+
+            return c.json({
+                status: "complete",
+                nodes: nodeCount,
+                edges: edgeCount,
+                clusters: summary.clusters.clusterCount,
+                pageRankConverged: summary.pageRank.converged,
+            });
+        } catch (err) {
+            return c.json({ error: `Build failed: ${err instanceof Error ? err.message : err}` }, 500);
+        }
+    });
+
+    // POST /pipeline/run — Run the full pipeline (Last.fm only, Spotify requires separate auth)
+    app.post("/pipeline/run", async (c) => {
+        try {
+            const steps: string[] = [];
+
+            // 1. Fetch Last.fm
+            const config = loadLastfmConfig();
+            const client = new LastfmClient(config);
+            await client.verifyAuth();
+            steps.push("Last.fm auth verified");
+
+            const scrobbles = await fetchLastfmScrobbles(client);
+            steps.push(`Fetched ${scrobbles.length} scrobbles from Last.fm`);
+
+            // 2. Try Spotify if authorized
+            let spotifyDump = null;
+            const auth = new SpotifyAuth();
+            if (auth.hasTokens()) {
+                const spotifyClient = new SpotifyClient(auth);
+                spotifyDump = await spotifyClient.fetchAll();
+                steps.push(`Fetched ${spotifyDump.recentlyPlayed.length} recent + ${spotifyDump.playlistTracks.length} playlist tracks from Spotify`);
+            } else {
+                steps.push("Spotify not authorized — skipping. Call POST /pipeline/spotify/auth to set up.");
+            }
+
+            // 3. Build graph
+            const graph = buildGraph({
+                lastfmScrobbles: scrobbles,
+                spotifyRecentTracks: spotifyDump?.recentlyPlayed,
+                spotifyPlaylistTracks: spotifyDump?.playlistTracks,
+                lastfmUsername: config.username,
+            });
+            steps.push(`Built graph: ${Object.keys(graph.nodes).length} nodes`);
+
+            // 4. Enrich
+            const { summary } = enrichGraph(graph);
+            steps.push(`Enriched: ${summary.clusters.clusterCount} clusters, PageRank converged=${summary.pageRank.converged}`);
+
+            // 5. Save to DB
+            db.saveGraph(graph);
+            steps.push("Saved to database");
+
+            return c.json({ status: "complete", steps });
+        } catch (err) {
+            return c.json({ error: `Pipeline failed: ${err instanceof Error ? err.message : err}` }, 500);
+        }
     });
 
     return app;

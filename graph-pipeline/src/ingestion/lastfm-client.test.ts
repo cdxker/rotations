@@ -37,9 +37,9 @@ describe("LastfmClient", () => {
         );
 
         const client = new LastfmClient(TEST_CONFIG);
-        await expect(
-            client.request("user.getInfo"),
-        ).rejects.toThrow("Last.fm API error (403)");
+        await expect(client.request("user.getInfo")).rejects.toThrow(
+            "Last.fm API error (403)",
+        );
     });
 
     it("throws on Last.fm API-level error", async () => {
@@ -51,9 +51,9 @@ describe("LastfmClient", () => {
         );
 
         const client = new LastfmClient(TEST_CONFIG);
-        await expect(
-            client.request("user.getInfo"),
-        ).rejects.toThrow("Invalid API key");
+        await expect(client.request("user.getInfo")).rejects.toThrow(
+            "Invalid API key",
+        );
     });
 
     it("verifyAuth returns user info", async () => {

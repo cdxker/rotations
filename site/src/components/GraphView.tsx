@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     SigmaContainer,
     useLoadGraph,
@@ -17,7 +17,9 @@ import { SearchBarInner } from "./graph/SearchBar";
 import { FilterPanel, DEFAULT_FILTER } from "./graph/FilterPanel";
 import type { FilterState } from "./graph/FilterPanel";
 import { GraphFilters } from "./graph/GraphFilters";
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal, Route } from "lucide-react";
+import { PathPanel } from "./graph/PathPanel";
+import type { PathModeState } from "./graph/PathPanel";
 
 /** Load graph data into Sigma and run ForceAtlas2 layout. */
 function GraphInner({
@@ -28,6 +30,8 @@ function GraphInner({
     onMouseMove,
     hiddenClusters,
     focusedCluster,
+    pathNodes,
+    pathEdges,
 }: {
     onSelectNode: (node: SelectedNode | null) => void;
     selectedNode: SelectedNode | null;
@@ -36,6 +40,8 @@ function GraphInner({
     onMouseMove: (pos: { x: number; y: number }) => void;
     hiddenClusters: Set<number>;
     focusedCluster: number | null;
+    pathNodes?: Set<string>;
+    pathEdges?: Set<string>;
 }) {
     const { graph, state, error } = useGraphData();
     const loadGraph = useLoadGraph();
@@ -114,6 +120,8 @@ function GraphInner({
                     onHoverEdge={onHoverEdge}
                     hiddenClusters={hiddenClusters}
                     focusedCluster={focusedCluster}
+                    pathNodes={pathNodes}
+                    pathEdges={pathEdges}
                 />
             </>
         );
@@ -126,6 +134,8 @@ function GraphInner({
             onHoverEdge={onHoverEdge}
             hiddenClusters={hiddenClusters}
             focusedCluster={focusedCluster}
+            pathNodes={pathNodes}
+            pathEdges={pathEdges}
         />
     );
 }
@@ -206,6 +216,15 @@ function GraphHeader() {
     );
 }
 
+const DEFAULT_PATH_STATE: PathModeState = {
+    from: null,
+    to: null,
+    result: null,
+    loading: false,
+    error: null,
+    algorithm: "shortest",
+};
+
 export default function GraphView() {
     const { graph } = useGraphData();
     const clusters = useClusterInfo(graph);
@@ -227,7 +246,25 @@ export default function GraphView() {
     const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER);
     const [filterStats, setFilterStats] = useState({ visibleNodes: 0, maxPlays: 200, maxEdgeWeight: 50 });
     const [showFilters, setShowFilters] = useState(false);
+    const [pathMode, setPathMode] = useState(false);
+    const [pathState, setPathState] = useState<PathModeState>(DEFAULT_PATH_STATE);
     const totalNodes = graph?.order ?? 0;
+
+    // Compute path node/edge sets for highlighting
+    const pathNodes = useMemo(() => {
+        if (!pathState.result?.found) return undefined;
+        return new Set(pathState.result.path.map((s) => s.songKey));
+    }, [pathState.result]);
+
+    const pathEdges = useMemo(() => {
+        if (!pathState.result?.found) return undefined;
+        const edges = new Set<string>();
+        const steps = pathState.result.path;
+        for (let i = 0; i < steps.length - 1; i++) {
+            edges.add(`${steps[i]!.songKey}→${steps[i + 1]!.songKey}`);
+        }
+        return edges;
+    }, [pathState.result]);
 
     const handleNavigate = useCallback((nodeKey: string) => {
         setNavigateTarget(nodeKey);
@@ -299,6 +336,8 @@ export default function GraphView() {
                     onMouseMove={setMousePos}
                     hiddenClusters={hiddenClusters}
                     focusedCluster={focusedCluster}
+                    pathNodes={pathMode ? pathNodes : undefined}
+                    pathEdges={pathMode ? pathEdges : undefined}
                 />
                 <GraphNavigator
                     targetNode={navigateTarget}
@@ -311,7 +350,7 @@ export default function GraphView() {
                 <GraphFilters filter={filter} onStatsChange={setFilterStats} />
             </SigmaContainer>
 
-            {/* Search bar and filter toggle — top left, below header */}
+            {/* Filter + path toggle — top left, below header */}
             <div className="absolute top-12 left-4 z-20 flex items-start gap-2 pointer-events-auto">
                 <button
                     onClick={() => setShowFilters((prev) => !prev)}
@@ -323,6 +362,20 @@ export default function GraphView() {
                     title="Toggle filters"
                 >
                     <SlidersHorizontal size={14} />
+                </button>
+                <button
+                    onClick={() => {
+                        setPathMode((prev) => !prev);
+                        if (pathMode) setPathState(DEFAULT_PATH_STATE);
+                    }}
+                    className={`p-2 rounded-lg border transition-colors ${
+                        pathMode
+                            ? "bg-white/10 border-white/20 text-white/70"
+                            : "bg-[#181818] border-white/10 text-white/40 hover:text-white/60"
+                    }`}
+                    title="Path explorer"
+                >
+                    <Route size={14} />
                 </button>
             </div>
 
@@ -347,10 +400,18 @@ export default function GraphView() {
             {hoveredEdge && !selectedNode && (
                 <EdgeTooltip edge={hoveredEdge} x={mousePos.x} y={mousePos.y} />
             )}
-            {selectedNode && (
+            {selectedNode && !pathMode && (
                 <NodeDetailPanel
                     node={selectedNode}
                     onClose={() => setSelectedNode(null)}
+                    onNavigate={handleNavigate}
+                />
+            )}
+            {pathMode && (
+                <PathPanel
+                    state={pathState}
+                    onStateChange={setPathState}
+                    onClose={() => { setPathMode(false); setPathState(DEFAULT_PATH_STATE); }}
                     onNavigate={handleNavigate}
                 />
             )}
