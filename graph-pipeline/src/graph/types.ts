@@ -77,6 +77,9 @@ export interface GraphNode {
 
     /** Cluster ID, populated by community detection in the analysis phase. */
     clusterId?: number;
+
+    /** Album/track artwork URL, if available from Spotify or Last.fm. */
+    imageUrl?: string;
 }
 
 /** Metadata about the graph export. */

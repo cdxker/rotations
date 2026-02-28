@@ -15,12 +15,28 @@ export function NodeDetailPanel({ node, onNavigate }: NodeDetailPanelProps) {
         <div className="absolute top-0 right-0 bottom-0 z-20 w-80 bg-[#121212] border-l border-white/10 overflow-y-auto">
             {/* Header */}
             <div className="sticky top-0 bg-[#121212] border-b border-white/10 px-4 py-3">
-                <h2 className="text-white text-sm font-mono font-medium truncate">
-                    {attrs.label.split(" — ")[1] ?? attrs.label}
-                </h2>
-                <p className="text-white/50 text-xs font-mono truncate">
-                    {attrs.artists.join(", ")}
-                </p>
+                <div className="flex items-start gap-3">
+                    {attrs.imageUrl ? (
+                        <img
+                            src={attrs.imageUrl}
+                            alt=""
+                            className="w-10 h-10 rounded shrink-0 object-cover bg-white/5"
+                            onError={(e) => {
+                                ;(e.target as HTMLImageElement).style.display = "none"
+                            }}
+                        />
+                    ) : (
+                        <div className="w-10 h-10 rounded shrink-0 bg-white/5" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                        <h2 className="text-white text-sm font-mono font-medium truncate">
+                            {attrs.label.split(" — ")[1] ?? attrs.label}
+                        </h2>
+                        <p className="text-white/50 text-xs font-mono truncate">
+                            {attrs.artists.join(", ")}
+                        </p>
+                    </div>
+                </div>
             </div>
 
             {/* Stats */}

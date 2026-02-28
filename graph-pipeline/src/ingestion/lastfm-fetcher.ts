@@ -13,6 +13,7 @@ interface LastfmApiTrack {
     artist: { "#text": string };
     name: string;
     album: { "#text": string };
+    image?: Array<{ "#text": string; size: string }>;
     date?: { uts: string };
     "@attr"?: { nowplaying: string };
 }
@@ -57,11 +58,22 @@ function parseTrack(track: LastfmApiTrack): RawScrobble | null {
         return null;
     }
 
+    // Pick the best available image (prefer "extralarge" or "large")
+    let imageUrl: string | undefined;
+    if (track.image?.length) {
+        const large =
+            track.image.find((img) => img.size === "extralarge") ??
+            track.image.find((img) => img.size === "large");
+        const url = (large ?? track.image[track.image.length - 1])?.["#text"];
+        if (url) imageUrl = url;
+    }
+
     return {
         artist: track.artist["#text"],
         track: track.name,
         album: track.album["#text"] ?? "",
         timestamp,
+        imageUrl,
     };
 }
 

@@ -32,6 +32,7 @@ interface GraphEventsProps {
             artists: string[]
             totalPlays: number
             pageRank: number
+            imageUrl?: string
             x: number
             y: number
         } | null
@@ -169,6 +170,7 @@ export function GraphEvents({
                     artists: attrs.artists,
                     totalPlays: attrs.totalPlays,
                     pageRank: attrs.pageRank,
+                    imageUrl: attrs.imageUrl,
                     x: viewportPos.x,
                     y: viewportPos.y,
                 })

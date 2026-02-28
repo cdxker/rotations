@@ -89,11 +89,22 @@ site/src/components/graph/
 **Bottom panel (h-auto, slides up on node click):**
 
 - Shows details for selected node
-- Song name, artists, album
+- Album artwork (if available), song name, artists, album
 - Key metrics: total plays, PageRank score, cluster ID
 - Neighbor lists (next/previous with transition counts)
 - Click a neighbor to navigate to it in the graph
 - Close button to dismiss
+
+## Artwork Support
+
+Album artwork is sourced from Spotify and Last.fm during ingestion:
+
+- **Spotify**: `album.images[]` from recently-played and playlist endpoints (medium ~300px preferred)
+- **Last.fm**: `image[]` from `user.getRecentTracks` (extralarge/large preferred)
+- **Merging**: First non-empty URL wins during graph construction (Spotify typically has higher quality)
+- **Storage**: Persisted as `image_url TEXT` in the nodes table; survives graph rebuilds via COALESCE upsert
+- **Frontend**: Shown in the detail panel header and hover tooltip; missing images degrade to a placeholder
+- **Limitations**: Images are external URLs — they may become stale if the source service removes them
 
 ## Visual Design
 

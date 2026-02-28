@@ -13,8 +13,15 @@ interface SpotifyArtistRef {
     name: string;
 }
 
+interface SpotifyImage {
+    url: string;
+    height: number | null;
+    width: number | null;
+}
+
 interface SpotifyAlbumRef {
     name: string;
+    images?: SpotifyImage[];
 }
 
 interface SpotifyTrackObject {
@@ -60,6 +67,16 @@ export interface SpotifyDump {
     recentlyPlayed: RawSpotifyRecentTrack[];
     playlistTracks: RawSpotifyPlaylistTrack[];
     exportedAt: string;
+}
+
+/** Pick the best album image URL (~300px preferred, fallback to first available). */
+function pickImageUrl(images?: SpotifyImage[]): string | undefined {
+    if (!images || images.length === 0) return undefined;
+    // Prefer medium-sized image (~300px) for reasonable quality/size balance
+    const medium = images.find(
+        (img) => img.height && img.height >= 200 && img.height <= 400,
+    );
+    return (medium ?? images[0])?.url;
 }
 
 export class SpotifyClient {
@@ -137,6 +154,7 @@ export class SpotifyClient {
                 track: item.track.name,
                 album: item.track.album.name,
                 playedAt: item.played_at,
+                imageUrl: pickImageUrl(item.track.album.images),
             }));
     }
 
@@ -194,6 +212,7 @@ export class SpotifyClient {
                     album: item.track.album.name,
                     playlistName,
                     position,
+                    imageUrl: pickImageUrl(item.track.album.images),
                 });
 
                 position++;

@@ -13,6 +13,7 @@ export interface GraphNode {
     albumName?: string
     spotifyId?: string
     lastfmUrl?: string
+    imageUrl?: string
     next: Record<SongKey, number>
     previous: Record<SongKey, number>
     totalPlays: number
@@ -59,6 +60,7 @@ export interface NodeAttributes {
     albumName?: string
     spotifyId?: string
     lastfmUrl?: string
+    imageUrl?: string
     totalPlays: number
     sources: string[]
     pageRank: number
@@ -212,6 +214,7 @@ export function toGraphology(
             albumName: node.albumName,
             spotifyId: node.spotifyId,
             lastfmUrl: node.lastfmUrl,
+            imageUrl: node.imageUrl,
             totalPlays: node.totalPlays,
             sources: node.sources,
             pageRank: node.pageRank ?? 0,

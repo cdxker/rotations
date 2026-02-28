@@ -32,6 +32,7 @@ function GraphInner({
             artists: string[]
             totalPlays: number
             pageRank: number
+            imageUrl?: string
             x: number
             y: number
         } | null
@@ -244,6 +245,7 @@ export default function GraphView() {
         artists: string[]
         totalPlays: number
         pageRank: number
+        imageUrl?: string
         x: number
         y: number
     } | null>(null)
@@ -304,20 +306,29 @@ export default function GraphView() {
                     className="absolute z-30 pointer-events-none"
                     style={{ left: hoveredNode.x + 12, top: hoveredNode.y - 10 }}
                 >
-                    <div className="bg-[#1a1a1a] border border-white/15 rounded-lg px-3 py-2 shadow-lg max-w-64">
-                        <p className="text-white/90 text-xs font-mono font-medium truncate">
-                            {hoveredNode.label.split(" — ")[1] ?? hoveredNode.label}
-                        </p>
-                        <p className="text-white/50 text-[10px] font-mono truncate">
-                            {hoveredNode.artists.join(", ")}
-                        </p>
-                        <div className="flex gap-3 mt-1.5">
-                            <span className="text-white/40 text-[10px] font-mono">
-                                {hoveredNode.totalPlays.toLocaleString()} plays
-                            </span>
-                            <span className="text-white/40 text-[10px] font-mono">
-                                PR: {hoveredNode.pageRank.toFixed(4)}
-                            </span>
+                    <div className="bg-[#1a1a1a] border border-white/15 rounded-lg px-3 py-2 shadow-lg max-w-64 flex items-start gap-2">
+                        {hoveredNode.imageUrl && (
+                            <img
+                                src={hoveredNode.imageUrl}
+                                alt=""
+                                className="w-8 h-8 rounded shrink-0 object-cover bg-white/5"
+                            />
+                        )}
+                        <div className="min-w-0">
+                            <p className="text-white/90 text-xs font-mono font-medium truncate">
+                                {hoveredNode.label.split(" — ")[1] ?? hoveredNode.label}
+                            </p>
+                            <p className="text-white/50 text-[10px] font-mono truncate">
+                                {hoveredNode.artists.join(", ")}
+                            </p>
+                            <div className="flex gap-3 mt-1.5">
+                                <span className="text-white/40 text-[10px] font-mono">
+                                    {hoveredNode.totalPlays.toLocaleString()} plays
+                                </span>
+                                <span className="text-white/40 text-[10px] font-mono">
+                                    PR: {hoveredNode.pageRank.toFixed(4)}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -13,6 +13,8 @@ export interface RawScrobble {
     album: string;
     /** Unix timestamp (seconds) of when the track was scrobbled. */
     timestamp: number;
+    /** Album artwork URL from Last.fm, if available. */
+    imageUrl?: string;
 }
 
 /** A single track from Spotify's /v1/me/player/recently-played endpoint. */
@@ -23,6 +25,8 @@ export interface RawSpotifyRecentTrack {
     album: string;
     /** ISO 8601 timestamp of when the track was played. */
     playedAt: string;
+    /** Album artwork URL from Spotify, if available. */
+    imageUrl?: string;
 }
 
 /** A single track from a Spotify playlist, with its position in that playlist. */
@@ -35,6 +39,8 @@ export interface RawSpotifyPlaylistTrack {
     playlistName: string;
     /** Zero-based position of this track within the playlist. */
     position: number;
+    /** Album artwork URL from Spotify, if available. */
+    imageUrl?: string;
 }
 
 /** Input data for the graph builder. All fields are optional — build with whatever sources are available. */
@@ -52,6 +58,7 @@ function getOrCreateNode(
     name: string,
     artist: string,
     album: string,
+    imageUrl?: string,
 ): GraphNode {
     let node = nodes[key];
     if (!node) {
@@ -65,6 +72,10 @@ function getOrCreateNode(
             sources: [],
         };
         nodes[key] = node;
+    }
+    // Keep first non-empty image URL encountered
+    if (imageUrl && !node.imageUrl) {
+        node.imageUrl = imageUrl;
     }
     return node;
 }
@@ -111,6 +122,7 @@ function processLastfmScrobbles(
             scrobble.track,
             scrobble.artist,
             scrobble.album,
+            scrobble.imageUrl,
         );
         node.totalPlays++;
         addSource(node, "lastfm");
@@ -148,6 +160,7 @@ function processSpotifyRecentTracks(
             track.track,
             track.artist,
             track.album,
+            track.imageUrl,
         );
         node.totalPlays++;
         node.spotifyId = node.spotifyId ?? track.spotifyId;
@@ -192,6 +205,7 @@ function processSpotifyPlaylists(
                 track.track,
                 track.artist,
                 track.album,
+                track.imageUrl,
             );
             node.totalPlays++;
             node.spotifyId = node.spotifyId ?? track.spotifyId;
