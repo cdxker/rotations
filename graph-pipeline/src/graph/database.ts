@@ -61,6 +61,11 @@ export class GraphDatabase {
         }
     }
 
+    /** Clear all graph data (nodes, edges, metadata) from the database. */
+    clearGraph(): void {
+        this.db.exec("DELETE FROM edges; DELETE FROM nodes; DELETE FROM metadata;");
+    }
+
     /**
      * Save a ListeningGraph to the database.
      * Supports incremental updates — merges edge weights and play counts

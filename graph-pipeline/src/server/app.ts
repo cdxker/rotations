@@ -301,6 +301,7 @@ export function createApp(config: ServerConfig): Hono {
             });
 
             const { summary } = enrichGraph(graph);
+            db.clearGraph();
             db.saveGraph(graph);
 
             const nodeCount = Object.keys(graph.nodes).length;
@@ -359,6 +360,7 @@ export function createApp(config: ServerConfig): Hono {
                 `Enriched: ${summary.clusters.clusterCount} clusters, PageRank converged=${summary.pageRank.converged}`,
             );
 
+            db.clearGraph();
             db.saveGraph(graph);
             steps.push("Saved to database");
 

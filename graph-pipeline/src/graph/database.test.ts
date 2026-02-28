@@ -229,6 +229,28 @@ describe("GraphDatabase", () => {
         expect(db.getEdgeCount()).toBe(2); // A→B, B→C
     });
 
+    it("clearGraph + saveGraph is idempotent — repeated saves produce identical data", () => {
+        const graph = makeTestGraph();
+        const keyA = toSongKey("Artist A", "Track 1");
+        const keyB = toSongKey("Artist B", "Track 2");
+
+        // Save once
+        db.clearGraph();
+        db.saveGraph(graph);
+        const first = db.loadGraph();
+
+        // Save again with clear — should be identical
+        db.clearGraph();
+        db.saveGraph(graph);
+        const second = db.loadGraph();
+
+        expect(db.getNodeCount()).toBe(Object.keys(graph.nodes).length);
+        expect(db.getEdgeCount()).toBe(2);
+        expect(second.nodes[keyA]!.totalPlays).toBe(first.nodes[keyA]!.totalPlays);
+        expect(second.nodes[keyB]!.totalPlays).toBe(first.nodes[keyB]!.totalPlays);
+        expect(second.nodes[keyA]!.next[keyB]).toBe(first.nodes[keyA]!.next[keyB]);
+    });
+
     it("handles empty graph", () => {
         const empty: ListeningGraph = {
             nodes: {} as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
