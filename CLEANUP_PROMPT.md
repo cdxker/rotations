@@ -4,10 +4,12 @@ You are cleaning up the `graphs` branch PR. The goal is to **reduce total lines 
 
 ## Scope
 
-Only touch files in this PR. Run `gh pr view --json files` if you need the list. Do NOT touch test files, ticket files, docs, lock files, or config files. The two codebases are:
+Only touch files in this PR. Run `gh pr view --json files` if you need the list. Do NOT touch ticket files, docs, lock files, or config files. The two codebases are:
 
 - `site/src/` — Astro + React frontend (graph visualization with Sigma.js)
 - `graph-pipeline/src/` — Node/Hono backend (Last.fm/Spotify ingestion, graph DB, API)
+
+**Test files**: You may update import paths in test files when you delete or merge source files. Do NOT rewrite test logic, add tests, or remove tests — only fix broken imports.
 
 ## Phase 1: Remove Unnecessary Abstractions
 
@@ -61,42 +63,40 @@ Rules for this phase:
 
 Run this full checklist after **each phase**. Do not move to the next phase if anything fails.
 
+**Server management**: Kill any running servers before each test run. Start fresh servers for each phase. Use `lsof -ti:3001 | xargs kill -9` and `lsof -ti:4321 | xargs kill -9` to ensure clean ports.
+
 ### Automated Tests
 1. `cd graph-pipeline && yarn test` — all backend unit tests pass
 2. `cd site && yarn test` — all frontend unit tests pass
 
 ### Backend Smoke Tests
-3. Start the server: `cd graph-pipeline && npx tsx src/server/index.ts` (use a free port if 3001 is taken)
-4. `curl http://localhost:3001/graph/stats` — returns JSON with `totalNodes`, `totalEdges`, `metadata`
-5. `curl http://localhost:3001/graph?limit=2` — returns JSON with `nodes` (2 entries), `pagination.hasMore: true`
-6. `curl http://localhost:3001/graph/analysis` — returns JSON with `pageRank`, `clusters`, `stats` keys
-7. Pick a songKey from the stats response and hit `curl http://localhost:3001/graph/node/<songKey>` — returns node data
-8. Kill the server after checks pass
+3. Kill any process on port 3001, then start the server: `cd graph-pipeline && npx tsx src/server/index.ts &`
+4. Wait for the server to be ready, then run:
+   - `curl http://localhost:3001/graph/stats` — returns JSON with `totalNodes`, `totalEdges`, `metadata`
+   - `curl http://localhost:3001/graph?limit=2` — returns JSON with `nodes` (2 entries), `pagination.hasMore: true`
+   - `curl http://localhost:3001/graph/analysis` — returns JSON with `pageRank`, `clusters`, `stats` keys
+   - Pick a songKey from the response and hit `curl http://localhost:3001/graph/node/<songKey>` — returns node data
 
 ### Pipeline / Scraper Smoke Tests
-9. `curl -X POST http://localhost:3001/pipeline/fetch/lastfm` — returns JSON with `status: "complete"`, `scrobbleCount` > 0, and a `logs` array
-10. `curl -X POST http://localhost:3001/pipeline/build` — returns JSON with `status: "complete"`, `nodes` > 0, `edges` > 0, `clusters` > 0, `pageRankConverged: true`
-11. `curl -X POST http://localhost:3001/pipeline/fetch/spotify` — returns either a success response or `400` with `"Not authorized"` (both are acceptable, confirms the route exists and handles state correctly)
+5. With the server still running from step 3:
+   - `curl -X POST http://localhost:3001/pipeline/fetch/lastfm` — returns JSON with `status: "complete"`, `scrobbleCount` > 0, and a `logs` array
+   - `curl -X POST http://localhost:3001/pipeline/build` — returns JSON with `status: "complete"`, `nodes` > 0, `edges` > 0, `clusters` > 0, `pageRankConverged: true`
+   - `curl -X POST http://localhost:3001/pipeline/fetch/spotify` — returns either a success response or `400` with `"Not authorized"` (both are acceptable, confirms the route exists and handles state correctly)
+6. Kill the server on port 3001
 
-### Frontend Build
-9. `cd site && yarn build` — Astro production build completes without errors
-10. Confirm `graph.astro` page is included in build output (check for it in `dist/`)
-
-### Frontend Runtime (manual, quick check)
-11. Start `cd site && yarn dev`, open `http://localhost:4321/graph` in a browser
-12. Verify: graph canvas renders (not blank, not raw JSON)
-13. Verify: nodes are visible and layout animates for ~5 seconds
-14. Verify: hovering a node shows a tooltip
-15. Verify: clicking a node opens the detail panel
-16. Verify: search bar in top-right accepts input and highlights matching nodes
-17. Verify: cluster legend is visible on the left side
-18. Verify: filter button (sliders icon) opens the filter panel
-19. Verify: path explorer button (route icon) opens the path panel
+### Frontend Smoke Tests
+7. `cd site && yarn build` — Astro production build completes without errors
+8. Confirm `graph.astro` page is included in build output (check for it in `dist/`)
+9. Kill any process on port 4321, then start the dev server: `cd site && yarn dev &`
+10. Wait for the server to be ready, then:
+    - `curl -s http://localhost:4321/graph` — returns HTML (not JSON), and the response body contains `GraphView` or `sigma` or `<canvas` (confirms the React component is being rendered, not raw API data)
+11. Kill the dev server on port 4321
 
 ### Regression Checklist
-After all phases are complete, re-run items 1–10 one final time and confirm:
+After all phases are complete, re-run the full test plan one final time and confirm:
 - No new TypeScript errors: `cd graph-pipeline && npx tsc --noEmit` and `cd site && npx tsc --noEmit`
 - No new lint errors: `cd graph-pipeline && yarn lint` and `cd site && yarn lint`
+- Run formatters: `cd graph-pipeline && yarn format` and `cd site && yarn format`
 - Line count reduced from baseline 5,238 lines — report the final number
 
 ## Code Style
@@ -128,7 +128,7 @@ After making changes, run formatters before committing:
 
 1. **Run the test plan after each phase.** Do not proceed if anything fails.
 2. Do NOT change any public API behavior (HTTP endpoints, response shapes).
-3. Do NOT rename files that are imported by test files unless you also update the test imports.
+3. You may update test file imports when source files are deleted/merged. Do NOT rewrite test logic.
 4. Preserve all JSDoc comments on public/exported functions. Remove comments that just restate what the code does.
 5. When inlining, prefer readability over minimal lines — don't create 200-char single lines.
 6. Report final line count vs starting 5,238 lines.
