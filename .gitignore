@@ -17,6 +17,9 @@ pnpm-debug.log*
 .env
 .env.production
 
+# spotify token storage
+.spotify-tokens.json
+
 # macOS-specific files
 .DS_Store
 

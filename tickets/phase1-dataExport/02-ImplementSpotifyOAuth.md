@@ -40,3 +40,10 @@ The existing `site/src/hooks/SpotifyContext.tsx` already has Spotify Web Playbac
 
 - This is a server-side/CLI OAuth flow, not a browser-based one.
 - Consider a simple local HTTP server that opens the browser for auth, catches the redirect, and shuts down.
+
+## Progress
+
+- [X] Add SpotifyConfig to config.ts
+- [X] Implement SpotifyAuth class (token storage, auth flow, refresh)
+- [X] Add tests (16 tests passing)
+- [X] Verify compilation (tsc --noEmit clean)

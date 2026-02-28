@@ -25,3 +25,31 @@ export function loadLastfmConfig(): LastfmConfig {
 
     return { apiKey, username };
 }
+
+export interface SpotifyConfig {
+    clientId: string;
+    clientSecret: string;
+    redirectPort: number;
+}
+
+export function loadSpotifyConfig(): SpotifyConfig {
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+    const redirectPort = parseInt(process.env.SPOTIFY_REDIRECT_PORT ?? "8888", 10);
+
+    if (!clientId) {
+        throw new Error(
+            "SPOTIFY_CLIENT_ID is not set. Add it to your .env file.\n" +
+                "Create a Spotify app at https://developer.spotify.com/dashboard",
+        );
+    }
+
+    if (!clientSecret) {
+        throw new Error(
+            "SPOTIFY_CLIENT_SECRET is not set. Add it to your .env file.\n" +
+                "Find it in your Spotify app settings at https://developer.spotify.com/dashboard",
+        );
+    }
+
+    return { clientId, clientSecret, redirectPort };
+}
