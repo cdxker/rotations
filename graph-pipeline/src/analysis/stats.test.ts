@@ -18,6 +18,7 @@ function makeGraph(): ListeningGraph {
                 previous: {} as Record<SongKey, number>,
                 totalPlays: 10,
                 sources: ["lastfm", "spotify-recent"],
+                sourcePlays: { lastfm: 7, "spotify-recent": 3 },
             },
             [keyB]: {
                 name: "Song 2",
@@ -26,6 +27,7 @@ function makeGraph(): ListeningGraph {
                 previous: { [keyA]: 3 } as Record<SongKey, number>,
                 totalPlays: 7,
                 sources: ["lastfm"],
+                sourcePlays: { lastfm: 7 },
             },
             [keyC]: {
                 name: "Song 3",
@@ -37,6 +39,7 @@ function makeGraph(): ListeningGraph {
                 } as Record<SongKey, number>,
                 totalPlays: 4,
                 sources: ["lastfm", "spotify-playlist"],
+                sourcePlays: { lastfm: 2, "spotify-playlist": 2 },
             },
             [keyD]: {
                 name: "Song 4",
@@ -45,6 +48,7 @@ function makeGraph(): ListeningGraph {
                 previous: { [keyC]: 1 } as Record<SongKey, number>,
                 totalPlays: 1,
                 sources: ["spotify-playlist"],
+                sourcePlays: { "spotify-playlist": 1 },
             },
         } as Record<SongKey, GraphNode>,
         metadata: {
@@ -77,12 +81,12 @@ describe("computeStats", () => {
         const result = computeStats(graph);
         const sb = result.graphStats.sourceBreakdown;
 
-        // lastfm: A, B, C = 3 nodes
-        expect(sb["lastfm"]).toBe(3);
-        // spotify-recent: A = 1 node
-        expect(sb["spotify-recent"]).toBe(1);
-        // spotify-playlist: C, D = 2 nodes
-        expect(sb["spotify-playlist"]).toBe(2);
+        // lastfm: A(7) + B(7) + C(2) = 16 scrobbles
+        expect(sb["lastfm"]).toBe(16);
+        // spotify-recent: A(3) = 3 scrobbles
+        expect(sb["spotify-recent"]).toBe(3);
+        // spotify-playlist: C(2) + D(1) = 3 scrobbles
+        expect(sb["spotify-playlist"]).toBe(3);
     });
 
     it("computes per-node stats correctly", () => {

@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS nodes (
     sources TEXT NOT NULL DEFAULT '[]',
     page_rank REAL,
     cluster_id INTEGER,
-    image_url TEXT
+    image_url TEXT,
+    source_plays TEXT
 );
 
 CREATE TABLE IF NOT EXISTS edges (
@@ -51,13 +52,17 @@ export class GraphDatabase {
 
     private initSchema(): void {
         this.db.exec(SCHEMA_SQL);
-        // Migration: add image_url column to existing databases
-        try {
-            this.db.exec(
-                "ALTER TABLE nodes ADD COLUMN image_url TEXT",
-            );
-        } catch {
-            // Column already exists — expected for new databases
+        // Migrations: add columns to existing databases
+        const migrations = [
+            "ALTER TABLE nodes ADD COLUMN image_url TEXT",
+            "ALTER TABLE nodes ADD COLUMN source_plays TEXT",
+        ];
+        for (const sql of migrations) {
+            try {
+                this.db.exec(sql);
+            } catch {
+                // Column already exists — expected for new databases
+            }
         }
     }
 
@@ -73,8 +78,8 @@ export class GraphDatabase {
      */
     saveGraph(graph: ListeningGraph): void {
         const upsertNode = this.db.prepare(`
-            INSERT INTO nodes (song_key, name, artists, album_name, spotify_id, lastfm_url, track_id, total_plays, sources, page_rank, cluster_id, image_url)
-            VALUES (@songKey, @name, @artists, @albumName, @spotifyId, @lastfmUrl, @trackId, @totalPlays, @sources, @pageRank, @clusterId, @imageUrl)
+            INSERT INTO nodes (song_key, name, artists, album_name, spotify_id, lastfm_url, track_id, total_plays, sources, page_rank, cluster_id, image_url, source_plays)
+            VALUES (@songKey, @name, @artists, @albumName, @spotifyId, @lastfmUrl, @trackId, @totalPlays, @sources, @pageRank, @clusterId, @imageUrl, @sourcePlays)
             ON CONFLICT(song_key) DO UPDATE SET
                 name = COALESCE(excluded.name, nodes.name),
                 artists = excluded.artists,
@@ -86,7 +91,8 @@ export class GraphDatabase {
                 sources = excluded.sources,
                 page_rank = COALESCE(excluded.page_rank, nodes.page_rank),
                 cluster_id = COALESCE(excluded.cluster_id, nodes.cluster_id),
-                image_url = COALESCE(excluded.image_url, nodes.image_url)
+                image_url = COALESCE(excluded.image_url, nodes.image_url),
+                source_plays = COALESCE(excluded.source_plays, nodes.source_plays)
         `);
 
         const upsertEdge = this.db.prepare(`
@@ -128,6 +134,7 @@ export class GraphDatabase {
                     pageRank: node.pageRank ?? null,
                     clusterId: node.clusterId ?? null,
                     imageUrl: node.imageUrl ?? null,
+                    sourcePlays: node.sourcePlays ? JSON.stringify(node.sourcePlays) : null,
                 });
             }
 
@@ -206,6 +213,7 @@ export class GraphDatabase {
                 pageRank: row.page_rank ?? undefined,
                 clusterId: row.cluster_id ?? undefined,
                 imageUrl: row.image_url ?? undefined,
+                sourcePlays: row.source_plays ? JSON.parse(row.source_plays) : undefined,
             };
         }
 
@@ -282,6 +290,7 @@ export class GraphDatabase {
             pageRank: row.page_rank ?? undefined,
             clusterId: row.cluster_id ?? undefined,
             imageUrl: row.image_url ?? undefined,
+            sourcePlays: row.source_plays ? JSON.parse(row.source_plays) : undefined,
         };
     }
 
@@ -321,6 +330,7 @@ interface NodeRow {
     page_rank: number | null;
     cluster_id: number | null;
     image_url: string | null;
+    source_plays: string | null;
 }
 
 /** Row shape from the edges table. */

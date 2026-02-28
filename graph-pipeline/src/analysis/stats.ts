@@ -104,8 +104,15 @@ export function computeStats(graph: ListeningGraph, topN = 10): StatsResult {
 
     for (const [, node] of entries) {
         totalEdges += Object.keys(node.next).length;
-        for (const source of node.sources) {
-            sourceBreakdown[source] = (sourceBreakdown[source] ?? 0) + 1;
+        if (node.sourcePlays) {
+            for (const [source, count] of Object.entries(node.sourcePlays)) {
+                sourceBreakdown[source] = (sourceBreakdown[source] ?? 0) + (count ?? 0);
+            }
+        } else {
+            // Fallback for graphs without sourcePlays (e.g. loaded from older DB)
+            for (const source of node.sources) {
+                sourceBreakdown[source] = (sourceBreakdown[source] ?? 0) + 1;
+            }
         }
     }
 

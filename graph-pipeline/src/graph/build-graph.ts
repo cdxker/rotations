@@ -84,6 +84,8 @@ function addSource(node: GraphNode, source: ListeningSource): void {
     if (!node.sources.includes(source)) {
         node.sources.push(source);
     }
+    node.sourcePlays ??= {};
+    node.sourcePlays[source] = (node.sourcePlays[source] ?? 0) + 1;
 }
 
 function addEdge(

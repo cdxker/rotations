@@ -72,6 +72,9 @@ export interface GraphNode {
     /** Which data sources contributed plays for this song. */
     sources: ListeningSource[];
 
+    /** Play counts broken down by source. */
+    sourcePlays?: Partial<Record<ListeningSource, number>>;
+
     /** PageRank score, populated by the analysis phase. */
     pageRank?: number;
 

@@ -70,5 +70,5 @@
 - [X] `01-FixSpotifyDoubleFetch.md` — Pass pre-fetched dump to exportToJson to eliminate redundant API calls
 - [X] `01-FixTimestampSpreadOverflow.md` — Replace Math.min/max spread with loop to handle >65k scrobbles
 - [X] `01-FixPathPanelStaleAsync.md` — Use functional state updates in async callbacks to prevent stale closure overwrites
-- [ ] `01-FixSourceBreakdownSemantics.md` — Track per-source play counts and report scrobbles instead of nodes
+- [X] `01-FixSourceBreakdownSemantics.md` — Track per-source play counts and report scrobbles instead of nodes
 - [ ] `01-FixModularityNormalization.md` — Divide by 2m instead of m in modularity formula
