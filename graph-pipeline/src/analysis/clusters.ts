@@ -219,11 +219,11 @@ function computeModularity(
     for (let i = 0; i < n; i++) {
         for (const [j, w] of weights[i]!) {
             if (community[i] === community[j]) {
-                q += w - (degree[i]! * degree[j]!) / m;
+                q += w - (degree[i]! * degree[j]!) / (2 * m);
             }
         }
     }
-    return q / m;
+    return q / (2 * m);
 }
 
 function computeClusterStats(
