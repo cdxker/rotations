@@ -11,8 +11,8 @@ These instructions were explicitly requested by the repository owner on 2026-02-
 5. Show proposed tickets to the user **before creating any ticket**.
 6. After user approval, create tickets and complete all approved tickets.
 7. Work ticket-by-ticket and keep each commit scoped to the ticket being addressed.
-8. **Before every commit**: ask the user for permission and state exactly what files/changes will be committed.
-9. Do not commit until explicit user approval is received for that specific commit.
+8. Commits are pre-approved for this request; proceed autonomously without per-commit permission prompts.
+9. Before each commit, verify scope and list exact staged files in the commit message body or summary.
 
 ## Staging And Ownership Rules
 
@@ -25,4 +25,4 @@ These instructions were explicitly requested by the repository owner on 2026-02-
 ## Commit Cadence Policy For This Request
 
 - One ticket fix per commit whenever practical.
-- Ask permission each time, even if a prior commit was approved.
+- Auto-commit is allowed for approved ticket work; do not pause for additional permission prompts.

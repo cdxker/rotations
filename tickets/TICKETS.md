@@ -61,3 +61,5 @@
 - [ ] `01-Triage-ClusterModularityNormalization.md` — Triage whether modularity normalization formula should be corrected
 - [ ] `01-Triage-SpotifyPlayTypo.md` — Triage whether low-severity variable typo should be addressed
 - [ ] `01-Triage-RemoveCleanupPromptFile.md` — Triage whether `CLEANUP_PROMPT.md` should remain in the repository
+- [ ] `02-RunCleanupPrompt.md` — Execute `CLEANUP_PROMPT.md` and apply all approved cleanup actions
+- [ ] `03-BugBotCommentSweep.md` — Run BugBot comment pass on active PR and create follow-up tickets for later fixes
