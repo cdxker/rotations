@@ -1,0 +1,11 @@
+---
+import GraphView from "../components/GraphView.tsx"
+import Layout from "./Layout.astro"
+import "../styles/global.css"
+---
+
+<Layout>
+    <div class="w-full h-screen bg-[#0B0B0B]">
+        <GraphView client:only="react" />
+    </div>
+</Layout>

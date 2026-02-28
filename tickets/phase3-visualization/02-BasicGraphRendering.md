@@ -35,3 +35,15 @@ Dev
 
 - Start with a subset of the graph (e.g. top 500 nodes by PageRank) to get rendering working, then optimize for larger graphs.
 - The force-directed layout may need tuning (gravity, charge, link distance) to produce readable results with music data.
+
+## Progress
+
+- [X] Install sigma, graphology, @react-sigma packages
+- [X] Create /graph Astro page (client:only="react")
+- [X] Build GraphView component with SigmaContainer + GraphLoader
+- [X] Node sizing by play count (log scale 4-20px), colors by cluster (5-color palette)
+- [X] Edge rendering with log-scaled thickness, weight-based opacity (5-30%)
+- [X] Force-directed layout (ForceAtlas2 Web Worker, 5s auto-stop)
+- [X] Dark theme (#0B0B0B bg, DM Mono labels, white/80 label color)
+- [X] Mock data fallback when API unavailable
+- [X] Verify compilation (tsc --noEmit clean for new files)
