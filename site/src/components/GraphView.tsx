@@ -11,6 +11,8 @@ import { GraphEvents } from "./graph/GraphEvents";
 import type { SelectedNode, HoveredEdge } from "./graph/GraphEvents";
 import { NodeTooltip, EdgeTooltip } from "./graph/GraphTooltip";
 import { NodeDetailPanel } from "./graph/NodeDetailPanel";
+import { useClusterInfo } from "./graph/useClusterInfo";
+import { ClusterLegend } from "./graph/ClusterLegend";
 
 /** Load graph data into Sigma and run ForceAtlas2 layout. */
 function GraphInner({
@@ -19,12 +21,16 @@ function GraphInner({
     onHoverNode,
     onHoverEdge,
     onMouseMove,
+    hiddenClusters,
+    focusedCluster,
 }: {
     onSelectNode: (node: SelectedNode | null) => void;
     selectedNode: SelectedNode | null;
     onHoverNode: (info: { key: string; label: string; artists: string[]; totalPlays: number; pageRank: number; x: number; y: number } | null) => void;
     onHoverEdge: (info: HoveredEdge | null) => void;
     onMouseMove: (pos: { x: number; y: number }) => void;
+    hiddenClusters: Set<number>;
+    focusedCluster: number | null;
 }) {
     const { graph, state, error } = useGraphData();
     const loadGraph = useLoadGraph();
@@ -101,6 +107,8 @@ function GraphInner({
                     onSelectNode={onSelectNode}
                     onHoverNode={onHoverNode}
                     onHoverEdge={onHoverEdge}
+                    hiddenClusters={hiddenClusters}
+                    focusedCluster={focusedCluster}
                 />
             </>
         );
@@ -111,6 +119,8 @@ function GraphInner({
             onSelectNode={onSelectNode}
             onHoverNode={onHoverNode}
             onHoverEdge={onHoverEdge}
+            hiddenClusters={hiddenClusters}
+            focusedCluster={focusedCluster}
         />
     );
 }
@@ -192,6 +202,10 @@ function GraphHeader() {
 }
 
 export default function GraphView() {
+    const { graph } = useGraphData();
+    const clusters = useClusterInfo(graph);
+    const [hiddenClusters, setHiddenClusters] = useState<Set<number>>(new Set());
+    const [focusedCluster, setFocusedCluster] = useState<number | null>(null);
     const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
     const [hoveredNode, setHoveredNode] = useState<{
         key: string;
@@ -214,9 +228,33 @@ export default function GraphView() {
         setNavigateTarget(null);
     }, []);
 
+    const handleToggleCluster = useCallback((clusterId: number) => {
+        setHiddenClusters((prev) => {
+            const next = new Set(prev);
+            if (next.has(clusterId)) {
+                next.delete(clusterId);
+            } else {
+                next.add(clusterId);
+            }
+            return next;
+        });
+        setFocusedCluster((prev) => (prev === clusterId ? null : prev));
+    }, []);
+
+    const handleFocusCluster = useCallback((clusterId: number | null) => {
+        setFocusedCluster(clusterId);
+    }, []);
+
     return (
         <div className="relative w-full h-full">
             <GraphHeader />
+            <ClusterLegend
+                clusters={clusters}
+                hiddenClusters={hiddenClusters}
+                focusedCluster={focusedCluster}
+                onToggleCluster={handleToggleCluster}
+                onFocusCluster={handleFocusCluster}
+            />
             <SigmaContainer
                 style={{
                     width: "100%",
@@ -240,6 +278,8 @@ export default function GraphView() {
                     onHoverNode={setHoveredNode}
                     onHoverEdge={setHoveredEdge}
                     onMouseMove={setMousePos}
+                    hiddenClusters={hiddenClusters}
+                    focusedCluster={focusedCluster}
                 />
                 <GraphNavigator
                     targetNode={navigateTarget}

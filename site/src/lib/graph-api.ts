@@ -148,15 +148,25 @@ export function toGraphology(listeningGraph: ListeningGraph): Graph<NodeAttribut
     }
 
     // Add edges (directed: from → to using the `next` map)
+    // Inter-cluster edges are thinner and more transparent than intra-cluster edges
     for (const [fromKey, node] of entries) {
+        const fromCluster = listeningGraph.nodes[fromKey as SongKey]?.clusterId ?? 0;
+
         for (const [toKey, weight] of Object.entries(node.next)) {
             if (!graph.hasNode(toKey)) continue;
             if (graph.hasEdge(fromKey, toKey)) continue;
 
+            const toCluster = listeningGraph.nodes[toKey as SongKey]?.clusterId ?? 0;
+            const isInterCluster = fromCluster !== toCluster;
+
             graph.addDirectedEdge(fromKey, toKey, {
                 weight,
-                size: Math.max(0.5, Math.min(3, Math.log(weight + 1))),
-                color: `rgba(255, 255, 255, ${Math.min(0.3, 0.05 + weight * 0.03)})`,
+                size: isInterCluster
+                    ? Math.max(0.3, Math.min(1.5, Math.log(weight + 1) * 0.5))
+                    : Math.max(0.5, Math.min(3, Math.log(weight + 1))),
+                color: isInterCluster
+                    ? `rgba(255, 255, 255, ${Math.min(0.1, 0.02 + weight * 0.01)})`
+                    : `rgba(255, 255, 255, ${Math.min(0.3, 0.05 + weight * 0.03)})`,
             });
         }
     }

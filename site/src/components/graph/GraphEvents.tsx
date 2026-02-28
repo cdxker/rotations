@@ -162,37 +162,81 @@ export function GraphEvents({ onSelectNode, onHoverNode, onHoverEdge, hiddenClus
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [selectedNode, onSelectNode]);
 
-    // Apply node reducer for highlighting
+    // Apply node reducer for highlighting + cluster filtering
     useEffect(() => {
         const activeNode = selectedNode ?? hoveredNode;
+        const hasClusterFilter = hiddenClusters.size > 0 || focusedCluster !== null;
 
-        if (!activeNode) {
+        if (!activeNode && !hasClusterFilter) {
             sigma.setSetting("nodeReducer", null);
             sigma.setSetting("edgeReducer", null);
             return;
         }
 
-        const neighbors = getNeighborSet(activeNode);
-        const connectedEdges = getEdgeSet(activeNode);
+        const neighbors = activeNode ? getNeighborSet(activeNode) : new Set<string>();
+        const connectedEdges = activeNode ? getEdgeSet(activeNode) : new Set<string>();
 
         sigma.setSetting("nodeReducer", (node, data) => {
-            if (node === activeNode) {
-                return { ...data, highlighted: true, zIndex: 1 };
+            const clusterId = (data as NodeAttributes & typeof data).clusterId ?? 0;
+
+            // Hidden clusters: hide entirely
+            if (hiddenClusters.has(clusterId)) {
+                return { ...data, hidden: true };
             }
-            if (neighbors.has(node)) {
-                return { ...data, zIndex: 0 };
+
+            // Active node hover/selection highlighting takes priority
+            if (activeNode) {
+                if (node === activeNode) {
+                    return { ...data, highlighted: true, zIndex: 1 };
+                }
+                if (neighbors.has(node)) {
+                    return { ...data, zIndex: 0 };
+                }
+                return { ...data, color: "#333", label: "", zIndex: -1 };
             }
-            // Dim non-neighbors
-            return { ...data, color: "#333", label: "", zIndex: -1 };
+
+            // Focus mode: dim nodes not in the focused cluster
+            if (focusedCluster !== null && clusterId !== focusedCluster) {
+                return { ...data, color: "#222", label: "", zIndex: -1 };
+            }
+
+            if (focusedCluster !== null && clusterId === focusedCluster) {
+                return { ...data, zIndex: 1 };
+            }
+
+            return data;
         });
 
         sigma.setSetting("edgeReducer", (edge, data) => {
-            if (connectedEdges.has(edge)) {
-                return { ...data, color: "rgba(255, 255, 255, 0.4)", zIndex: 1 };
+            const graph = sigma.getGraph();
+            const sourceCluster = (graph.getNodeAttributes(graph.source(edge)) as NodeAttributes).clusterId ?? 0;
+            const targetCluster = (graph.getNodeAttributes(graph.target(edge)) as NodeAttributes).clusterId ?? 0;
+
+            // Hide edges connected to hidden clusters
+            if (hiddenClusters.has(sourceCluster) || hiddenClusters.has(targetCluster)) {
+                return { ...data, hidden: true };
             }
-            return { ...data, hidden: true };
+
+            // Active node hover/selection takes priority
+            if (activeNode) {
+                if (connectedEdges.has(edge)) {
+                    return { ...data, color: "rgba(255, 255, 255, 0.4)", zIndex: 1 };
+                }
+                return { ...data, hidden: true };
+            }
+
+            // Focus mode
+            if (focusedCluster !== null) {
+                const isIntra = sourceCluster === focusedCluster && targetCluster === focusedCluster;
+                if (isIntra) {
+                    return { ...data, color: "rgba(255, 255, 255, 0.25)", zIndex: 1 };
+                }
+                return { ...data, hidden: true };
+            }
+
+            return data;
         });
-    }, [selectedNode, hoveredNode, sigma, getNeighborSet, getEdgeSet]);
+    }, [selectedNode, hoveredNode, sigma, getNeighborSet, getEdgeSet, hiddenClusters, focusedCluster]);
 
     return null;
 }

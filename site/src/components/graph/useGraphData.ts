@@ -95,35 +95,47 @@ function buildMockGraph(): Graph {
     for (const node of nodes) {
         g.addNode(node.key, {
             label: `${node.artist} — ${node.track}`,
+            artists: [node.artist],
             size: nodeSize(node.plays, maxPlays),
             color: getClusterColor(node.cluster),
             totalPlays: node.plays,
             pageRank: Math.random() * 0.01,
             clusterId: node.cluster,
+            sources: ["lastfm"],
             x: Math.random() * 1000,
             y: Math.random() * 1000,
         });
     }
 
-    // Add edges — connect sequential and some random cross-cluster
+    // Add edges — connect sequential (intra-cluster edges are more prominent)
     for (let i = 0; i < nodes.length - 1; i++) {
         const weight = Math.floor(Math.random() * 5) + 1;
+        const isInterCluster = nodes[i]!.cluster !== nodes[i + 1]!.cluster;
         g.addEdge(nodes[i]!.key, nodes[i + 1]!.key, {
             weight,
-            size: Math.max(0.5, Math.min(3, Math.log(weight + 1))),
-            color: `rgba(255, 255, 255, ${Math.min(0.3, 0.05 + weight * 0.03)})`,
+            size: isInterCluster
+                ? Math.max(0.3, Math.min(1.5, Math.log(weight + 1) * 0.5))
+                : Math.max(0.5, Math.min(3, Math.log(weight + 1))),
+            color: isInterCluster
+                ? `rgba(255, 255, 255, ${Math.min(0.1, 0.02 + weight * 0.01)})`
+                : `rgba(255, 255, 255, ${Math.min(0.3, 0.05 + weight * 0.03)})`,
         });
     }
-    // Random cross-edges
+    // Random cross-edges (inter-cluster)
     for (let i = 0; i < 30; i++) {
         const a = nodes[Math.floor(Math.random() * nodes.length)]!;
         const b = nodes[Math.floor(Math.random() * nodes.length)]!;
         if (a.key !== b.key && !g.hasEdge(a.key, b.key)) {
             const weight = Math.floor(Math.random() * 3) + 1;
+            const isInterCluster = a.cluster !== b.cluster;
             g.addEdge(a.key, b.key, {
                 weight,
-                size: Math.max(0.5, Math.min(3, Math.log(weight + 1))),
-                color: `rgba(255, 255, 255, ${Math.min(0.3, 0.05 + weight * 0.03)})`,
+                size: isInterCluster
+                    ? Math.max(0.3, Math.min(1.5, Math.log(weight + 1) * 0.5))
+                    : Math.max(0.5, Math.min(3, Math.log(weight + 1))),
+                color: isInterCluster
+                    ? `rgba(255, 255, 255, ${Math.min(0.1, 0.02 + weight * 0.01)})`
+                    : `rgba(255, 255, 255, ${Math.min(0.3, 0.05 + weight * 0.03)})`,
             });
         }
     }
