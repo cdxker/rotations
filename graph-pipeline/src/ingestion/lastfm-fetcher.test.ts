@@ -141,7 +141,16 @@ describe("fetchLastfmScrobbles", () => {
         ];
 
         vi.spyOn(globalThis, "fetch").mockResolvedValue(
-            new Response(JSON.stringify(makeApiResponse(tracks as any, 1, 1, 2))),
+            new Response(
+                JSON.stringify(
+                    makeApiResponse(
+                        tracks as ReturnType<typeof makeApiTrack>[],
+                        1,
+                        1,
+                        2,
+                    ),
+                ),
+            ),
         );
 
         const result = await fetchLastfmScrobbles(client, {
@@ -194,9 +203,7 @@ describe("fetchLastfmScrobbles", () => {
 
     it("handles empty scrobble history", async () => {
         vi.spyOn(globalThis, "fetch").mockResolvedValue(
-            new Response(
-                JSON.stringify(makeApiResponse([], 1, 0, 0)),
-            ),
+            new Response(JSON.stringify(makeApiResponse([], 1, 0, 0))),
         );
 
         const result = await fetchLastfmScrobbles(client, {
@@ -290,9 +297,7 @@ describe("fetchLastfmScrobbles", () => {
             }),
         );
 
-        const tracks = [
-            makeApiTrack("Artist A", "Track 1", "Album 1", "500"),
-        ];
+        const tracks = [makeApiTrack("Artist A", "Track 1", "Album 1", "500")];
 
         vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
             const url = new URL((input as URL).toString());
