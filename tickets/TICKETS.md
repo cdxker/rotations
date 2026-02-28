@@ -12,7 +12,7 @@
 - [X] `03-GetDataDumpLastFM.md` — Fetch full scrobble history from Last.fm
 - [X] `03-GetDataDumpSpotify.md` — Fetch recently played + playlists from Spotify
 - [X] `04-BuildGraph.md` — Normalize, construct edges, merge into unified graph
-- [-] `04-HookUpExportToDatabase.md` — Persist graph to chosen database
+- [X] `04-HookUpExportToDatabase.md` — Persist graph to chosen database
 - [X] `02-FixLintAndFormat.md` — Fix lint errors, formatting issues, and code review findings
 - [ ] `05-CreateServer.md` — API server to serve graph data
 - [ ] `05-DeveloperGuide.md` — Write developer guide and onboarding docs

@@ -26,3 +26,14 @@ Dev
 
 - The specific implementation depends entirely on which DB is chosen in `02-DataStorage.md`.
 - The server (`05-CreateServer.md`) will read from this database.
+
+## Progress
+
+- [X] DB schema: `nodes`, `edges`, `metadata` tables with indexed FKs
+- [X] Schema auto-creation in constructor via `CREATE TABLE IF NOT EXISTS`
+- [X] Insert/upsert for nodes (ON CONFLICT merges play counts, sources, optional fields)
+- [X] Insert/upsert for edges (ON CONFLICT sums weights)
+- [X] Incremental updates tested — second save merges with existing data
+- [X] Round-trip verified: save → load → matches original (6 tests)
+- [X] WAL journal mode + transactions for large graph efficiency
+- [X] Helper methods: getNode, getNodeCount, getEdgeCount
