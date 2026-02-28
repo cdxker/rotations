@@ -7,8 +7,8 @@
 - [X] `02-DataStorage.md` — Research and pick a database
 - [ ] `02-CreateSpotifyDeveloperApp.md` — *(manual)* Create Spotify developer app, get credentials
 - [ ] `02-CreateLastFMAPIAccount.md` — *(manual)* Create Last.fm API account, get API key
-- [ ] `02-ImplementSpotifyOAuth.md` — Build Spotify OAuth2 flow
-- [-] `02-ImplementLastFMAuth.md` — Set up Last.fm API key auth
+- [-] `02-ImplementSpotifyOAuth.md` — Build Spotify OAuth2 flow
+- [X] `02-ImplementLastFMAuth.md` — Set up Last.fm API key auth
 - [ ] `03-GetDataDumpLastFM.md` — Fetch full scrobble history from Last.fm
 - [ ] `03-GetDataDumpSpotify.md` — Fetch recently played + playlists from Spotify
 - [ ] `04-BuildGraph.md` — Normalize, construct edges, merge into unified graph
