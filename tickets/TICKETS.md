@@ -46,3 +46,17 @@
 - [ ] `01-NodeArtworkSupport.md` — Add image/artwork support to graph nodes (frontend + ingestion/data contract)
 - [ ] `01-SearchEnterNavigationFix.md` — Fix bug where pressing Enter in search does not navigate focus to the selected node
 - [ ] `02-ThreeLayerNeighborhoodDepthView.md` — Show children-of-children to depth 3 with fading by edge/commonness and optional 3D prototype
+
+## Phase 6 — PR Review Triage
+
+- [ ] `01-Triage-PipelineRerunDoublesData.md` — Triage whether reruns of `/pipeline/build` and `/pipeline/run` should be addressed for data doubling
+- [ ] `01-Triage-SpotifyFetchDoubleCall.md` — Triage whether `/pipeline/fetch/spotify` duplicate fetch behavior should be addressed
+- [ ] `01-Triage-TimestampSpreadOverflow.md` — Triage whether timestamp spread operations should be addressed for large datasets
+- [ ] `01-Triage-VitestDirnameInESM.md` — Triage whether `__dirname` usage in ESM Vitest config should be addressed
+- [ ] `01-Triage-ImportMetaDirnameUsage.md` — Triage whether `import.meta.dirname` portability should be addressed
+- [ ] `01-Triage-SearchNoEarlyExit.md` — Triage whether search O(N) scanning behavior should be addressed
+- [ ] `01-Triage-PathPanelStaleAsyncState.md` — Triage whether path panel async stale-state risk should be addressed
+- [ ] `01-Triage-GraphViewDoubleDataBuild.md` — Triage whether double graph data construction in GraphView should be addressed
+- [ ] `01-Triage-SourceBreakdownSemantics.md` — Triage whether `sourceBreakdown` semantics mismatch should be addressed
+- [ ] `01-Triage-SpotifyPlayTypo.md` — Triage whether low-severity variable typo should be addressed
+- [ ] `01-Triage-RemoveCleanupPromptFile.md` — Triage whether `CLEANUP_PROMPT.md` should remain in the repository

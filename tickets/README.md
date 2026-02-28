@@ -11,6 +11,7 @@ tickets/
 ├── phase3-visualization/ — Graph viz UI built into the existing site/ app
 ├── phase4-polish/        — Cleanup, UX improvements, and refinements
 ├── phase5-visual-refresh/ — Visual hierarchy redesign, artwork support, and depth exploration
+├── phase6-triage/        — Review-comment triage tickets and disposition decisions
 ```
 
 ## Numbering = Dependency Chain
