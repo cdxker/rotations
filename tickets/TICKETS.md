@@ -3,7 +3,7 @@
 ## Phase 1 — Data Export & Graph Construction
 
 - [X] `00-ProjectSetup.md` — Scaffold project directory, package.json, tsconfig, folder structure
-- [-] `01-DefineGraphSchema.md` — Define SongKey, GraphNode, ListeningGraph types
+- [X] `01-DefineGraphSchema.md` — Define SongKey, GraphNode, ListeningGraph types
 - [ ] `02-DataStorage.md` — Research and pick a database
 - [ ] `02-CreateSpotifyDeveloperApp.md` — *(manual)* Create Spotify developer app, get credentials
 - [ ] `02-CreateLastFMAPIAccount.md` — *(manual)* Create Last.fm API account, get API key

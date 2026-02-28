@@ -60,3 +60,14 @@ Key differences:
 
 - Song matching across sources is imperfect. The `artist::track` normalization handles most cases. Fuzzy matching is a future enhancement.
 - Consider a helper function `toSongKey(artist: string, track: string): SongKey` as part of this ticket.
+
+## Progress
+
+- [X] Define `SongKey` type — `src/graph/types.ts`
+- [X] Define `GraphNode` interface with all fields
+- [X] Define `ListeningGraph` and `GraphMetadata` interfaces
+- [X] Define `ListeningSource` union type
+- [X] Define raw ingestion types — `src/ingestion/types.ts` (RawScrobble, RawSpotifyRecentTrack, RawSpotifyPlaylistTrack)
+- [X] Document SongKey / TrackId / FuckingTrack relationship in module-level JSDoc
+- [X] Implement `toSongKey()` helper
+- [X] Lint and build pass
