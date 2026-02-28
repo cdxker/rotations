@@ -46,7 +46,16 @@ Dev
 | `2867946197` | Timestamp spread overflow (duplicate) | Duplicate of `2867888537` — same issue, same file/line |
 | `2867976646` | `Math.max(...newScrobbles.map(...))` in lastfm checkpoint | **Rejected**: code no longer contains this pattern in `lastfm-fetcher.ts`. The only remaining spread overflow is in `build-graph.ts:262-266`, already covered by `01-Triage-TimestampSpreadOverflow.md`. |
 
-**Summary:** All 7 BugBot comments map to existing triage tickets (5 unique issues, 1 duplicate, 1 stale). No new follow-up tickets needed.
+**Summary:** All 7 BugBot comments map to 5 unique issues (1 duplicate, 1 stale). Implementation tickets created in `phase7-bugfixes/`:
+
+| Triage Ticket | Implementation Ticket |
+|---|---|
+| `01-Triage-PipelineRerunDoublesData.md` | `phase7-bugfixes/01-FixPipelineRerunDoubling.md` |
+| `01-Triage-SpotifyFetchDoubleCall.md` | `phase7-bugfixes/01-FixSpotifyDoubleFetch.md` |
+| `01-Triage-TimestampSpreadOverflow.md` | `phase7-bugfixes/01-FixTimestampSpreadOverflow.md` |
+| `01-Triage-PathPanelStaleAsyncState.md` | `phase7-bugfixes/01-FixPathPanelStaleAsync.md` |
+| `01-Triage-SourceBreakdownSemantics.md` | `phase7-bugfixes/01-FixSourceBreakdownSemantics.md` |
+| `01-Triage-ClusterModularityNormalization.md` | `phase7-bugfixes/01-FixModularityNormalization.md` |
 
 ## Notes
 

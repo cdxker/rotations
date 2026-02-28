@@ -63,3 +63,12 @@
 - [X] `01-Triage-RemoveCleanupPromptFile.md` — Do Now: delete `CLEANUP_PROMPT.md` (completed cleanup artifact)
 - [X] `02-RunCleanupPrompt.md` — Cleanup already completed in Phase 4; applied Do Now fixes (typo + deleted CLEANUP_PROMPT.md)
 - [X] `03-BugBotCommentSweep.md` — All 7 BugBot comments mapped to existing triage tickets; no new tickets needed
+
+## Phase 7 — Bug Fixes (from Triage)
+
+- [ ] `01-FixPipelineRerunDoubling.md` — Clear graph tables before save to make pipeline idempotent
+- [ ] `01-FixSpotifyDoubleFetch.md` — Pass pre-fetched dump to exportToJson to eliminate redundant API calls
+- [ ] `01-FixTimestampSpreadOverflow.md` — Replace Math.min/max spread with loop to handle >65k scrobbles
+- [ ] `01-FixPathPanelStaleAsync.md` — Use functional state updates in async callbacks to prevent stale closure overwrites
+- [ ] `01-FixSourceBreakdownSemantics.md` — Track per-source play counts and report scrobbles instead of nodes
+- [ ] `01-FixModularityNormalization.md` — Divide by 2m instead of m in modularity formula
