@@ -9,6 +9,7 @@ tickets/
 ├── phase1-dataExport/    — Data ingestion, graph construction, storage, server
 ├── phase2-analysis/      — PageRank, stats, clustering, enriched export
 ├── phase3-visualization/ — Graph viz UI built into the existing site/ app
+├── phase4-polish/        — Cleanup, UX improvements, and refinements
 ```
 
 ## Numbering = Dependency Chain

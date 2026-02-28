@@ -34,3 +34,8 @@
 - [X] `03-ClusterView.md` — Color-code and toggle clusters
 - [X] `04-SearchAndFilter.md` — Search by song/artist, filter by play count/source
 - [X] `04-PathExploration.md` — Find and display transition paths between two songs
+
+## Phase 4 — Polish
+
+- [X] `01-CodebaseCleanup.md` — Consolidate dead code, merge redundant files, DRY up patterns
+- [X] `01-AlwaysFocusedView.md` — Always-focused single-node view, remove unfocused state
