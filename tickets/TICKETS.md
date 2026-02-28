@@ -26,8 +26,8 @@
 
 ## Phase 3 — Visualization
 
-- [ ] `01-PickVisualizationLibrary.md` — Research and pick a graph viz library
-- [ ] `01-DesignGraphUI.md` — Wireframe the graph view UI
+- [-] `01-PickVisualizationLibrary.md` — Research and pick a graph viz library
+- [X] `01-DesignGraphUI.md` — Wireframe the graph view UI
 - [ ] `02-GraphDataLayer.md` — Connect enriched graph data to the frontend
 - [ ] `02-BasicGraphRendering.md` — Render nodes and edges with force-directed layout
 - [ ] `03-InteractiveFeatures.md` — Zoom, pan, click, hover, node detail panel

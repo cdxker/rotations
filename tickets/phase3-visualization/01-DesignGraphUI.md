@@ -45,3 +45,11 @@ The `site/` app already has:
 
 - Keep the design consistent with the existing app's aesthetic — dark theme, monospace font, clean/minimal.
 - The graph view is likely its own page (`/graph`) rather than part of the player.
+
+## Progress
+
+- [X] Review existing UI patterns (PlayerView multi-mode, Tailwind theme, shadcn, icons)
+- [X] Create wireframe/design spec → `site/src/pages/graph-design.md`
+- [X] Define integration approach (new `/graph` Astro page with React GraphView)
+- [X] Document color scheme for clusters (chart-1 through chart-5, cycling)
+- [X] Address responsive considerations (desktop-first, mobile falls back to list view)
