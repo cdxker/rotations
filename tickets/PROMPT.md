@@ -45,7 +45,7 @@ Before writing code, review the ticket critically:
 - Are there contradictions or gaps?
 - Is anything unclear about how this fits with the rest of the project?
 
-These tickets were AI-generated and may have errors. If something seems wrong, **message the team lead** before building the wrong thing.
+These tickets were AI-generated and may have errors. If something seems wrong, **message the team lead** before building the wrong thing. **Proactively raise concerns** — if you notice bugs in existing code, inconsistencies between files, architectural issues, or anything that feels off, tell the team lead. Don't silently work around problems.
 
 ### 4. Work on the Ticket
 
@@ -73,6 +73,7 @@ These tickets were AI-generated and may have errors. If something seems wrong, *
 - Verify all acceptance criteria from the ticket are met.
 - Run any relevant validations (type checking, tests, linting).
 - Make sure your code compiles and doesn't break existing code.
+- **MANDATORY: Before committing, run `yarn lint` and `yarn format` from the `graph-pipeline/` directory.** Fix any lint errors and commit the formatted code. Do NOT commit code that fails `yarn lint` or has formatting issues.
 
 ### 6. Commit
 
