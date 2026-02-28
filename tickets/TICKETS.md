@@ -58,5 +58,6 @@
 - [ ] `01-Triage-PathPanelStaleAsyncState.md` — Triage whether path panel async stale-state risk should be addressed
 - [ ] `01-Triage-GraphViewDoubleDataBuild.md` — Triage whether double graph data construction in GraphView should be addressed
 - [ ] `01-Triage-SourceBreakdownSemantics.md` — Triage whether `sourceBreakdown` semantics mismatch should be addressed
+- [ ] `01-Triage-ClusterModularityNormalization.md` — Triage whether modularity normalization formula should be corrected
 - [ ] `01-Triage-SpotifyPlayTypo.md` — Triage whether low-severity variable typo should be addressed
 - [ ] `01-Triage-RemoveCleanupPromptFile.md` — Triage whether `CLEANUP_PROMPT.md` should remain in the repository
