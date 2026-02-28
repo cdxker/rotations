@@ -74,6 +74,9 @@ export interface GraphNode {
 
     /** PageRank score, populated by the analysis phase. */
     pageRank?: number;
+
+    /** Cluster ID, populated by community detection in the analysis phase. */
+    clusterId?: number;
 }
 
 /** Metadata about the graph export. */
