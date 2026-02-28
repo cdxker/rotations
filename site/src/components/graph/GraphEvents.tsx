@@ -24,6 +24,7 @@ export interface HoveredEdge {
 
 interface GraphEventsProps {
     onSelectNode: (node: SelectedNode | null) => void
+    externalSelectedKey: string | null
     onHoverNode: (
         info: {
             key: string
@@ -54,6 +55,7 @@ interface GraphEventsProps {
  */
 export function GraphEvents({
     onSelectNode,
+    externalSelectedKey,
     onHoverNode,
     onHoverEdge,
     hiddenClusters,
@@ -67,6 +69,13 @@ export function GraphEvents({
     const registerEvents = useRegisterEvents()
     const [selectedNode, setSelectedNode] = useState<string | null>(null)
     const [hoveredNode, setHoveredNode] = useState<string | null>(null)
+
+    // Sync external selection (e.g. auto-focus on load)
+    useEffect(() => {
+        if (externalSelectedKey !== null) {
+            setSelectedNode(externalSelectedKey)
+        }
+    }, [externalSelectedKey])
 
     // Get neighbor set for highlighting
     const getNeighborSet = useCallback(
@@ -144,8 +153,7 @@ export function GraphEvents({
                 onSelectNode(buildSelectedNode(node))
             },
             clickStage: () => {
-                setSelectedNode(null)
-                onSelectNode(null)
+                // Never deselect — always keep a node focused
             },
             enterNode: ({ node }) => {
                 setHoveredNode(node)
@@ -190,17 +198,6 @@ export function GraphEvents({
         })
     }, [registerEvents, sigma, buildSelectedNode, onSelectNode, onHoverNode, onHoverEdge])
 
-    // Escape key to deselect
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === "Escape" && selectedNode) {
-                setSelectedNode(null)
-                onSelectNode(null)
-            }
-        }
-        window.addEventListener("keydown", handleKeyDown)
-        return () => window.removeEventListener("keydown", handleKeyDown)
-    }, [selectedNode, onSelectNode])
 
     // Apply node reducer for highlighting + cluster filtering + path highlighting
     useEffect(() => {

@@ -1,14 +1,12 @@
-import { X } from "lucide-react"
 import type { SelectedNode } from "./GraphEvents"
 import { getClusterColor } from "@/lib/graph-api"
 
 interface NodeDetailPanelProps {
     node: SelectedNode
-    onClose: () => void
     onNavigate: (nodeKey: string) => void
 }
 
-export function NodeDetailPanel({ node, onClose, onNavigate }: NodeDetailPanelProps) {
+export function NodeDetailPanel({ node, onNavigate }: NodeDetailPanelProps) {
     const { attrs, neighbors } = node
 
     const outgoing = neighbors.filter((n) => n.direction === "outgoing")
@@ -17,21 +15,13 @@ export function NodeDetailPanel({ node, onClose, onNavigate }: NodeDetailPanelPr
     return (
         <div className="absolute top-0 right-0 bottom-0 z-20 w-80 bg-[#121212] border-l border-white/10 overflow-y-auto">
             {/* Header */}
-            <div className="sticky top-0 bg-[#121212] border-b border-white/10 px-4 py-3 flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                    <h2 className="text-white text-sm font-mono font-medium truncate">
-                        {attrs.label.split(" — ")[1] ?? attrs.label}
-                    </h2>
-                    <p className="text-white/50 text-xs font-mono truncate">
-                        {attrs.artists.join(", ")}
-                    </p>
-                </div>
-                <button
-                    onClick={onClose}
-                    className="text-white/40 hover:text-white/80 transition-colors shrink-0 mt-0.5"
-                >
-                    <X size={16} />
-                </button>
+            <div className="sticky top-0 bg-[#121212] border-b border-white/10 px-4 py-3">
+                <h2 className="text-white text-sm font-mono font-medium truncate">
+                    {attrs.label.split(" — ")[1] ?? attrs.label}
+                </h2>
+                <p className="text-white/50 text-xs font-mono truncate">
+                    {attrs.artists.join(", ")}
+                </p>
             </div>
 
             {/* Stats */}
