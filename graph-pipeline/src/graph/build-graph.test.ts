@@ -500,4 +500,22 @@ describe("buildGraph", () => {
             expect(node.totalPlays).toBe(3);
         });
     });
+
+    describe("large datasets", () => {
+        it("handles 200k+ scrobbles without stack overflow", () => {
+            const count = 200_000;
+            const scrobbles = Array.from({ length: count }, (_, i) => ({
+                artist: `Artist ${i % 100}`,
+                track: `Track ${i % 100}`,
+                album: "Album",
+                timestamp: 1_700_000_000 + i,
+            }));
+
+            const graph = buildGraph({ lastfmScrobbles: scrobbles });
+
+            expect(graph.metadata.dateRange.from).toBeTruthy();
+            expect(graph.metadata.dateRange.to).toBeTruthy();
+            expect(graph.metadata.totalScrobbles).toBe(count);
+        });
+    });
 });

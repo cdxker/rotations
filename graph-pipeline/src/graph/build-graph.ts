@@ -237,7 +237,7 @@ export function buildGraph(input: GraphInput): ListeningGraph {
     if (input.lastfmScrobbles?.length) {
         const result = processLastfmScrobbles(nodes, input.lastfmScrobbles);
         totalScrobbles += result.totalPlays;
-        allTimestamps.push(...result.timestamps);
+        for (const t of result.timestamps) allTimestamps.push(t);
     }
 
     if (input.spotifyRecentTracks?.length) {
@@ -246,7 +246,7 @@ export function buildGraph(input: GraphInput): ListeningGraph {
             input.spotifyRecentTracks,
         );
         totalScrobbles += result.totalPlays;
-        allTimestamps.push(...result.timestamps);
+        for (const t of result.timestamps) allTimestamps.push(t);
     }
 
     if (input.spotifyPlaylistTracks?.length) {
@@ -256,14 +256,20 @@ export function buildGraph(input: GraphInput): ListeningGraph {
         );
     }
 
-    // Compute date range from timestamps
+    // Compute date range from timestamps (loop to avoid stack overflow on large arrays)
+    let minTs = Infinity;
+    let maxTs = -Infinity;
+    for (const t of allTimestamps) {
+        if (t < minTs) minTs = t;
+        if (t > maxTs) maxTs = t;
+    }
     const from =
         allTimestamps.length > 0
-            ? new Date(Math.min(...allTimestamps) * 1000).toISOString()
+            ? new Date(minTs * 1000).toISOString()
             : "";
     const to =
         allTimestamps.length > 0
-            ? new Date(Math.max(...allTimestamps) * 1000).toISOString()
+            ? new Date(maxTs * 1000).toISOString()
             : "";
 
     return {
