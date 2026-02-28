@@ -67,7 +67,7 @@
 ## Phase 7 — Bug Fixes (from Triage)
 
 - [X] `01-FixPipelineRerunDoubling.md` — Clear graph tables before save to make pipeline idempotent
-- [ ] `01-FixSpotifyDoubleFetch.md` — Pass pre-fetched dump to exportToJson to eliminate redundant API calls
+- [X] `01-FixSpotifyDoubleFetch.md` — Pass pre-fetched dump to exportToJson to eliminate redundant API calls
 - [ ] `01-FixTimestampSpreadOverflow.md` — Replace Math.min/max spread with loop to handle >65k scrobbles
 - [ ] `01-FixPathPanelStaleAsync.md` — Use functional state updates in async callbacks to prevent stale closure overwrites
 - [ ] `01-FixSourceBreakdownSemantics.md` — Track per-source play counts and report scrobbles instead of nodes

@@ -245,7 +245,7 @@ export function createApp(config: ServerConfig): Hono {
             }
             const client = new SpotifyClient(auth);
             const dump = await client.fetchAll();
-            await client.exportToJson("data/spotify-dump.json");
+            await client.exportToJson("data/spotify-dump.json", dump);
 
             return c.json({
                 status: "complete",

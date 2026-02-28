@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { SpotifyClient } from "./spotify-client.js";
+import { SpotifyClient, type SpotifyDump } from "./spotify-client.js";
 import { SpotifyAuth } from "./spotify-auth.js";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 
 const TEST_CONFIG = {
     clientId: "test-id",
@@ -342,6 +342,41 @@ describe("SpotifyClient", () => {
             await expect(client.getRecentlyPlayed()).rejects.toThrow(
                 "rate limited",
             );
+        });
+    });
+
+    describe("exportToJson", () => {
+        it("uses provided dump without calling fetchAll", async () => {
+            const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+            const dump: SpotifyDump = {
+                recentlyPlayed: [
+                    {
+                        spotifyId: "r1",
+                        artist: "Artist",
+                        track: "Track",
+                        album: "Album",
+                        playedAt: "2025-01-15T10:00:00Z",
+                    },
+                ],
+                playlistTracks: [],
+                exportedAt: "2025-01-15T12:00:00Z",
+            };
+
+            const tmpDir = mkdtempSync(join(tmpdir(), "export-test-"));
+            const outPath = join(tmpDir, "dump.json");
+
+            const client = await createClient();
+            const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+            const result = await client.exportToJson(outPath, dump);
+            consoleSpy.mockRestore();
+
+            expect(fetchSpy).not.toHaveBeenCalled();
+            expect(result).toEqual(dump);
+
+            const written = JSON.parse(readFileSync(outPath, "utf-8"));
+            expect(written.recentlyPlayed).toHaveLength(1);
+            expect(written.recentlyPlayed[0].track).toBe("Track");
         });
     });
 
