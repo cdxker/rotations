@@ -3,7 +3,12 @@ import type { SongKey, ListeningGraph } from "../graph/types.js";
 export interface ClusterStats {
     clusterId: number;
     size: number;
-    topSongs: Array<{ songKey: SongKey; name: string; artists: string[]; totalPlays: number }>;
+    topSongs: Array<{
+        songKey: SongKey;
+        name: string;
+        artists: string[];
+        totalPlays: number;
+    }>;
     interClusterEdges: number;
 }
 
@@ -43,7 +48,10 @@ export function detectClusters(
     }
 
     // Adjacency: weights[i] = Map<j, weight> (undirected)
-    const weights: Map<number, number>[] = Array.from({ length: n }, () => new Map());
+    const weights: Map<number, number>[] = Array.from(
+        { length: n },
+        () => new Map(),
+    );
     let totalWeight = 0;
 
     for (let i = 0; i < keys.length; i++) {
@@ -69,12 +77,14 @@ export function detectClusters(
             clusters: keys.map((key, i) => ({
                 clusterId: i,
                 size: 1,
-                topSongs: [{
-                    songKey: key,
-                    name: graph.nodes[key]!.name,
-                    artists: graph.nodes[key]!.artists,
-                    totalPlays: graph.nodes[key]!.totalPlays,
-                }],
+                topSongs: [
+                    {
+                        songKey: key,
+                        name: graph.nodes[key]!.name,
+                        artists: graph.nodes[key]!.artists,
+                        totalPlays: graph.nodes[key]!.totalPlays,
+                    },
+                ],
                 interClusterEdges: 0,
             })),
             modularity: 0,
@@ -185,7 +195,15 @@ export function detectClusters(
 
     // Compute cluster stats
     const clusterCount = nextId;
-    const clusters = computeClusterStats(graph, keys, community, weights, keyIndex, clusterCount, maxTopSongs);
+    const clusters = computeClusterStats(
+        graph,
+        keys,
+        community,
+        weights,
+        keyIndex,
+        clusterCount,
+        maxTopSongs,
+    );
 
     return { clusterCount, clusters, modularity };
 }

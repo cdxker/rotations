@@ -5,7 +5,7 @@ import path from "node:path";
 import os from "node:os";
 import { LastfmClient } from "./lastfm-client.js";
 import { fetchLastfmScrobbles } from "./lastfm-fetcher.js";
-import type { RawScrobble } from "./types.js";
+import type { RawScrobble } from "../graph/build-graph.js";
 
 const TEST_CONFIG = { apiKey: "test-key", username: "test-user" };
 

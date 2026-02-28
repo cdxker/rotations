@@ -90,7 +90,7 @@ export function SpotifyAddContent({ onBack }: { onBack?: () => void }) {
                 <div className="flex items-center justify-between mb-8">
                     <div className="flex items-center gap-4">
                         <button
-                            onClick={() => onBack ? onBack() : (window.location.href = "/player")}
+                            onClick={() => (onBack ? onBack() : (window.location.href = "/player"))}
                             className="text-white/50 hover:text-white transition-colors"
                         >
                             &larr; Back
@@ -150,9 +150,7 @@ export function SpotifyAddContent({ onBack }: { onBack?: () => void }) {
                                 <h3
                                     className={cn(
                                         "font-medium truncate transition-colors",
-                                        isSelected
-                                            ? "text-green-400"
-                                            : "group-hover:text-green-400"
+                                        isSelected ? "text-green-400" : "group-hover:text-green-400"
                                     )}
                                 >
                                     {playlist.name}

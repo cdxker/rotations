@@ -15,6 +15,21 @@ export interface ServerConfig {
     dbPath: string;
 }
 
+/** Run an async handler, catching errors and returning a 500 JSON response. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function pipelineHandler(c: any, label: string, fn: () => Promise<any>) {
+    try {
+        return await fn();
+    } catch (err) {
+        return c.json(
+            {
+                error: `${label}: ${err instanceof Error ? err.message : err}`,
+            },
+            500,
+        );
+    }
+}
+
 /** Create the Hono app with all graph API routes. */
 export function createApp(config: ServerConfig): Hono {
     const app = new Hono();
@@ -146,21 +161,31 @@ export function createApp(config: ServerConfig): Hono {
         const algorithm = c.req.query("algorithm") ?? "shortest";
 
         if (!from || !to) {
-            return c.json({ error: "Both 'from' and 'to' query parameters are required" }, 400);
+            return c.json(
+                { error: "Both 'from' and 'to' query parameters are required" },
+                400,
+            );
         }
 
         if (!from.includes("::") || !to.includes("::")) {
-            return c.json({ error: "Invalid songKey format. Expected: artist::track" }, 400);
+            return c.json(
+                { error: "Invalid songKey format. Expected: artist::track" },
+                400,
+            );
         }
 
         if (algorithm !== "shortest" && algorithm !== "strongest") {
-            return c.json({ error: "Algorithm must be 'shortest' or 'strongest'" }, 400);
+            return c.json(
+                { error: "Algorithm must be 'shortest' or 'strongest'" },
+                400,
+            );
         }
 
         const graph = db.loadGraph();
-        const result = algorithm === "strongest"
-            ? strongestPath(graph, from as SongKey, to as SongKey)
-            : shortestPath(graph, from as SongKey, to as SongKey);
+        const result =
+            algorithm === "strongest"
+                ? strongestPath(graph, from as SongKey, to as SongKey)
+                : shortestPath(graph, from as SongKey, to as SongKey);
 
         return c.json(result);
     });
@@ -168,23 +193,27 @@ export function createApp(config: ServerConfig): Hono {
     // ===== Pipeline Routes =====
 
     // POST /pipeline/spotify/auth — Start Spotify OAuth flow (opens browser)
-    app.post("/pipeline/spotify/auth", async (c) => {
-        try {
+    app.post("/pipeline/spotify/auth", (c) =>
+        pipelineHandler(c, "Spotify auth failed", async () => {
             const auth = new SpotifyAuth();
-            if (auth.hasTokens()) {
-                return c.json({ status: "already_authorized", message: "Spotify tokens already exist. Use /pipeline/spotify/refresh to refresh." });
+            if (await auth.hasTokens()) {
+                return c.json({
+                    status: "already_authorized",
+                    message:
+                        "Spotify tokens already exist. Use /pipeline/spotify/refresh to refresh.",
+                });
             }
-            // This opens a browser and waits for callback — will block until user completes auth
             await auth.authorize();
-            return c.json({ status: "authorized", message: "Spotify OAuth completed successfully." });
-        } catch (err) {
-            return c.json({ error: `Spotify auth failed: ${err instanceof Error ? err.message : err}` }, 500);
-        }
-    });
+            return c.json({
+                status: "authorized",
+                message: "Spotify OAuth completed successfully.",
+            });
+        }),
+    );
 
     // POST /pipeline/fetch/lastfm — Fetch scrobble history from Last.fm
-    app.post("/pipeline/fetch/lastfm", async (c) => {
-        try {
+    app.post("/pipeline/fetch/lastfm", (c) =>
+        pipelineHandler(c, "Last.fm fetch failed", async () => {
             const config = loadLastfmConfig();
             const client = new LastfmClient(config);
             await client.verifyAuth();
@@ -199,17 +228,20 @@ export function createApp(config: ServerConfig): Hono {
                 scrobbleCount: scrobbles.length,
                 logs,
             });
-        } catch (err) {
-            return c.json({ error: `Last.fm fetch failed: ${err instanceof Error ? err.message : err}` }, 500);
-        }
-    });
+        }),
+    );
 
     // POST /pipeline/fetch/spotify — Fetch recently played + playlists from Spotify
-    app.post("/pipeline/fetch/spotify", async (c) => {
-        try {
+    app.post("/pipeline/fetch/spotify", (c) =>
+        pipelineHandler(c, "Spotify fetch failed", async () => {
             const auth = new SpotifyAuth();
-            if (!auth.hasTokens()) {
-                return c.json({ error: "Not authorized. Call POST /pipeline/spotify/auth first." }, 400);
+            if (!(await auth.hasTokens())) {
+                return c.json(
+                    {
+                        error: "Not authorized. Call POST /pipeline/spotify/auth first.",
+                    },
+                    400,
+                );
             }
             const client = new SpotifyClient(auth);
             const dump = await client.fetchAll();
@@ -220,14 +252,12 @@ export function createApp(config: ServerConfig): Hono {
                 recentlyPlayed: dump.recentlyPlayed.length,
                 playlistTracks: dump.playlistTracks.length,
             });
-        } catch (err) {
-            return c.json({ error: `Spotify fetch failed: ${err instanceof Error ? err.message : err}` }, 500);
-        }
-    });
+        }),
+    );
 
     // POST /pipeline/build — Build graph from fetched data, enrich, and store in DB
-    app.post("/pipeline/build", async (c) => {
-        try {
+    app.post("/pipeline/build", (c) =>
+        pipelineHandler(c, "Build failed", async () => {
             const { readFile } = await import("node:fs/promises");
             const { existsSync } = await import("node:fs");
 
@@ -235,12 +265,19 @@ export function createApp(config: ServerConfig): Hono {
             const spotifyPath = "data/spotify-dump.json";
 
             if (!existsSync(lastfmPath) && !existsSync(spotifyPath)) {
-                return c.json({ error: "No data found. Fetch data first via /pipeline/fetch/lastfm or /pipeline/fetch/spotify" }, 400);
+                return c.json(
+                    {
+                        error: "No data found. Fetch data first via /pipeline/fetch/lastfm or /pipeline/fetch/spotify",
+                    },
+                    400,
+                );
             }
 
             let lastfmScrobbles;
             if (existsSync(lastfmPath)) {
-                lastfmScrobbles = JSON.parse(await readFile(lastfmPath, "utf-8"));
+                lastfmScrobbles = JSON.parse(
+                    await readFile(lastfmPath, "utf-8"),
+                );
             }
 
             let spotifyDump;
@@ -248,7 +285,13 @@ export function createApp(config: ServerConfig): Hono {
                 spotifyDump = JSON.parse(await readFile(spotifyPath, "utf-8"));
             }
 
-            const lastfmConfig = (() => { try { return loadLastfmConfig(); } catch { return null; } })();
+            const lastfmConfig = (() => {
+                try {
+                    return loadLastfmConfig();
+                } catch {
+                    return null;
+                }
+            })();
 
             const graph = buildGraph({
                 lastfmScrobbles,
@@ -257,15 +300,13 @@ export function createApp(config: ServerConfig): Hono {
                 lastfmUsername: lastfmConfig?.username,
             });
 
-            // Enrich with PageRank, stats, clusters
             const { summary } = enrichGraph(graph);
-
-            // Save to database
             db.saveGraph(graph);
 
             const nodeCount = Object.keys(graph.nodes).length;
             const edgeCount = Object.values(graph.nodes).reduce(
-                (sum, n) => sum + Object.keys(n.next).length, 0
+                (sum, n) => sum + Object.keys(n.next).length,
+                0,
             );
 
             return c.json({
@@ -275,17 +316,14 @@ export function createApp(config: ServerConfig): Hono {
                 clusters: summary.clusters.clusterCount,
                 pageRankConverged: summary.pageRank.converged,
             });
-        } catch (err) {
-            return c.json({ error: `Build failed: ${err instanceof Error ? err.message : err}` }, 500);
-        }
-    });
+        }),
+    );
 
     // POST /pipeline/run — Run the full pipeline (Last.fm only, Spotify requires separate auth)
-    app.post("/pipeline/run", async (c) => {
-        try {
+    app.post("/pipeline/run", (c) =>
+        pipelineHandler(c, "Pipeline failed", async () => {
             const steps: string[] = [];
 
-            // 1. Fetch Last.fm
             const config = loadLastfmConfig();
             const client = new LastfmClient(config);
             await client.verifyAuth();
@@ -294,18 +332,20 @@ export function createApp(config: ServerConfig): Hono {
             const scrobbles = await fetchLastfmScrobbles(client);
             steps.push(`Fetched ${scrobbles.length} scrobbles from Last.fm`);
 
-            // 2. Try Spotify if authorized
             let spotifyDump = null;
             const auth = new SpotifyAuth();
-            if (auth.hasTokens()) {
+            if (await auth.hasTokens()) {
                 const spotifyClient = new SpotifyClient(auth);
                 spotifyDump = await spotifyClient.fetchAll();
-                steps.push(`Fetched ${spotifyDump.recentlyPlayed.length} recent + ${spotifyDump.playlistTracks.length} playlist tracks from Spotify`);
+                steps.push(
+                    `Fetched ${spotifyDump.recentlyPlayed.length} recent + ${spotifyDump.playlistTracks.length} playlist tracks from Spotify`,
+                );
             } else {
-                steps.push("Spotify not authorized — skipping. Call POST /pipeline/spotify/auth to set up.");
+                steps.push(
+                    "Spotify not authorized — skipping. Call POST /pipeline/spotify/auth to set up.",
+                );
             }
 
-            // 3. Build graph
             const graph = buildGraph({
                 lastfmScrobbles: scrobbles,
                 spotifyRecentTracks: spotifyDump?.recentlyPlayed,
@@ -314,19 +354,17 @@ export function createApp(config: ServerConfig): Hono {
             });
             steps.push(`Built graph: ${Object.keys(graph.nodes).length} nodes`);
 
-            // 4. Enrich
             const { summary } = enrichGraph(graph);
-            steps.push(`Enriched: ${summary.clusters.clusterCount} clusters, PageRank converged=${summary.pageRank.converged}`);
+            steps.push(
+                `Enriched: ${summary.clusters.clusterCount} clusters, PageRank converged=${summary.pageRank.converged}`,
+            );
 
-            // 5. Save to DB
             db.saveGraph(graph);
             steps.push("Saved to database");
 
             return c.json({ status: "complete", steps });
-        } catch (err) {
-            return c.json({ error: `Pipeline failed: ${err instanceof Error ? err.message : err}` }, 500);
-        }
-    });
+        }),
+    );
 
     return app;
 }

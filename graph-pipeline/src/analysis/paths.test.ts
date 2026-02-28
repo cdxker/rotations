@@ -3,7 +3,12 @@ import { shortestPath, strongestPath } from "./paths.js";
 import type { ListeningGraph, SongKey, GraphNode } from "../graph/types.js";
 
 /** Helper to create a minimal graph node. */
-function makeNode(name: string, artist: string, next: Record<string, number> = {}, previous: Record<string, number> = {}): GraphNode {
+function makeNode(
+    name: string,
+    artist: string,
+    next: Record<string, number> = {},
+    previous: Record<string, number> = {},
+): GraphNode {
     return {
         name,
         artists: [artist],
@@ -39,14 +44,22 @@ function buildGraph(edges: Array<[string, string, number]>): ListeningGraph {
 
     return {
         nodes: nodes as Record<SongKey, GraphNode>,
-        metadata: { totalScrobbles: 0, dateRange: { from: "", to: "" }, exportTimestamp: "" },
+        metadata: {
+            totalScrobbles: 0,
+            dateRange: { from: "", to: "" },
+            exportTimestamp: "",
+        },
     };
 }
 
 describe("shortestPath", () => {
     it("finds direct one-hop path", () => {
         const graph = buildGraph([["a::x", "b::y", 5]]);
-        const result = shortestPath(graph, "a::x" as SongKey, "b::y" as SongKey);
+        const result = shortestPath(
+            graph,
+            "a::x" as SongKey,
+            "b::y" as SongKey,
+        );
         expect(result.found).toBe(true);
         expect(result.hops).toBe(1);
         expect(result.path).toHaveLength(2);
@@ -68,7 +81,11 @@ describe("shortestPath", () => {
             ["g::7", "h::8", 10],
             ["h::8", "d::4", 10],
         ]);
-        const result = shortestPath(graph, "a::1" as SongKey, "d::4" as SongKey);
+        const result = shortestPath(
+            graph,
+            "a::1" as SongKey,
+            "d::4" as SongKey,
+        );
         expect(result.found).toBe(true);
         expect(result.hops).toBe(3); // a->b->c->d
     });
@@ -78,14 +95,22 @@ describe("shortestPath", () => {
             ["a::1", "b::2", 1],
             ["c::3", "d::4", 1],
         ]);
-        const result = shortestPath(graph, "a::1" as SongKey, "d::4" as SongKey);
+        const result = shortestPath(
+            graph,
+            "a::1" as SongKey,
+            "d::4" as SongKey,
+        );
         expect(result.found).toBe(false);
         expect(result.path).toHaveLength(0);
     });
 
     it("handles same start and end", () => {
         const graph = buildGraph([["a::1", "b::2", 1]]);
-        const result = shortestPath(graph, "a::1" as SongKey, "a::1" as SongKey);
+        const result = shortestPath(
+            graph,
+            "a::1" as SongKey,
+            "a::1" as SongKey,
+        );
         expect(result.found).toBe(true);
         expect(result.hops).toBe(0);
         expect(result.path).toHaveLength(1);
@@ -93,14 +118,22 @@ describe("shortestPath", () => {
 
     it("returns not found for missing nodes", () => {
         const graph = buildGraph([["a::1", "b::2", 1]]);
-        const result = shortestPath(graph, "a::1" as SongKey, "z::z" as SongKey);
+        const result = shortestPath(
+            graph,
+            "a::1" as SongKey,
+            "z::z" as SongKey,
+        );
         expect(result.found).toBe(false);
     });
 
     it("respects directed edges", () => {
         // a -> b exists but b -> a does not
         const graph = buildGraph([["a::1", "b::2", 1]]);
-        const result = shortestPath(graph, "b::2" as SongKey, "a::1" as SongKey);
+        const result = shortestPath(
+            graph,
+            "b::2" as SongKey,
+            "a::1" as SongKey,
+        );
         expect(result.found).toBe(false);
     });
 });
@@ -108,7 +141,11 @@ describe("shortestPath", () => {
 describe("strongestPath", () => {
     it("finds direct path", () => {
         const graph = buildGraph([["a::x", "b::y", 5]]);
-        const result = strongestPath(graph, "a::x" as SongKey, "b::y" as SongKey);
+        const result = strongestPath(
+            graph,
+            "a::x" as SongKey,
+            "b::y" as SongKey,
+        );
         expect(result.found).toBe(true);
         expect(result.hops).toBe(1);
         expect(result.minEdgeWeight).toBe(5);
@@ -123,7 +160,11 @@ describe("strongestPath", () => {
             ["a::1", "c::3", 5],
             ["c::3", "d::4", 3],
         ]);
-        const result = strongestPath(graph, "a::1" as SongKey, "d::4" as SongKey);
+        const result = strongestPath(
+            graph,
+            "a::1" as SongKey,
+            "d::4" as SongKey,
+        );
         expect(result.found).toBe(true);
         expect(result.minEdgeWeight).toBe(3); // Via c, not b
         expect(result.path[1]!.songKey).toBe("c::3");
@@ -134,13 +175,21 @@ describe("strongestPath", () => {
             ["a::1", "b::2", 1],
             ["c::3", "d::4", 1],
         ]);
-        const result = strongestPath(graph, "a::1" as SongKey, "d::4" as SongKey);
+        const result = strongestPath(
+            graph,
+            "a::1" as SongKey,
+            "d::4" as SongKey,
+        );
         expect(result.found).toBe(false);
     });
 
     it("handles same start and end", () => {
         const graph = buildGraph([["a::1", "b::2", 1]]);
-        const result = strongestPath(graph, "a::1" as SongKey, "a::1" as SongKey);
+        const result = strongestPath(
+            graph,
+            "a::1" as SongKey,
+            "a::1" as SongKey,
+        );
         expect(result.found).toBe(true);
         expect(result.hops).toBe(0);
     });
@@ -150,7 +199,11 @@ describe("strongestPath", () => {
             ["a::1", "b::2", 3],
             ["b::2", "c::3", 7],
         ]);
-        const result = strongestPath(graph, "a::1" as SongKey, "c::3" as SongKey);
+        const result = strongestPath(
+            graph,
+            "a::1" as SongKey,
+            "c::3" as SongKey,
+        );
         expect(result.found).toBe(true);
         expect(result.totalWeight).toBe(10);
         expect(result.minEdgeWeight).toBe(3);

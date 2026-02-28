@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Search, X } from "lucide-react";
-import { useSigma } from "@react-sigma/core";
-import type { NodeAttributes } from "@/lib/graph-api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Search, X } from "lucide-react"
+import { useSigma } from "@react-sigma/core"
+import type { NodeAttributes } from "@/lib/graph-api"
 
 interface SearchResult {
-    key: string;
-    label: string;
-    totalPlays: number;
+    key: string
+    label: string
+    totalPlays: number
 }
 
 interface SearchBarProps {
-    onSelect: (nodeKey: string) => void;
+    onSelect: (nodeKey: string) => void
 }
 
 /**
@@ -18,81 +18,87 @@ interface SearchBarProps {
  * Must be rendered inside a SigmaContainer.
  */
 export function SearchBarInner({ onSelect }: SearchBarProps) {
-    const sigma = useSigma();
-    const [query, setQuery] = useState("");
-    const [results, setResults] = useState<SearchResult[]>([]);
-    const [isOpen, setIsOpen] = useState(false);
-    const [selectedIndex, setSelectedIndex] = useState(0);
-    const inputRef = useRef<HTMLInputElement>(null);
-    const containerRef = useRef<HTMLDivElement>(null);
+    const sigma = useSigma()
+    const [query, setQuery] = useState("")
+    const [results, setResults] = useState<SearchResult[]>([])
+    const [isOpen, setIsOpen] = useState(false)
+    const [selectedIndex, setSelectedIndex] = useState(0)
+    const inputRef = useRef<HTMLInputElement>(null)
+    const containerRef = useRef<HTMLDivElement>(null)
 
     // Search the graph when query changes
     useEffect(() => {
         if (!query.trim()) {
-            setResults([]);
-            setIsOpen(false);
-            return;
+            setResults([])
+            setIsOpen(false)
+            return
         }
 
-        const graph = sigma.getGraph();
-        const lowerQuery = query.toLowerCase();
-        const matches: SearchResult[] = [];
+        const graph = sigma.getGraph()
+        const lowerQuery = query.toLowerCase()
+        const matches: SearchResult[] = []
 
         graph.forEachNode((node, attrs) => {
-            const nodeAttrs = attrs as NodeAttributes;
-            const label = nodeAttrs.label.toLowerCase();
+            const nodeAttrs = attrs as NodeAttributes
+            const label = nodeAttrs.label.toLowerCase()
             if (label.includes(lowerQuery)) {
                 matches.push({
                     key: node,
                     label: nodeAttrs.label,
                     totalPlays: nodeAttrs.totalPlays,
-                });
+                })
             }
-            if (matches.length >= 20) return;
-        });
+            if (matches.length >= 20) return
+        })
 
         // Sort by play count descending for better relevance
-        matches.sort((a, b) => b.totalPlays - a.totalPlays);
+        matches.sort((a, b) => b.totalPlays - a.totalPlays)
 
-        setResults(matches.slice(0, 10));
-        setSelectedIndex(0);
-        setIsOpen(matches.length > 0);
-    }, [query, sigma]);
+        setResults(matches.slice(0, 10))
+        setSelectedIndex(0)
+        setIsOpen(matches.length > 0)
+    }, [query, sigma])
 
-    const handleSelect = useCallback((nodeKey: string) => {
-        onSelect(nodeKey);
-        setQuery("");
-        setResults([]);
-        setIsOpen(false);
-        inputRef.current?.blur();
-    }, [onSelect]);
+    const handleSelect = useCallback(
+        (nodeKey: string) => {
+            onSelect(nodeKey)
+            setQuery("")
+            setResults([])
+            setIsOpen(false)
+            inputRef.current?.blur()
+        },
+        [onSelect]
+    )
 
-    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-        if (e.key === "ArrowDown") {
-            e.preventDefault();
-            setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1));
-        } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setSelectedIndex((prev) => Math.max(prev - 1, 0));
-        } else if (e.key === "Enter" && results[selectedIndex]) {
-            e.preventDefault();
-            handleSelect(results[selectedIndex].key);
-        } else if (e.key === "Escape") {
-            setIsOpen(false);
-            inputRef.current?.blur();
-        }
-    }, [results, selectedIndex, handleSelect]);
+    const handleKeyDown = useCallback(
+        (e: React.KeyboardEvent) => {
+            if (e.key === "ArrowDown") {
+                e.preventDefault()
+                setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1))
+            } else if (e.key === "ArrowUp") {
+                e.preventDefault()
+                setSelectedIndex((prev) => Math.max(prev - 1, 0))
+            } else if (e.key === "Enter" && results[selectedIndex]) {
+                e.preventDefault()
+                handleSelect(results[selectedIndex].key)
+            } else if (e.key === "Escape") {
+                setIsOpen(false)
+                inputRef.current?.blur()
+            }
+        },
+        [results, selectedIndex, handleSelect]
+    )
 
     // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-                setIsOpen(false);
+                setIsOpen(false)
             }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
+        }
+        document.addEventListener("mousedown", handleClickOutside)
+        return () => document.removeEventListener("mousedown", handleClickOutside)
+    }, [])
 
     return (
         <div ref={containerRef} className="relative">
@@ -103,14 +109,20 @@ export function SearchBarInner({ onSelect }: SearchBarProps) {
                     type="text"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    onFocus={() => { if (results.length > 0) setIsOpen(true); }}
+                    onFocus={() => {
+                        if (results.length > 0) setIsOpen(true)
+                    }}
                     onKeyDown={handleKeyDown}
                     placeholder="Search songs or artists..."
                     className="bg-transparent text-white/80 text-xs font-mono placeholder:text-white/30 outline-none w-48"
                 />
                 {query && (
                     <button
-                        onClick={() => { setQuery(""); setResults([]); setIsOpen(false); }}
+                        onClick={() => {
+                            setQuery("")
+                            setResults([])
+                            setIsOpen(false)
+                        }}
                         className="text-white/30 hover:text-white/60 transition-colors"
                     >
                         <X size={12} />
@@ -141,5 +153,5 @@ export function SearchBarInner({ onSelect }: SearchBarProps) {
                 </div>
             )}
         </div>
-    );
+    )
 }

@@ -1,11 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { buildGraph, type GraphInput } from "./build-graph.js";
 import type { SongKey } from "./types.js";
-import type { RawScrobble } from "../ingestion/types.js";
-import type {
-    RawSpotifyRecentTrack,
-    RawSpotifyPlaylistTrack,
-} from "../ingestion/types.js";
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -16,8 +11,18 @@ describe("buildGraph", () => {
         it("creates nodes from scrobbles", () => {
             const input: GraphInput = {
                 lastfmScrobbles: [
-                    { artist: "Artist A", track: "Track 1", album: "Album 1", timestamp: 1000 },
-                    { artist: "Artist B", track: "Track 2", album: "Album 2", timestamp: 2000 },
+                    {
+                        artist: "Artist A",
+                        track: "Track 1",
+                        album: "Album 1",
+                        timestamp: 1000,
+                    },
+                    {
+                        artist: "Artist B",
+                        track: "Track 2",
+                        album: "Album 2",
+                        timestamp: 2000,
+                    },
                 ],
             };
 
@@ -110,7 +115,9 @@ describe("buildGraph", () => {
             };
 
             const graph = buildGraph(input);
-            expect(graph.nodes["a::t1" as SongKey]!.sources).toEqual(["lastfm"]);
+            expect(graph.nodes["a::t1" as SongKey]!.sources).toEqual([
+                "lastfm",
+            ]);
         });
 
         it("skips tracks with missing artist or name", () => {
@@ -131,8 +138,20 @@ describe("buildGraph", () => {
         it("creates nodes and edges from recent tracks", () => {
             const input: GraphInput = {
                 spotifyRecentTracks: [
-                    { spotifyId: "s1", artist: "A", track: "T1", album: "Al1", playedAt: "2024-01-01T00:00:00Z" },
-                    { spotifyId: "s2", artist: "B", track: "T2", album: "Al2", playedAt: "2024-01-01T00:05:00Z" },
+                    {
+                        spotifyId: "s1",
+                        artist: "A",
+                        track: "T1",
+                        album: "Al1",
+                        playedAt: "2024-01-01T00:00:00Z",
+                    },
+                    {
+                        spotifyId: "s2",
+                        artist: "B",
+                        track: "T2",
+                        album: "Al2",
+                        playedAt: "2024-01-01T00:05:00Z",
+                    },
                 ],
             };
 
@@ -148,8 +167,20 @@ describe("buildGraph", () => {
         it("sorts by playedAt before building edges", () => {
             const input: GraphInput = {
                 spotifyRecentTracks: [
-                    { spotifyId: "s2", artist: "B", track: "T2", album: "", playedAt: "2024-01-01T00:10:00Z" },
-                    { spotifyId: "s1", artist: "A", track: "T1", album: "", playedAt: "2024-01-01T00:00:00Z" },
+                    {
+                        spotifyId: "s2",
+                        artist: "B",
+                        track: "T2",
+                        album: "",
+                        playedAt: "2024-01-01T00:10:00Z",
+                    },
+                    {
+                        spotifyId: "s1",
+                        artist: "A",
+                        track: "T1",
+                        album: "",
+                        playedAt: "2024-01-01T00:00:00Z",
+                    },
                 ],
             };
 
@@ -163,9 +194,30 @@ describe("buildGraph", () => {
         it("creates edges from playlist track ordering", () => {
             const input: GraphInput = {
                 spotifyPlaylistTracks: [
-                    { spotifyId: "s1", artist: "A", track: "T1", album: "", playlistName: "My Playlist", position: 0 },
-                    { spotifyId: "s2", artist: "B", track: "T2", album: "", playlistName: "My Playlist", position: 1 },
-                    { spotifyId: "s3", artist: "C", track: "T3", album: "", playlistName: "My Playlist", position: 2 },
+                    {
+                        spotifyId: "s1",
+                        artist: "A",
+                        track: "T1",
+                        album: "",
+                        playlistName: "My Playlist",
+                        position: 0,
+                    },
+                    {
+                        spotifyId: "s2",
+                        artist: "B",
+                        track: "T2",
+                        album: "",
+                        playlistName: "My Playlist",
+                        position: 1,
+                    },
+                    {
+                        spotifyId: "s3",
+                        artist: "C",
+                        track: "T3",
+                        album: "",
+                        playlistName: "My Playlist",
+                        position: 2,
+                    },
                 ],
             };
 
@@ -181,10 +233,38 @@ describe("buildGraph", () => {
         it("processes multiple playlists independently", () => {
             const input: GraphInput = {
                 spotifyPlaylistTracks: [
-                    { spotifyId: "s1", artist: "A", track: "T1", album: "", playlistName: "Playlist 1", position: 0 },
-                    { spotifyId: "s2", artist: "B", track: "T2", album: "", playlistName: "Playlist 1", position: 1 },
-                    { spotifyId: "s3", artist: "C", track: "T3", album: "", playlistName: "Playlist 2", position: 0 },
-                    { spotifyId: "s4", artist: "D", track: "T4", album: "", playlistName: "Playlist 2", position: 1 },
+                    {
+                        spotifyId: "s1",
+                        artist: "A",
+                        track: "T1",
+                        album: "",
+                        playlistName: "Playlist 1",
+                        position: 0,
+                    },
+                    {
+                        spotifyId: "s2",
+                        artist: "B",
+                        track: "T2",
+                        album: "",
+                        playlistName: "Playlist 1",
+                        position: 1,
+                    },
+                    {
+                        spotifyId: "s3",
+                        artist: "C",
+                        track: "T3",
+                        album: "",
+                        playlistName: "Playlist 2",
+                        position: 0,
+                    },
+                    {
+                        spotifyId: "s4",
+                        artist: "D",
+                        track: "T4",
+                        album: "",
+                        playlistName: "Playlist 2",
+                        position: 1,
+                    },
                 ],
             };
 
@@ -205,10 +285,21 @@ describe("buildGraph", () => {
         it("merges the same song from multiple sources", () => {
             const input: GraphInput = {
                 lastfmScrobbles: [
-                    { artist: "Artist A", track: "Track 1", album: "Album 1", timestamp: 1000 },
+                    {
+                        artist: "Artist A",
+                        track: "Track 1",
+                        album: "Album 1",
+                        timestamp: 1000,
+                    },
                 ],
                 spotifyRecentTracks: [
-                    { spotifyId: "s1", artist: "Artist A", track: "Track 1", album: "Album 1", playedAt: "2024-01-01T00:00:00Z" },
+                    {
+                        spotifyId: "s1",
+                        artist: "Artist A",
+                        track: "Track 1",
+                        album: "Album 1",
+                        playedAt: "2024-01-01T00:00:00Z",
+                    },
                 ],
             };
 
@@ -230,8 +321,20 @@ describe("buildGraph", () => {
                     { artist: "B", track: "T2", album: "", timestamp: 2000 },
                 ],
                 spotifyRecentTracks: [
-                    { spotifyId: "s1", artist: "A", track: "T1", album: "", playedAt: "2024-01-02T00:00:00Z" },
-                    { spotifyId: "s2", artist: "B", track: "T2", album: "", playedAt: "2024-01-02T00:05:00Z" },
+                    {
+                        spotifyId: "s1",
+                        artist: "A",
+                        track: "T1",
+                        album: "",
+                        playedAt: "2024-01-02T00:00:00Z",
+                    },
+                    {
+                        spotifyId: "s2",
+                        artist: "B",
+                        track: "T2",
+                        album: "",
+                        playedAt: "2024-01-02T00:05:00Z",
+                    },
                 ],
             };
 
@@ -269,7 +372,14 @@ describe("buildGraph", () => {
         it("handles single-track playlist (no edges)", () => {
             const input: GraphInput = {
                 spotifyPlaylistTracks: [
-                    { spotifyId: "s1", artist: "A", track: "T1", album: "", playlistName: "Solo", position: 0 },
+                    {
+                        spotifyId: "s1",
+                        artist: "A",
+                        track: "T1",
+                        album: "",
+                        playlistName: "Solo",
+                        position: 0,
+                    },
                 ],
             };
 
@@ -287,10 +397,23 @@ describe("buildGraph", () => {
                     { artist: "B", track: "T2", album: "", timestamp: 2000 },
                 ],
                 spotifyRecentTracks: [
-                    { spotifyId: "s1", artist: "C", track: "T3", album: "", playedAt: "2024-01-01T00:00:00Z" },
+                    {
+                        spotifyId: "s1",
+                        artist: "C",
+                        track: "T3",
+                        album: "",
+                        playedAt: "2024-01-01T00:00:00Z",
+                    },
                 ],
                 spotifyPlaylistTracks: [
-                    { spotifyId: "s2", artist: "D", track: "T4", album: "", playlistName: "P", position: 0 },
+                    {
+                        spotifyId: "s2",
+                        artist: "D",
+                        track: "T4",
+                        album: "",
+                        playlistName: "P",
+                        position: 0,
+                    },
                 ],
             };
 
@@ -304,15 +427,31 @@ describe("buildGraph", () => {
 
             const input: GraphInput = {
                 lastfmScrobbles: [
-                    { artist: "A", track: "T1", album: "", timestamp: 1704067200 }, // 2024-01-01
-                    { artist: "B", track: "T2", album: "", timestamp: 1706745600 }, // 2024-02-01
+                    {
+                        artist: "A",
+                        track: "T1",
+                        album: "",
+                        timestamp: 1704067200,
+                    }, // 2024-01-01
+                    {
+                        artist: "B",
+                        track: "T2",
+                        album: "",
+                        timestamp: 1706745600,
+                    }, // 2024-02-01
                 ],
             };
 
             const graph = buildGraph(input);
-            expect(graph.metadata.dateRange.from).toBe("2024-01-01T00:00:00.000Z");
-            expect(graph.metadata.dateRange.to).toBe("2024-02-01T00:00:00.000Z");
-            expect(graph.metadata.exportTimestamp).toBe("2024-06-01T00:00:00.000Z");
+            expect(graph.metadata.dateRange.from).toBe(
+                "2024-01-01T00:00:00.000Z",
+            );
+            expect(graph.metadata.dateRange.to).toBe(
+                "2024-02-01T00:00:00.000Z",
+            );
+            expect(graph.metadata.exportTimestamp).toBe(
+                "2024-06-01T00:00:00.000Z",
+            );
 
             vi.useRealTimers();
         });
@@ -332,9 +471,24 @@ describe("buildGraph", () => {
         it("matches songs case-insensitively", () => {
             const input: GraphInput = {
                 lastfmScrobbles: [
-                    { artist: "Artist A", track: "Track 1", album: "", timestamp: 1000 },
-                    { artist: "ARTIST A", track: "TRACK 1", album: "", timestamp: 2000 },
-                    { artist: "artist a", track: "track 1", album: "", timestamp: 3000 },
+                    {
+                        artist: "Artist A",
+                        track: "Track 1",
+                        album: "",
+                        timestamp: 1000,
+                    },
+                    {
+                        artist: "ARTIST A",
+                        track: "TRACK 1",
+                        album: "",
+                        timestamp: 2000,
+                    },
+                    {
+                        artist: "artist a",
+                        track: "track 1",
+                        album: "",
+                        timestamp: 3000,
+                    },
                 ],
             };
 

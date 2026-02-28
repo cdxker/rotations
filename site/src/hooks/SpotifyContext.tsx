@@ -115,7 +115,7 @@ export function SpotifyProvider({ children }: SpotifyProviderProps) {
                     player.getCurrentState().then((state) => {
                         if (state) setCurrentTimeMs(state.position)
                     })
-                } , 250)
+                }, 250)
 
                 player.connect()
                 playerRef.current = player

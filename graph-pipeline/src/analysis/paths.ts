@@ -30,7 +30,11 @@ export interface PathResult {
  * BFS shortest path — fewest hops between two songs.
  * Follows directed edges (node.next).
  */
-export function shortestPath(graph: ListeningGraph, from: SongKey, to: SongKey): PathResult {
+export function shortestPath(
+    graph: ListeningGraph,
+    from: SongKey,
+    to: SongKey,
+): PathResult {
     const empty: PathResult = {
         from,
         to,
@@ -87,7 +91,11 @@ export function shortestPath(graph: ListeningGraph, from: SongKey, to: SongKey):
  * Uses a max-priority queue on the minimum edge weight seen so far.
  * Follows directed edges (node.next).
  */
-export function strongestPath(graph: ListeningGraph, from: SongKey, to: SongKey): PathResult {
+export function strongestPath(
+    graph: ListeningGraph,
+    from: SongKey,
+    to: SongKey,
+): PathResult {
     const empty: PathResult = {
         from,
         to,
@@ -108,7 +116,9 @@ export function strongestPath(graph: ListeningGraph, from: SongKey, to: SongKey)
     best.set(from, Infinity);
 
     // Simple priority queue using sorted insertion (graph sizes are manageable)
-    const pq: Array<{ key: SongKey; minWeight: number }> = [{ key: from, minWeight: Infinity }];
+    const pq: Array<{ key: SongKey; minWeight: number }> = [
+        { key: from, minWeight: Infinity },
+    ];
 
     while (pq.length > 0) {
         // Pop the entry with the highest minWeight
@@ -151,7 +161,11 @@ export function strongestPath(graph: ListeningGraph, from: SongKey, to: SongKey)
 }
 
 /** Build a PathResult from an ordered list of SongKeys. */
-function buildResult(graph: ListeningGraph, keys: SongKey[], algorithm: "shortest" | "strongest"): PathResult {
+function buildResult(
+    graph: ListeningGraph,
+    keys: SongKey[],
+    algorithm: "shortest" | "strongest",
+): PathResult {
     const path: PathStep[] = [];
     let totalWeight = 0;
     let minEdgeWeight = Infinity;

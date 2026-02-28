@@ -3,7 +3,7 @@ import { SpotifyAuth } from "./spotify-auth.js";
 import type {
     RawSpotifyRecentTrack,
     RawSpotifyPlaylistTrack,
-} from "./types.js";
+} from "../graph/build-graph.js";
 
 const SPOTIFY_API_BASE = "https://api.spotify.com/v1";
 

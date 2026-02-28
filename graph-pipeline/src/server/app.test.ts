@@ -12,10 +12,30 @@ function seedDatabase(dbPath: string): GraphDatabase {
     const db = new GraphDatabase(dbPath);
     const graph = buildGraph({
         lastfmScrobbles: [
-            { artist: "Radiohead", track: "Creep", album: "Pablo Honey", timestamp: 1000 },
-            { artist: "Radiohead", track: "Karma Police", album: "OK Computer", timestamp: 2000 },
-            { artist: "Radiohead", track: "Creep", album: "Pablo Honey", timestamp: 3000 },
-            { artist: "Nirvana", track: "Smells Like Teen Spirit", album: "Nevermind", timestamp: 4000 },
+            {
+                artist: "Radiohead",
+                track: "Creep",
+                album: "Pablo Honey",
+                timestamp: 1000,
+            },
+            {
+                artist: "Radiohead",
+                track: "Karma Police",
+                album: "OK Computer",
+                timestamp: 2000,
+            },
+            {
+                artist: "Radiohead",
+                track: "Creep",
+                album: "Pablo Honey",
+                timestamp: 3000,
+            },
+            {
+                artist: "Nirvana",
+                track: "Smells Like Teen Spirit",
+                album: "Nevermind",
+                timestamp: 4000,
+            },
         ],
         lastfmUsername: "testuser",
     });

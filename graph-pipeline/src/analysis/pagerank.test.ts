@@ -14,9 +14,7 @@ function makeNode(overrides: Partial<GraphNode> = {}): GraphNode {
     };
 }
 
-function makeGraph(
-    nodes: Record<string, GraphNode>,
-): ListeningGraph {
+function makeGraph(nodes: Record<string, GraphNode>): ListeningGraph {
     return {
         nodes: nodes as Record<SongKey, GraphNode>,
         metadata: {

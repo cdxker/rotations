@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import { filterGraph, toGraphology, clearGraphCache, fetchGraph, getClusterColor } from "./graph-api"
-import type { ListeningGraph, SongKey, GraphNode } from "./graph-types"
+import {
+    filterGraph,
+    toGraphology,
+    clearGraphCache,
+    fetchGraph,
+    getClusterColor,
+} from "./graph-api"
+import type { ListeningGraph, SongKey, GraphNode } from "./graph-api"
 
 function makeNode(overrides: Partial<GraphNode> = {}): GraphNode {
     return {
@@ -112,15 +118,17 @@ describe("toGraphology", () => {
     })
 
     it("creates nodes with correct attributes", () => {
-        const graph = toGraphology(makeGraph({
-            "a::t1": makeNode({
-                name: "Song1",
-                artists: ["ArtistA"],
-                totalPlays: 42,
-                pageRank: 0.05,
-                clusterId: 2,
-            }),
-        }))
+        const graph = toGraphology(
+            makeGraph({
+                "a::t1": makeNode({
+                    name: "Song1",
+                    artists: ["ArtistA"],
+                    totalPlays: 42,
+                    pageRank: 0.05,
+                    clusterId: 2,
+                }),
+            })
+        )
 
         expect(graph.order).toBe(1)
         const attrs = graph.getNodeAttributes("a::t1")
@@ -135,14 +143,16 @@ describe("toGraphology", () => {
     })
 
     it("creates directed edges from next map", () => {
-        const graph = toGraphology(makeGraph({
-            "a::t1": makeNode({
-                next: { "b::t2": 5 } as Record<SongKey, number>,
-            }),
-            "b::t2": makeNode({
-                previous: { "a::t1": 5 } as Record<SongKey, number>,
-            }),
-        }))
+        const graph = toGraphology(
+            makeGraph({
+                "a::t1": makeNode({
+                    next: { "b::t2": 5 } as Record<SongKey, number>,
+                }),
+                "b::t2": makeNode({
+                    previous: { "a::t1": 5 } as Record<SongKey, number>,
+                }),
+            })
+        )
 
         expect(graph.order).toBe(2)
         expect(graph.size).toBe(1)
@@ -151,12 +161,14 @@ describe("toGraphology", () => {
     })
 
     it("sets edge weight and size", () => {
-        const graph = toGraphology(makeGraph({
-            "a::t1": makeNode({
-                next: { "b::t2": 10 } as Record<SongKey, number>,
-            }),
-            "b::t2": makeNode(),
-        }))
+        const graph = toGraphology(
+            makeGraph({
+                "a::t1": makeNode({
+                    next: { "b::t2": 10 } as Record<SongKey, number>,
+                }),
+                "b::t2": makeNode(),
+            })
+        )
 
         const edge = graph.edge("a::t1", "b::t2")!
         const attrs = graph.getEdgeAttributes(edge)
@@ -165,10 +177,12 @@ describe("toGraphology", () => {
     })
 
     it("scales node size by play count", () => {
-        const graph = toGraphology(makeGraph({
-            "a::t1": makeNode({ totalPlays: 1 }),
-            "b::t2": makeNode({ totalPlays: 100 }),
-        }))
+        const graph = toGraphology(
+            makeGraph({
+                "a::t1": makeNode({ totalPlays: 1 }),
+                "b::t2": makeNode({ totalPlays: 100 }),
+            })
+        )
 
         const sizeA = graph.getNodeAttribute("a::t1", "size")
         const sizeB = graph.getNodeAttribute("b::t2", "size")
@@ -176,20 +190,24 @@ describe("toGraphology", () => {
     })
 
     it("skips edges to nodes not in the graph", () => {
-        const graph = toGraphology(makeGraph({
-            "a::t1": makeNode({
-                next: { "missing::node": 5 } as Record<SongKey, number>,
-            }),
-        }))
+        const graph = toGraphology(
+            makeGraph({
+                "a::t1": makeNode({
+                    next: { "missing::node": 5 } as Record<SongKey, number>,
+                }),
+            })
+        )
 
         expect(graph.order).toBe(1)
         expect(graph.size).toBe(0)
     })
 
     it("handles nodes without pageRank or clusterId", () => {
-        const graph = toGraphology(makeGraph({
-            "a::t1": makeNode(),
-        }))
+        const graph = toGraphology(
+            makeGraph({
+                "a::t1": makeNode(),
+            })
+        )
 
         const attrs = graph.getNodeAttributes("a::t1")
         expect(attrs.pageRank).toBe(0)
@@ -197,13 +215,15 @@ describe("toGraphology", () => {
     })
 
     it("handles multiple edges between different nodes", () => {
-        const graph = toGraphology(makeGraph({
-            "a::t1": makeNode({
-                next: { "b::t2": 3, "c::t3": 7 } as Record<SongKey, number>,
-            }),
-            "b::t2": makeNode(),
-            "c::t3": makeNode(),
-        }))
+        const graph = toGraphology(
+            makeGraph({
+                "a::t1": makeNode({
+                    next: { "b::t2": 3, "c::t3": 7 } as Record<SongKey, number>,
+                }),
+                "b::t2": makeNode(),
+                "c::t3": makeNode(),
+            })
+        )
 
         expect(graph.size).toBe(2)
         expect(graph.getEdgeAttribute(graph.edge("a::t1", "b::t2")!, "weight")).toBe(3)
@@ -231,9 +251,9 @@ describe("fetchGraph", () => {
 
     it("fetches from the API and caches", async () => {
         const mockGraph = makeGraph({ "a::t1": makeNode() })
-        const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-            new Response(JSON.stringify(mockGraph), { status: 200 }),
-        )
+        const fetchSpy = vi
+            .spyOn(globalThis, "fetch")
+            .mockResolvedValue(new Response(JSON.stringify(mockGraph), { status: 200 }))
 
         const result = await fetchGraph()
         expect(result.nodes["a::t1" as SongKey]).toBeDefined()
@@ -247,9 +267,11 @@ describe("fetchGraph", () => {
 
     it("re-fetches when forceRefresh is true", async () => {
         const mockGraph = makeGraph({ "a::t1": makeNode() })
-        const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
-            Promise.resolve(new Response(JSON.stringify(mockGraph), { status: 200 })),
-        )
+        const fetchSpy = vi
+            .spyOn(globalThis, "fetch")
+            .mockImplementation(() =>
+                Promise.resolve(new Response(JSON.stringify(mockGraph), { status: 200 }))
+            )
 
         await fetchGraph()
         await fetchGraph(true)
@@ -258,7 +280,7 @@ describe("fetchGraph", () => {
 
     it("throws on non-OK response", async () => {
         vi.spyOn(globalThis, "fetch").mockResolvedValue(
-            new Response("Not Found", { status: 404, statusText: "Not Found" }),
+            new Response("Not Found", { status: 404, statusText: "Not Found" })
         )
 
         await expect(fetchGraph()).rejects.toThrow("Failed to fetch graph: 404 Not Found")

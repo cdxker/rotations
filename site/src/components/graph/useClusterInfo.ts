@@ -1,14 +1,14 @@
-import { useMemo } from "react";
-import type Graph from "graphology";
-import type { Attributes } from "graphology-types";
-import { getClusterColor } from "@/lib/graph-api";
+import { useMemo } from "react"
+import type Graph from "graphology"
+import type { Attributes } from "graphology-types"
+import { getClusterColor } from "@/lib/graph-api"
 
 export interface ClusterInfo {
-    id: number;
-    color: string;
-    size: number;
-    label: string;
-    topSongs: Array<{ key: string; label: string; plays: number }>;
+    id: number
+    color: string
+    size: number
+    label: string
+    topSongs: Array<{ key: string; label: string; plays: number }>
 }
 
 /**
@@ -18,46 +18,46 @@ export interface ClusterInfo {
  */
 export function useClusterInfo(graph: Graph<Attributes> | null): ClusterInfo[] {
     return useMemo(() => {
-        if (!graph) return [];
+        if (!graph) return []
 
         const clusters = new Map<
             number,
             {
-                nodes: Array<{ key: string; label: string; plays: number; artists: string[] }>;
-                artistCounts: Map<string, number>;
+                nodes: Array<{ key: string; label: string; plays: number; artists: string[] }>
+                artistCounts: Map<string, number>
             }
-        >();
+        >()
 
         graph.forEachNode((key, attrs) => {
-            const clusterId = (attrs.clusterId as number | undefined) ?? 0;
+            const clusterId = (attrs.clusterId as number | undefined) ?? 0
 
             if (!clusters.has(clusterId)) {
-                clusters.set(clusterId, { nodes: [], artistCounts: new Map() });
+                clusters.set(clusterId, { nodes: [], artistCounts: new Map() })
             }
 
-            const cluster = clusters.get(clusterId)!;
+            const cluster = clusters.get(clusterId)!
             cluster.nodes.push({
                 key,
-                label: attrs.label as string ?? key,
-                plays: attrs.totalPlays as number ?? 0,
+                label: (attrs.label as string) ?? key,
+                plays: (attrs.totalPlays as number) ?? 0,
                 artists: (attrs.artists as string[]) ?? [],
-            });
+            })
 
-            for (const artist of ((attrs.artists as string[]) ?? [])) {
-                cluster.artistCounts.set(artist, (cluster.artistCounts.get(artist) ?? 0) + 1);
+            for (const artist of (attrs.artists as string[]) ?? []) {
+                cluster.artistCounts.set(artist, (cluster.artistCounts.get(artist) ?? 0) + 1)
             }
-        });
+        })
 
-        const result: ClusterInfo[] = [];
+        const result: ClusterInfo[] = []
 
         for (const [id, data] of clusters) {
             // Find most common artist for label
-            let topArtist = "Unknown";
-            let topArtistCount = 0;
+            let topArtist = "Unknown"
+            let topArtistCount = 0
             for (const [artist, count] of data.artistCounts) {
                 if (count > topArtistCount) {
-                    topArtist = artist;
-                    topArtistCount = count;
+                    topArtist = artist
+                    topArtistCount = count
                 }
             }
 
@@ -65,7 +65,7 @@ export function useClusterInfo(graph: Graph<Attributes> | null): ClusterInfo[] {
             const topSongs = data.nodes
                 .sort((a, b) => b.plays - a.plays)
                 .slice(0, 3)
-                .map(({ key, label, plays }) => ({ key, label, plays }));
+                .map(({ key, label, plays }) => ({ key, label, plays }))
 
             result.push({
                 id,
@@ -73,12 +73,12 @@ export function useClusterInfo(graph: Graph<Attributes> | null): ClusterInfo[] {
                 size: data.nodes.length,
                 label: topArtist,
                 topSongs,
-            });
+            })
         }
 
         // Sort by size descending
-        result.sort((a, b) => b.size - a.size);
+        result.sort((a, b) => b.size - a.size)
 
-        return result;
-    }, [graph]);
+        return result
+    }, [graph])
 }

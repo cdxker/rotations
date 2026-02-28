@@ -136,8 +136,18 @@ export function computePageRank(
 export function getTopByPageRank(
     graph: ListeningGraph,
     n: number = 20,
-): Array<{ songKey: SongKey; name: string; artists: string[]; pageRank: number }> {
-    const entries = (Object.entries(graph.nodes) as [SongKey, typeof graph.nodes[SongKey]][])
+): Array<{
+    songKey: SongKey;
+    name: string;
+    artists: string[];
+    pageRank: number;
+}> {
+    const entries = (
+        Object.entries(graph.nodes) as [
+            SongKey,
+            (typeof graph.nodes)[SongKey],
+        ][]
+    )
         .filter(([, node]) => node.pageRank != null)
         .map(([key, node]) => ({
             songKey: key,

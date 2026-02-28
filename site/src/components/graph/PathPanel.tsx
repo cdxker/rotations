@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { X, Route, ArrowRight, Search } from "lucide-react";
-import { useSigma } from "@react-sigma/core";
-import { fetchPath } from "@/lib/graph-api";
-import type { PathResult, NodeAttributes } from "@/lib/graph-api";
+import { useCallback, useEffect, useRef, useState } from "react"
+import { X, Route, ArrowRight, Search } from "lucide-react"
+import { useSigma } from "@react-sigma/core"
+import { fetchPath } from "@/lib/graph-api"
+import type { PathResult, NodeAttributes } from "@/lib/graph-api"
 
 interface SearchResult {
-    key: string;
-    label: string;
-    totalPlays: number;
+    key: string
+    label: string
+    totalPlays: number
 }
 
 /** Inline node search for picking start/end nodes. */
@@ -17,82 +17,86 @@ function NodePicker({
     onSelect,
     onClear,
 }: {
-    label: string;
-    value: { key: string; label: string } | null;
-    onSelect: (key: string, label: string) => void;
-    onClear: () => void;
+    label: string
+    value: { key: string; label: string } | null
+    onSelect: (key: string, label: string) => void
+    onClear: () => void
 }) {
-    const sigma = useSigma();
-    const [query, setQuery] = useState("");
-    const [results, setResults] = useState<SearchResult[]>([]);
-    const [isOpen, setIsOpen] = useState(false);
-    const [selectedIndex, setSelectedIndex] = useState(0);
-    const inputRef = useRef<HTMLInputElement>(null);
-    const containerRef = useRef<HTMLDivElement>(null);
+    const sigma = useSigma()
+    const [query, setQuery] = useState("")
+    const [results, setResults] = useState<SearchResult[]>([])
+    const [isOpen, setIsOpen] = useState(false)
+    const [selectedIndex, setSelectedIndex] = useState(0)
+    const inputRef = useRef<HTMLInputElement>(null)
+    const containerRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
         if (!query.trim()) {
-            setResults([]);
-            setIsOpen(false);
-            return;
+            setResults([])
+            setIsOpen(false)
+            return
         }
 
-        const graph = sigma.getGraph();
-        const lowerQuery = query.toLowerCase();
-        const matches: SearchResult[] = [];
+        const graph = sigma.getGraph()
+        const lowerQuery = query.toLowerCase()
+        const matches: SearchResult[] = []
 
         graph.forEachNode((node, attrs) => {
-            const nodeAttrs = attrs as NodeAttributes;
+            const nodeAttrs = attrs as NodeAttributes
             if (nodeAttrs.label.toLowerCase().includes(lowerQuery)) {
-                matches.push({ key: node, label: nodeAttrs.label, totalPlays: nodeAttrs.totalPlays });
+                matches.push({
+                    key: node,
+                    label: nodeAttrs.label,
+                    totalPlays: nodeAttrs.totalPlays,
+                })
             }
-            if (matches.length >= 20) return;
-        });
+            if (matches.length >= 20) return
+        })
 
-        matches.sort((a, b) => b.totalPlays - a.totalPlays);
-        setResults(matches.slice(0, 8));
-        setSelectedIndex(0);
-        setIsOpen(matches.length > 0);
-    }, [query, sigma]);
+        matches.sort((a, b) => b.totalPlays - a.totalPlays)
+        setResults(matches.slice(0, 8))
+        setSelectedIndex(0)
+        setIsOpen(matches.length > 0)
+    }, [query, sigma])
 
     const handleSelect = useCallback(
         (key: string, nodeLabel: string) => {
-            onSelect(key, nodeLabel);
-            setQuery("");
-            setResults([]);
-            setIsOpen(false);
+            onSelect(key, nodeLabel)
+            setQuery("")
+            setResults([])
+            setIsOpen(false)
         },
-        [onSelect],
-    );
+        [onSelect]
+    )
 
     const handleKeyDown = useCallback(
         (e: React.KeyboardEvent) => {
             if (e.key === "ArrowDown") {
-                e.preventDefault();
-                setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1));
+                e.preventDefault()
+                setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1))
             } else if (e.key === "ArrowUp") {
-                e.preventDefault();
-                setSelectedIndex((prev) => Math.max(prev - 1, 0));
+                e.preventDefault()
+                setSelectedIndex((prev) => Math.max(prev - 1, 0))
             } else if (e.key === "Enter" && results[selectedIndex]) {
-                e.preventDefault();
-                handleSelect(results[selectedIndex].key, results[selectedIndex].label);
+                e.preventDefault()
+                handleSelect(results[selectedIndex].key, results[selectedIndex].label)
             } else if (e.key === "Escape") {
-                setIsOpen(false);
-                inputRef.current?.blur();
+                setIsOpen(false)
+                inputRef.current?.blur()
             }
         },
-        [results, selectedIndex, handleSelect],
-    );
+        [results, selectedIndex, handleSelect]
+    )
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-                setIsOpen(false);
+                setIsOpen(false)
             }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
+        }
+        document.addEventListener("mousedown", handleClickOutside)
+        return () => document.removeEventListener("mousedown", handleClickOutside)
+    }, [])
 
     if (value) {
         return (
@@ -110,7 +114,7 @@ function NodePicker({
                     </button>
                 </div>
             </div>
-        );
+        )
     }
 
     return (
@@ -125,7 +129,9 @@ function NodePicker({
                     type="text"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    onFocus={() => { if (results.length > 0) setIsOpen(true); }}
+                    onFocus={() => {
+                        if (results.length > 0) setIsOpen(true)
+                    }}
                     onKeyDown={handleKeyDown}
                     placeholder="Search..."
                     className="bg-transparent text-white/80 text-xs font-mono placeholder:text-white/30 outline-none w-full"
@@ -141,7 +147,9 @@ function NodePicker({
                                 i === selectedIndex ? "bg-white/10" : "hover:bg-white/5"
                             }`}
                         >
-                            <span className="text-white/80 text-xs font-mono truncate">{r.label}</span>
+                            <span className="text-white/80 text-xs font-mono truncate">
+                                {r.label}
+                            </span>
                             <span className="text-white/30 text-[10px] font-mono shrink-0 ml-2">
                                 {r.totalPlays}
                             </span>
@@ -150,38 +158,38 @@ function NodePicker({
                 </div>
             )}
         </div>
-    );
+    )
 }
 
 export interface PathModeState {
-    from: { key: string; label: string } | null;
-    to: { key: string; label: string } | null;
-    result: PathResult | null;
-    loading: boolean;
-    error: string | null;
-    algorithm: "shortest" | "strongest";
+    from: { key: string; label: string } | null
+    to: { key: string; label: string } | null
+    result: PathResult | null
+    loading: boolean
+    error: string | null
+    algorithm: "shortest" | "strongest"
 }
 
 interface PathPanelProps {
-    state: PathModeState;
-    onStateChange: (state: PathModeState) => void;
-    onClose: () => void;
-    onNavigate: (nodeKey: string) => void;
+    state: PathModeState
+    onStateChange: (state: PathModeState) => void
+    onClose: () => void
+    onNavigate: (nodeKey: string) => void
 }
 
 export function PathPanel({ state, onStateChange, onClose, onNavigate }: PathPanelProps) {
     const update = useCallback(
         (partial: Partial<PathModeState>) => onStateChange({ ...state, ...partial }),
-        [state, onStateChange],
-    );
+        [state, onStateChange]
+    )
 
     // Auto-search when both nodes are selected
     useEffect(() => {
-        if (!state.from || !state.to) return;
-        if (state.loading) return;
+        if (!state.from || !state.to) return
+        if (state.loading) return
 
-        let cancelled = false;
-        update({ loading: true, error: null, result: null });
+        let cancelled = false
+        update({ loading: true, error: null, result: null })
 
         fetchPath(state.from.key, state.to.key, state.algorithm)
             .then((result) => {
@@ -191,7 +199,7 @@ export function PathPanel({ state, onStateChange, onClose, onNavigate }: PathPan
                         loading: false,
                         result,
                         error: result.found ? null : "No path exists between these songs",
-                    });
+                    })
                 }
             })
             .catch((err) => {
@@ -200,12 +208,14 @@ export function PathPanel({ state, onStateChange, onClose, onNavigate }: PathPan
                         ...state,
                         loading: false,
                         error: err instanceof Error ? err.message : "Failed to find path",
-                    });
+                    })
                 }
-            });
+            })
 
-        return () => { cancelled = true; };
-    }, [state.from?.key, state.to?.key, state.algorithm]);
+        return () => {
+            cancelled = true
+        }
+    }, [state.from?.key, state.to?.key, state.algorithm])
 
     return (
         <div className="absolute top-0 right-0 bottom-0 z-20 w-80 bg-[#121212] border-l border-white/10 overflow-y-auto">
@@ -213,9 +223,7 @@ export function PathPanel({ state, onStateChange, onClose, onNavigate }: PathPan
             <div className="sticky top-0 bg-[#121212] border-b border-white/10 px-4 py-3 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                     <Route size={14} className="text-white/50" />
-                    <h2 className="text-white text-sm font-mono font-medium">
-                        Path Explorer
-                    </h2>
+                    <h2 className="text-white text-sm font-mono font-medium">Path Explorer</h2>
                 </div>
                 <button
                     onClick={onClose}
@@ -230,13 +238,17 @@ export function PathPanel({ state, onStateChange, onClose, onNavigate }: PathPan
                 <NodePicker
                     label="From"
                     value={state.from}
-                    onSelect={(key, label) => update({ from: { key, label }, result: null, error: null })}
+                    onSelect={(key, label) =>
+                        update({ from: { key, label }, result: null, error: null })
+                    }
                     onClear={() => update({ from: null, result: null, error: null })}
                 />
                 <NodePicker
                     label="To"
                     value={state.to}
-                    onSelect={(key, label) => update({ to: { key, label }, result: null, error: null })}
+                    onSelect={(key, label) =>
+                        update({ to: { key, label }, result: null, error: null })
+                    }
                     onClear={() => update({ to: null, result: null, error: null })}
                 />
             </div>
@@ -258,7 +270,9 @@ export function PathPanel({ state, onStateChange, onClose, onNavigate }: PathPan
                         Shortest
                     </button>
                     <button
-                        onClick={() => update({ algorithm: "strongest", result: null, error: null })}
+                        onClick={() =>
+                            update({ algorithm: "strongest", result: null, error: null })
+                        }
                         className={`flex-1 text-xs font-mono py-1.5 rounded transition-colors ${
                             state.algorithm === "strongest"
                                 ? "bg-white/10 text-white/80"
@@ -291,8 +305,14 @@ export function PathPanel({ state, onStateChange, onClose, onNavigate }: PathPan
                     <div className="px-4 py-3 border-b border-white/10">
                         <div className="grid grid-cols-3 gap-3">
                             <PathStat label="Hops" value={state.result.hops.toString()} />
-                            <PathStat label="Total Wt" value={state.result.totalWeight.toString()} />
-                            <PathStat label="Min Edge" value={state.result.minEdgeWeight.toString()} />
+                            <PathStat
+                                label="Total Wt"
+                                value={state.result.totalWeight.toString()}
+                            />
+                            <PathStat
+                                label="Min Edge"
+                                value={state.result.minEdgeWeight.toString()}
+                            />
                         </div>
                     </div>
 
@@ -313,14 +333,15 @@ export function PathPanel({ state, onStateChange, onClose, onNavigate }: PathPan
                                         </p>
                                     </div>
                                 </button>
-                                {step.edgeWeight !== undefined && i < state.result!.path.length - 1 && (
-                                    <div className="flex items-center gap-1 px-3 py-0.5">
-                                        <ArrowRight size={10} className="text-white/20" />
-                                        <span className="text-white/30 text-[10px] font-mono">
-                                            {step.edgeWeight}x
-                                        </span>
-                                    </div>
-                                )}
+                                {step.edgeWeight !== undefined &&
+                                    i < state.result!.path.length - 1 && (
+                                        <div className="flex items-center gap-1 px-3 py-0.5">
+                                            <ArrowRight size={10} className="text-white/20" />
+                                            <span className="text-white/30 text-[10px] font-mono">
+                                                {step.edgeWeight}x
+                                            </span>
+                                        </div>
+                                    )}
                             </div>
                         ))}
                     </div>
@@ -336,7 +357,7 @@ export function PathPanel({ state, onStateChange, onClose, onNavigate }: PathPan
                 </div>
             )}
         </div>
-    );
+    )
 }
 
 function PathStat({ label, value }: { label: string; value: string }) {
@@ -347,5 +368,5 @@ function PathStat({ label, value }: { label: string; value: string }) {
             </span>
             <div className="text-white/80 text-xs font-mono mt-0.5">{value}</div>
         </div>
-    );
+    )
 }

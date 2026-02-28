@@ -1,18 +1,18 @@
-import { X } from "lucide-react";
-import type { SelectedNode } from "./GraphEvents";
-import { getClusterColor } from "@/lib/graph-api";
+import { X } from "lucide-react"
+import type { SelectedNode } from "./GraphEvents"
+import { getClusterColor } from "@/lib/graph-api"
 
 interface NodeDetailPanelProps {
-    node: SelectedNode;
-    onClose: () => void;
-    onNavigate: (nodeKey: string) => void;
+    node: SelectedNode
+    onClose: () => void
+    onNavigate: (nodeKey: string) => void
 }
 
 export function NodeDetailPanel({ node, onClose, onNavigate }: NodeDetailPanelProps) {
-    const { attrs, neighbors } = node;
+    const { attrs, neighbors } = node
 
-    const outgoing = neighbors.filter((n) => n.direction === "outgoing");
-    const incoming = neighbors.filter((n) => n.direction === "incoming");
+    const outgoing = neighbors.filter((n) => n.direction === "outgoing")
+    const incoming = neighbors.filter((n) => n.direction === "incoming")
 
     return (
         <div className="absolute top-0 right-0 bottom-0 z-20 w-80 bg-[#121212] border-l border-white/10 overflow-y-auto">
@@ -84,7 +84,7 @@ export function NodeDetailPanel({ node, onClose, onNavigate }: NodeDetailPanelPr
                 </div>
             )}
         </div>
-    );
+    )
 }
 
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
@@ -93,11 +93,9 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
             <span className="text-white/40 text-[10px] font-mono uppercase tracking-wider">
                 {label}
             </span>
-            <div className="text-white/80 text-xs font-mono mt-0.5 truncate">
-                {value}
-            </div>
+            <div className="text-white/80 text-xs font-mono mt-0.5 truncate">{value}</div>
         </div>
-    );
+    )
 }
 
 function NeighborSection({
@@ -105,9 +103,9 @@ function NeighborSection({
     neighbors,
     onNavigate,
 }: {
-    title: string;
-    neighbors: SelectedNode["neighbors"];
-    onNavigate: (key: string) => void;
+    title: string
+    neighbors: SelectedNode["neighbors"]
+    onNavigate: (key: string) => void
 }) {
     return (
         <div className="border-b border-white/10">
@@ -143,5 +141,5 @@ function NeighborSection({
                 )}
             </div>
         </div>
-    );
+    )
 }

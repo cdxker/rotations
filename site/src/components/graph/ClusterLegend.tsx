@@ -1,12 +1,12 @@
-import { Eye, EyeOff, Focus } from "lucide-react";
-import type { ClusterInfo } from "./useClusterInfo";
+import { Eye, EyeOff, Focus } from "lucide-react"
+import type { ClusterInfo } from "./useClusterInfo"
 
 interface ClusterLegendProps {
-    clusters: ClusterInfo[];
-    hiddenClusters: Set<number>;
-    focusedCluster: number | null;
-    onToggleCluster: (clusterId: number) => void;
-    onFocusCluster: (clusterId: number | null) => void;
+    clusters: ClusterInfo[]
+    hiddenClusters: Set<number>
+    focusedCluster: number | null
+    onToggleCluster: (clusterId: number) => void
+    onFocusCluster: (clusterId: number | null) => void
 }
 
 export function ClusterLegend({
@@ -16,7 +16,7 @@ export function ClusterLegend({
     onToggleCluster,
     onFocusCluster,
 }: ClusterLegendProps) {
-    if (clusters.length === 0) return null;
+    if (clusters.length === 0) return null
 
     return (
         <div className="absolute top-12 left-4 z-20 w-56">
@@ -36,8 +36,8 @@ export function ClusterLegend({
                 </div>
                 <div className="max-h-80 overflow-y-auto">
                     {clusters.map((cluster) => {
-                        const isHidden = hiddenClusters.has(cluster.id);
-                        const isFocused = focusedCluster === cluster.id;
+                        const isHidden = hiddenClusters.has(cluster.id)
+                        const isFocused = focusedCluster === cluster.id
 
                         return (
                             <div
@@ -92,10 +92,10 @@ export function ClusterLegend({
                                     </div>
                                 )}
                             </div>
-                        );
+                        )
                     })}
                 </div>
             </div>
         </div>
-    );
+    )
 }

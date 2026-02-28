@@ -79,6 +79,7 @@ const scrobbles = await fetchLastfmScrobbles(client);
 ```
 
 Options:
+
 - `fullRefresh: true` — ignore checkpoint, re-fetch everything
 - `onProgress: (msg) => ...` — custom progress callback
 - `dataDir: "/custom/path"` — override output directory
@@ -102,11 +103,11 @@ Combine raw data from any/all sources into a unified `ListeningGraph`:
 import { buildGraph } from "./src/graph/build-graph.js";
 
 const graph = buildGraph({
-  lastfmScrobbles: scrobbles,
-  spotifyRecentTracks: dump.recentlyPlayed,
-  spotifyPlaylistTracks: dump.playlistTracks,
-  lastfmUsername: "your_username",
-  spotifyUsername: "your_display_name",
+    lastfmScrobbles: scrobbles,
+    spotifyRecentTracks: dump.recentlyPlayed,
+    spotifyPlaylistTracks: dump.playlistTracks,
+    lastfmUsername: "your_username",
+    spotifyUsername: "your_display_name",
 });
 ```
 
@@ -144,12 +145,12 @@ The server reads `GRAPH_SERVER_PORT` (default: `3001`) and `GRAPH_DB_PATH` (defa
 
 **Endpoints:**
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/graph` | Full graph. Optional `?limit=N&offset=M` for pagination. |
-| `GET` | `/graph/node/:songKey` | Single node with edges. `songKey` is URL-encoded (e.g., `artist%20a::track%201`). |
-| `GET` | `/graph/neighbors/:songKey` | Node with full neighbor data (resolved nodes for each edge). |
-| `GET` | `/graph/stats` | Summary: total nodes, edges, and graph metadata. |
+| Method | Path                        | Description                                                                       |
+| ------ | --------------------------- | --------------------------------------------------------------------------------- |
+| `GET`  | `/graph`                    | Full graph. Optional `?limit=N&offset=M` for pagination.                          |
+| `GET`  | `/graph/node/:songKey`      | Single node with edges. `songKey` is URL-encoded (e.g., `artist%20a::track%201`). |
+| `GET`  | `/graph/neighbors/:songKey` | Node with full neighbor data (resolved nodes for each edge).                      |
+| `GET`  | `/graph/stats`              | Summary: total nodes, edges, and graph metadata.                                  |
 
 CORS is enabled for frontend consumption.
 

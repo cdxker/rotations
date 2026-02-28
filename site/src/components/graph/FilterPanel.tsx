@@ -1,16 +1,15 @@
-import { useCallback } from "react";
-import * as Slider from "@radix-ui/react-slider";
-import type { ListeningSource } from "@/lib/graph-types";
+import * as Slider from "@radix-ui/react-slider"
+import type { ListeningSource } from "@/lib/graph-api"
 
 export interface FilterState {
     /** Minimum play count to show a node. */
-    minPlays: number;
+    minPlays: number
     /** Minimum PageRank percentile (0-100). 0 = show all, 50 = top 50%. */
-    minPageRankPct: number;
+    minPageRankPct: number
     /** Minimum edge weight to show an edge. */
-    minEdgeWeight: number;
+    minEdgeWeight: number
     /** Which sources to include (empty = all). */
-    activeSources: Set<ListeningSource>;
+    activeSources: Set<ListeningSource>
 }
 
 export const DEFAULT_FILTER: FilterState = {
@@ -18,23 +17,23 @@ export const DEFAULT_FILTER: FilterState = {
     minPageRankPct: 0,
     minEdgeWeight: 0,
     activeSources: new Set(),
-};
-
-interface FilterPanelProps {
-    filter: FilterState;
-    onFilterChange: (filter: FilterState) => void;
-    totalNodes: number;
-    visibleNodes: number;
-    maxPlays: number;
-    maxEdgeWeight: number;
 }
 
-const ALL_SOURCES: ListeningSource[] = ["lastfm", "spotify-recent", "spotify-playlist"];
+interface FilterPanelProps {
+    filter: FilterState
+    onFilterChange: (filter: FilterState) => void
+    totalNodes: number
+    visibleNodes: number
+    maxPlays: number
+    maxEdgeWeight: number
+}
+
+const ALL_SOURCES: ListeningSource[] = ["lastfm", "spotify-recent", "spotify-playlist"]
 const SOURCE_LABELS: Record<ListeningSource, string> = {
-    "lastfm": "Last.fm",
+    lastfm: "Last.fm",
     "spotify-recent": "Spotify Recent",
     "spotify-playlist": "Spotify Playlist",
-};
+}
 
 export function FilterPanel({
     filter,
@@ -44,37 +43,21 @@ export function FilterPanel({
     maxPlays,
     maxEdgeWeight,
 }: FilterPanelProps) {
-    const handleMinPlays = useCallback((value: number[]) => {
-        onFilterChange({ ...filter, minPlays: value[0]! });
-    }, [filter, onFilterChange]);
-
-    const handlePageRankPct = useCallback((value: number[]) => {
-        onFilterChange({ ...filter, minPageRankPct: value[0]! });
-    }, [filter, onFilterChange]);
-
-    const handleEdgeWeight = useCallback((value: number[]) => {
-        onFilterChange({ ...filter, minEdgeWeight: value[0]! });
-    }, [filter, onFilterChange]);
-
-    const handleToggleSource = useCallback((source: ListeningSource) => {
-        const next = new Set(filter.activeSources);
-        if (next.has(source)) {
-            next.delete(source);
-        } else {
-            next.add(source);
-        }
-        onFilterChange({ ...filter, activeSources: next });
-    }, [filter, onFilterChange]);
-
     const hasActiveFilters =
         filter.minPlays > 0 ||
         filter.minPageRankPct > 0 ||
         filter.minEdgeWeight > 0 ||
-        filter.activeSources.size > 0;
+        filter.activeSources.size > 0
 
-    const handleReset = useCallback(() => {
-        onFilterChange(DEFAULT_FILTER);
-    }, [onFilterChange]);
+    const toggleSource = (source: ListeningSource) => {
+        const next = new Set(filter.activeSources)
+        if (next.has(source)) {
+            next.delete(source)
+        } else {
+            next.add(source)
+        }
+        onFilterChange({ ...filter, activeSources: next })
+    }
 
     return (
         <div className="flex flex-col gap-3 bg-[#121212]/90 backdrop-blur-sm border border-white/10 rounded-lg p-3 w-64">
@@ -85,7 +68,7 @@ export function FilterPanel({
                 </span>
                 {hasActiveFilters && (
                     <button
-                        onClick={handleReset}
+                        onClick={() => onFilterChange(DEFAULT_FILTER)}
                         className="text-white/30 hover:text-white/60 text-[10px] font-mono transition-colors"
                     >
                         Reset
@@ -104,11 +87,12 @@ export function FilterPanel({
                 </label>
                 <div className="flex flex-wrap gap-1">
                     {ALL_SOURCES.map((source) => {
-                        const isActive = filter.activeSources.size === 0 || filter.activeSources.has(source);
+                        const isActive =
+                            filter.activeSources.size === 0 || filter.activeSources.has(source)
                         return (
                             <button
                                 key={source}
-                                onClick={() => handleToggleSource(source)}
+                                onClick={() => toggleSource(source)}
                                 className={`px-2 py-0.5 text-[10px] font-mono rounded border transition-colors ${
                                     isActive
                                         ? "border-white/30 text-white/70 bg-white/5"
@@ -117,7 +101,7 @@ export function FilterPanel({
                             >
                                 {SOURCE_LABELS[source]}
                             </button>
-                        );
+                        )
                     })}
                 </div>
             </div>
@@ -128,7 +112,7 @@ export function FilterPanel({
                 value={filter.minPlays}
                 max={Math.min(maxPlays, 200)}
                 displayValue={filter.minPlays > 0 ? `≥ ${filter.minPlays}` : "All"}
-                onValueChange={handleMinPlays}
+                onValueChange={(v) => onFilterChange({ ...filter, minPlays: v[0]! })}
             />
 
             {/* PageRank percentile slider */}
@@ -136,8 +120,10 @@ export function FilterPanel({
                 label="Top PageRank"
                 value={filter.minPageRankPct}
                 max={99}
-                displayValue={filter.minPageRankPct > 0 ? `Top ${100 - filter.minPageRankPct}%` : "All"}
-                onValueChange={handlePageRankPct}
+                displayValue={
+                    filter.minPageRankPct > 0 ? `Top ${100 - filter.minPageRankPct}%` : "All"
+                }
+                onValueChange={(v) => onFilterChange({ ...filter, minPageRankPct: v[0]! })}
             />
 
             {/* Edge weight slider */}
@@ -146,10 +132,10 @@ export function FilterPanel({
                 value={filter.minEdgeWeight}
                 max={Math.min(maxEdgeWeight, 50)}
                 displayValue={filter.minEdgeWeight > 0 ? `≥ ${filter.minEdgeWeight}` : "All"}
-                onValueChange={handleEdgeWeight}
+                onValueChange={(v) => onFilterChange({ ...filter, minEdgeWeight: v[0]! })}
             />
         </div>
-    );
+    )
 }
 
 function FilterSlider({
@@ -159,11 +145,11 @@ function FilterSlider({
     displayValue,
     onValueChange,
 }: {
-    label: string;
-    value: number;
-    max: number;
-    displayValue: string;
-    onValueChange: (value: number[]) => void;
+    label: string
+    value: number
+    max: number
+    displayValue: string
+    onValueChange: (value: number[]) => void
 }) {
     return (
         <div>
@@ -186,5 +172,5 @@ function FilterSlider({
                 <Slider.Thumb className="block w-3 h-3 bg-white/70 rounded-full hover:bg-white focus:outline-none focus:ring-1 focus:ring-white/50 transition-colors" />
             </Slider.Root>
         </div>
-    );
+    )
 }

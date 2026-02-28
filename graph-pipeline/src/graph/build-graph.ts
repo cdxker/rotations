@@ -5,9 +5,37 @@ import {
     type ListeningSource,
     toSongKey,
 } from "./types.js";
-import type { RawScrobble } from "../ingestion/types.js";
-import type { RawSpotifyRecentTrack } from "../ingestion/types.js";
-import type { RawSpotifyPlaylistTrack } from "../ingestion/types.js";
+
+/** A single scrobble from Last.fm's user.getRecentTracks API. */
+export interface RawScrobble {
+    artist: string;
+    track: string;
+    album: string;
+    /** Unix timestamp (seconds) of when the track was scrobbled. */
+    timestamp: number;
+}
+
+/** A single track from Spotify's /v1/me/player/recently-played endpoint. */
+export interface RawSpotifyRecentTrack {
+    spotifyId: string;
+    artist: string;
+    track: string;
+    album: string;
+    /** ISO 8601 timestamp of when the track was played. */
+    playedAt: string;
+}
+
+/** A single track from a Spotify playlist, with its position in that playlist. */
+export interface RawSpotifyPlaylistTrack {
+    spotifyId: string;
+    artist: string;
+    track: string;
+    album: string;
+    /** Name of the playlist this track belongs to. */
+    playlistName: string;
+    /** Zero-based position of this track within the playlist. */
+    position: number;
+}
 
 /** Input data for the graph builder. All fields are optional — build with whatever sources are available. */
 export interface GraphInput {
@@ -104,7 +132,8 @@ function processSpotifyRecentTracks(
 ): { totalPlays: number; timestamps: number[] } {
     // Sort chronologically by playedAt
     const sorted = [...tracks].sort(
-        (a, b) => new Date(a.playedAt).getTime() - new Date(b.playedAt).getTime(),
+        (a, b) =>
+            new Date(a.playedAt).getTime() - new Date(b.playedAt).getTime(),
     );
     const timestamps: number[] = [];
     const keys: SongKey[] = [];
@@ -198,13 +227,19 @@ export function buildGraph(input: GraphInput): ListeningGraph {
     }
 
     if (input.spotifyRecentTracks?.length) {
-        const result = processSpotifyRecentTracks(nodes, input.spotifyRecentTracks);
+        const result = processSpotifyRecentTracks(
+            nodes,
+            input.spotifyRecentTracks,
+        );
         totalScrobbles += result.totalPlays;
         allTimestamps.push(...result.timestamps);
     }
 
     if (input.spotifyPlaylistTracks?.length) {
-        totalScrobbles += processSpotifyPlaylists(nodes, input.spotifyPlaylistTracks);
+        totalScrobbles += processSpotifyPlaylists(
+            nodes,
+            input.spotifyPlaylistTracks,
+        );
     }
 
     // Compute date range from timestamps

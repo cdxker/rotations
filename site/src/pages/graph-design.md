@@ -5,6 +5,7 @@
 **New Astro page at `/graph`** — separate from the music player.
 
 Rationale:
+
 - The graph is an analytical view, conceptually different from the playback experience
 - It needs a full-screen canvas with its own interaction model (pan/zoom vs playlist scrolling)
 - Avoids bloating the player page with a heavy graph library
@@ -12,6 +13,7 @@ Rationale:
 - Navigation: add a link/button to the graph page from the existing player (or vice versa)
 
 File structure:
+
 ```
 site/src/pages/graph.astro          — Astro page shell
 site/src/components/GraphView.tsx   — Main graph view (React, client:load)
@@ -69,6 +71,7 @@ site/src/components/graph/
 ### Layout Breakdown
 
 **Left sidebar (w-64, fixed):**
+
 - Search input (filter nodes by name/artist)
 - Filter sliders (min play count, edge weight threshold)
 - Source filter dropdown (all / lastfm / spotify-recent / spotify-playlist)
@@ -76,6 +79,7 @@ site/src/components/graph/
 - Cluster legend (color swatches with sizes, clickable to isolate)
 
 **Main area (flex-1):**
+
 - Full graph canvas taking remaining space
 - Supports pan (drag), zoom (scroll), and click (select node)
 - Nodes sized proportionally to play count (log scale)
@@ -83,6 +87,7 @@ site/src/components/graph/
 - Nodes colored by cluster membership
 
 **Bottom panel (h-auto, slides up on node click):**
+
 - Shows details for selected node
 - Song name, artists, album
 - Key metrics: total plays, PageRank score, cluster ID
@@ -97,6 +102,7 @@ site/src/components/graph/
 **Background:** `#0B0B0B` (consistent with existing app)
 
 **Node colors by cluster** (using existing chart CSS variables):
+
 - Cluster 0: `chart-1` (dark mode: purple `oklch(0.488 0.243 264.376)`)
 - Cluster 1: `chart-2` (dark mode: cyan `oklch(0.696 0.17 162.48)`)
 - Cluster 2: `chart-3` (dark mode: orange-yellow `oklch(0.769 0.188 70.08)`)
@@ -105,21 +111,25 @@ site/src/components/graph/
 - Clusters 5+: cycle through chart-1 to chart-5 with reduced opacity
 
 **Node sizing:**
+
 - Minimum: 4px radius (1 play)
 - Maximum: 20px radius (highest play count)
 - Scale: `radius = 4 + 16 * log(plays) / log(maxPlays)`
 
 **Edges:**
+
 - Color: `white` at `5-30%` opacity (weight-mapped)
 - Width: 1px (can increase for high-weight edges)
 - Hover: highlight to `60%` opacity
 
 **Text:**
+
 - Node labels: `text-white/70` DM Mono, 10px, shown for top-N nodes by PageRank (or on zoom)
 - Panel text: `text-white/90` for primary, `text-white/60` for secondary
 - Metric values: `text-white` for emphasis
 
 **Interactive states:**
+
 - Hover node: brighten to full opacity, show tooltip with name + play count
 - Selected node: bright ring, highlight all connected edges
 - Hover edge: show transition count tooltip

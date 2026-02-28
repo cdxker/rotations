@@ -42,7 +42,7 @@ export const PUT: APIRoute = async ({ request }) => {
     )
 
     if (!playResponse.ok && playResponse.status !== 204) {
-        const responsBody = await playResponse.text();
+        const responsBody = await playResponse.text()
         return errorResponse("Failed to start playback " + responsBody, playResponse.status)
     }
 

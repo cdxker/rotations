@@ -2,7 +2,7 @@ import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { LastfmClient } from "./lastfm-client.js";
-import type { RawScrobble } from "./types.js";
+import type { RawScrobble } from "../graph/build-graph.js";
 
 const TRACKS_PER_PAGE = 200;
 const RATE_LIMIT_MS = 1000;
