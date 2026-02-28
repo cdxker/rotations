@@ -4,7 +4,7 @@ import {
     toGraphology,
     clearGraphCache,
     fetchGraph,
-    getClusterColor,
+    nodeBrightness,
 } from "./graph-api"
 import type { ListeningGraph, SongKey, GraphNode } from "./graph-api"
 
@@ -137,7 +137,8 @@ describe("toGraphology", () => {
         expect(attrs.pageRank).toBe(0.05)
         expect(attrs.clusterId).toBe(2)
         expect(attrs.size).toBeGreaterThan(0)
-        expect(attrs.color).toBeDefined()
+        // Monochrome: color is an rgb() grayscale value based on importance
+        expect(attrs.color).toMatch(/^rgb\(\d+, \d+, \d+\)$/)
         expect(typeof attrs.x).toBe("number")
         expect(typeof attrs.y).toBe("number")
     })
@@ -231,15 +232,24 @@ describe("toGraphology", () => {
     })
 })
 
-describe("getClusterColor", () => {
-    it("returns a color string for valid cluster IDs", () => {
-        expect(getClusterColor(0)).toBe("#7C3AED")
-        expect(getClusterColor(1)).toBe("#22D3EE")
+describe("nodeBrightness", () => {
+    it("returns darkest color for importance 0", () => {
+        expect(nodeBrightness(0)).toBe("rgb(64, 64, 64)")
     })
 
-    it("cycles colors for cluster IDs beyond the palette size", () => {
-        expect(getClusterColor(5)).toBe(getClusterColor(0))
-        expect(getClusterColor(6)).toBe(getClusterColor(1))
+    it("returns brightest color for importance 1", () => {
+        expect(nodeBrightness(1)).toBe("rgb(204, 204, 204)")
+    })
+
+    it("returns intermediate brightness for 0.5", () => {
+        const color = nodeBrightness(0.5)
+        // 64 + 140 * 0.5 = 134
+        expect(color).toBe("rgb(134, 134, 134)")
+    })
+
+    it("clamps values outside 0-1 range", () => {
+        expect(nodeBrightness(-1)).toBe(nodeBrightness(0))
+        expect(nodeBrightness(2)).toBe(nodeBrightness(1))
     })
 })
 

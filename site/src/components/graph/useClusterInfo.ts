@@ -1,11 +1,9 @@
 import { useMemo } from "react"
 import type Graph from "graphology"
 import type { Attributes } from "graphology-types"
-import { getClusterColor } from "@/lib/graph-api"
 
 export interface ClusterInfo {
     id: number
-    color: string
     size: number
     label: string
     topSongs: Array<{ key: string; label: string; plays: number }>
@@ -69,7 +67,6 @@ export function useClusterInfo(graph: Graph<Attributes> | null): ClusterInfo[] {
 
             result.push({
                 id,
-                color: getClusterColor(id),
                 size: data.nodes.length,
                 label: topArtist,
                 topSongs,

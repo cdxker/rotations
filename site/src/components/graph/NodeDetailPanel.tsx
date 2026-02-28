@@ -1,5 +1,4 @@
 import type { SelectedNode } from "./GraphEvents"
-import { getClusterColor } from "@/lib/graph-api"
 
 interface NodeDetailPanelProps {
     node: SelectedNode
@@ -29,18 +28,7 @@ export function NodeDetailPanel({ node, onNavigate }: NodeDetailPanelProps) {
                 <div className="grid grid-cols-2 gap-3">
                     <Stat label="Plays" value={attrs.totalPlays.toLocaleString()} />
                     <Stat label="PageRank" value={attrs.pageRank.toFixed(6)} />
-                    <Stat
-                        label="Cluster"
-                        value={
-                            <span className="flex items-center gap-1.5">
-                                <span
-                                    className="inline-block w-2 h-2 rounded-full"
-                                    style={{ backgroundColor: getClusterColor(attrs.clusterId) }}
-                                />
-                                {attrs.clusterId}
-                            </span>
-                        }
-                    />
+                    <Stat label="Cluster" value={attrs.clusterId} />
                     <Stat label="Sources" value={attrs.sources.join(", ")} />
                 </div>
                 {attrs.albumName && (

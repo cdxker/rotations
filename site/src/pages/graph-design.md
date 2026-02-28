@@ -22,7 +22,7 @@ site/src/components/graph/
   NodeDetailPanel.tsx               — Sidebar panel for selected node
   GraphControls.tsx                 — Top bar: search, filters, view toggles
   StatsPanel.tsx                    — Summary statistics overlay
-  ClusterLegend.tsx                 — Cluster color legend
+  ClusterLegend.tsx                 — Cluster legend (monochrome)
 ```
 
 ## Page Layout
@@ -39,7 +39,7 @@ site/src/components/graph/
 |                    |                                                   |
 |   Filters:         |         Nodes = songs (sized by play count)       |
 |   Min plays [==]   |         Edges = transitions (opacity by weight)   |
-|   Edge weight [==] |         Colors = cluster membership               |
+|   Edge weight [==] |         Brightness = importance (PageRank)        |
 |   Source [v]       |                                                   |
 |                    |                                                   |
 |   View:            |                                                   |
@@ -76,7 +76,7 @@ site/src/components/graph/
 - Filter sliders (min play count, edge weight threshold)
 - Source filter dropdown (all / lastfm / spotify-recent / spotify-playlist)
 - View mode radio buttons (All / Clusters / PageRank)
-- Cluster legend (color swatches with sizes, clickable to isolate)
+- Cluster legend (cluster names with sizes, clickable to isolate)
 
 **Main area (flex-1):**
 
@@ -84,7 +84,7 @@ site/src/components/graph/
 - Supports pan (drag), zoom (scroll), and click (select node)
 - Nodes sized proportionally to play count (log scale)
 - Edges drawn with opacity proportional to weight
-- Nodes colored by cluster membership
+- Nodes brightness-encoded by importance (PageRank)
 
 **Bottom panel (h-auto, slides up on node click):**
 
@@ -97,18 +97,24 @@ site/src/components/graph/
 
 ## Visual Design
 
-### Colors
+### Colors — Monochrome Brightness Hierarchy
 
 **Background:** `#0B0B0B` (consistent with existing app)
 
-**Node colors by cluster** (using existing chart CSS variables):
+**Node brightness by importance** (strict grayscale, no hue encoding):
 
-- Cluster 0: `chart-1` (dark mode: purple `oklch(0.488 0.243 264.376)`)
-- Cluster 1: `chart-2` (dark mode: cyan `oklch(0.696 0.17 162.48)`)
-- Cluster 2: `chart-3` (dark mode: orange-yellow `oklch(0.769 0.188 70.08)`)
-- Cluster 3: `chart-4` (dark mode: purple `oklch(0.627 0.265 303.9)`)
-- Cluster 4: `chart-5` (dark mode: red `oklch(0.645 0.246 16.439)`)
-- Clusters 5+: cycle through chart-1 to chart-5 with reduced opacity
+- Brightness is determined by PageRank (normalized 0–1 against graph max)
+- Least important: `rgb(64, 64, 64)` (~25% brightness)
+- Most important: `rgb(204, 204, 204)` (~80% brightness)
+- Formula: `level = 64 + 140 * importance`
+
+**Interactive brightness hierarchy:**
+
+- Selected/focused node: `#ffffff` (brightest, 100%)
+- Immediate neighbors: `#999` (~60%)
+- Peripheral context: `#333` (~20%, labels hidden)
+- Path-highlighted nodes: `#ddd` (~87%)
+- Dim/filtered nodes: `#222` (~13%)
 
 **Node sizing:**
 
@@ -118,9 +124,10 @@ site/src/components/graph/
 
 **Edges:**
 
-- Color: `white` at `5-30%` opacity (weight-mapped)
-- Width: 1px (can increase for high-weight edges)
-- Hover: highlight to `60%` opacity
+- Color: `white` at `3-25%` opacity (weight-mapped)
+- Width: log-scaled from weight
+- Selected-node edges: `white` at `40%` opacity
+- Path edges: `white` at `60%` opacity, 3px width
 
 **Text:**
 
@@ -130,10 +137,10 @@ site/src/components/graph/
 
 **Interactive states:**
 
-- Hover node: brighten to full opacity, show tooltip with name + play count
-- Selected node: bright ring, highlight all connected edges
+- Hover node: brighten to full white, show tooltip with name + play count
+- Selected node: white (`#fff`) with highlighted ring, all connected edges visible
 - Hover edge: show transition count tooltip
-- Filter active: dim non-matching nodes to `10%` opacity
+- Filter active: dim non-matching nodes to `#222`
 
 ### Typography
 

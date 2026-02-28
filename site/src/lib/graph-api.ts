@@ -45,17 +45,11 @@ export interface GraphFilter {
 
 const GRAPH_API_BASE = import.meta.env.PUBLIC_GRAPH_API_URL ?? "http://localhost:3001"
 
-/** Cluster color palette matching chart-1 through chart-5 CSS variables (dark mode). */
-const CLUSTER_COLORS = [
-    "#7C3AED", // chart-1: purple
-    "#22D3EE", // chart-2: cyan
-    "#F59E0B", // chart-3: orange-yellow
-    "#A855F7", // chart-4: lighter purple
-    "#EF4444", // chart-5: red
-]
-
-export function getClusterColor(clusterId: number): string {
-    return CLUSTER_COLORS[clusterId % CLUSTER_COLORS.length]!
+/** Compute a monochrome node color from importance (0–1 scale). Brighter = more important. */
+export function nodeBrightness(importance: number): string {
+    // Range: 25% (#404040) for least important → 80% (#cccccc) for most important
+    const level = Math.round(64 + 140 * Math.max(0, Math.min(1, importance)))
+    return `rgb(${level}, ${level}, ${level})`
 }
 
 /** Attributes stored on each graphology node. */
@@ -194,9 +188,9 @@ export function nodeSize(totalPlays: number, maxPlays: number): number {
 /**
  * Convert a ListeningGraph into a graphology Graph instance for Sigma.js.
  *
- * Nodes get attributes for rendering (size from play count, color from cluster, etc.).
- * Edges are directed with weight-based sizing. Random initial positions are assigned
- * for ForceAtlas2 to arrange.
+ * Nodes get attributes for rendering (size from play count, brightness from importance).
+ * Edges are directed with weight-based sizing and opacity. Random initial positions are
+ * assigned for ForceAtlas2 to arrange.
  */
 export function toGraphology(
     listeningGraph: ListeningGraph
@@ -207,9 +201,11 @@ export function toGraphology(
     if (entries.length === 0) return graph
 
     const maxPlays = Math.max(...entries.map(([, n]) => n.totalPlays), 1)
+    const maxPageRank = Math.max(...entries.map(([, n]) => n.pageRank ?? 0), 1e-10)
 
-    // Add nodes
+    // Add nodes — brightness encodes importance (pageRank)
     for (const [key, node] of entries) {
+        const importance = (node.pageRank ?? 0) / maxPageRank
         graph.addNode(key, {
             label: `${node.artists[0] ?? "Unknown"} — ${node.name}`,
             artists: node.artists,
@@ -221,32 +217,22 @@ export function toGraphology(
             pageRank: node.pageRank ?? 0,
             clusterId: node.clusterId ?? 0,
             size: nodeSize(node.totalPlays, maxPlays),
-            color: getClusterColor(node.clusterId ?? 0),
+            color: nodeBrightness(importance),
             x: Math.random() * 1000,
             y: Math.random() * 1000,
         })
     }
 
-    // Add edges (directed: from → to using the `next` map)
-    // Inter-cluster edges are thinner and more transparent than intra-cluster edges
+    // Add edges — opacity encodes weight
     for (const [fromKey, node] of entries) {
-        const fromCluster = listeningGraph.nodes[fromKey as SongKey]?.clusterId ?? 0
-
         for (const [toKey, weight] of Object.entries(node.next)) {
             if (!graph.hasNode(toKey)) continue
             if (graph.hasEdge(fromKey, toKey)) continue
 
-            const toCluster = listeningGraph.nodes[toKey as SongKey]?.clusterId ?? 0
-            const isInterCluster = fromCluster !== toCluster
-
             graph.addDirectedEdge(fromKey, toKey, {
                 weight,
-                size: isInterCluster
-                    ? Math.max(0.3, Math.min(1.5, Math.log(weight + 1) * 0.5))
-                    : Math.max(0.5, Math.min(3, Math.log(weight + 1))),
-                color: isInterCluster
-                    ? `rgba(255, 255, 255, ${Math.min(0.1, 0.02 + weight * 0.01)})`
-                    : `rgba(255, 255, 255, ${Math.min(0.3, 0.05 + weight * 0.03)})`,
+                size: Math.max(0.5, Math.min(3, Math.log(weight + 1))),
+                color: `rgba(255, 255, 255, ${Math.min(0.25, 0.03 + weight * 0.02)})`,
             })
         }
     }

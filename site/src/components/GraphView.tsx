@@ -108,8 +108,8 @@ function GraphInner({
         graph.forEachEdge(randomKey, (e) => edgeSet.add(e))
 
         sigma.setSetting("nodeReducer", (node, data) => {
-            if (node === randomKey) return { ...data, highlighted: true, zIndex: 1 }
-            if (neighborSet.has(node)) return { ...data, zIndex: 0 }
+            if (node === randomKey) return { ...data, color: "#ffffff", highlighted: true, zIndex: 1 }
+            if (neighborSet.has(node)) return { ...data, color: "#999", zIndex: 0 }
             return { ...data, color: "#333", label: "", zIndex: -1 }
         })
         sigma.setSetting("edgeReducer", (edge, data) => {

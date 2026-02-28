@@ -47,10 +47,7 @@ export function ClusterLegend({
                                 } ${isHidden ? "opacity-40" : ""}`}
                             >
                                 <div className="flex items-center gap-2">
-                                    <span
-                                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                                        style={{ backgroundColor: cluster.color }}
-                                    />
+                                    <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-white/30" />
                                     <span className="text-white/80 text-xs font-mono truncate flex-1">
                                         {cluster.label}
                                     </span>

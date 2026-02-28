@@ -222,21 +222,21 @@ export function GraphEvents({
                 return { ...data, hidden: true }
             }
 
-            // Active node hover/selection highlighting takes priority
+            // Active node hover/selection highlighting — monochrome brightness hierarchy
             if (activeNode) {
                 if (node === activeNode) {
-                    return { ...data, highlighted: true, zIndex: 1 }
+                    return { ...data, color: "#ffffff", highlighted: true, zIndex: 1 }
                 }
                 if (neighbors.has(node)) {
-                    return { ...data, zIndex: 0 }
+                    return { ...data, color: "#999", zIndex: 0 }
                 }
                 return { ...data, color: "#333", label: "", zIndex: -1 }
             }
 
-            // Path highlighting
+            // Path highlighting — monochrome
             if (hasPath) {
                 if (pathNodes.has(node)) {
-                    return { ...data, highlighted: true, zIndex: 1 }
+                    return { ...data, color: "#ddd", highlighted: true, zIndex: 1 }
                 }
                 return { ...data, color: "#222", label: "", zIndex: -1 }
             }
