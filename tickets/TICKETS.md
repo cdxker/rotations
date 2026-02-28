@@ -32,5 +32,5 @@
 - [X] `02-BasicGraphRendering.md` — Render nodes and edges with force-directed layout
 - [X] `03-InteractiveFeatures.md` — Zoom, pan, click, hover, node detail panel
 - [X] `03-ClusterView.md` — Color-code and toggle clusters
-- [ ] `04-SearchAndFilter.md` — Search by song/artist, filter by play count/source
-- [ ] `04-PathExploration.md` — Find and display transition paths between two songs
+- [X] `04-SearchAndFilter.md` — Search by song/artist, filter by play count/source
+- [-] `04-PathExploration.md` — Find and display transition paths between two songs

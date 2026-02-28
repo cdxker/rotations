@@ -13,6 +13,11 @@ import { NodeTooltip, EdgeTooltip } from "./graph/GraphTooltip";
 import { NodeDetailPanel } from "./graph/NodeDetailPanel";
 import { useClusterInfo } from "./graph/useClusterInfo";
 import { ClusterLegend } from "./graph/ClusterLegend";
+import { SearchBarInner } from "./graph/SearchBar";
+import { FilterPanel, DEFAULT_FILTER } from "./graph/FilterPanel";
+import type { FilterState } from "./graph/FilterPanel";
+import { GraphFilters } from "./graph/GraphFilters";
+import { SlidersHorizontal } from "lucide-react";
 
 /** Load graph data into Sigma and run ForceAtlas2 layout. */
 function GraphInner({
@@ -219,6 +224,10 @@ export default function GraphView() {
     const [hoveredEdge, setHoveredEdge] = useState<HoveredEdge | null>(null);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
     const [navigateTarget, setNavigateTarget] = useState<string | null>(null);
+    const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER);
+    const [filterStats, setFilterStats] = useState({ visibleNodes: 0, maxPlays: 200, maxEdgeWeight: 50 });
+    const [showFilters, setShowFilters] = useState(false);
+    const totalNodes = graph?.order ?? 0;
 
     const handleNavigate = useCallback((nodeKey: string) => {
         setNavigateTarget(nodeKey);
@@ -244,6 +253,16 @@ export default function GraphView() {
     const handleFocusCluster = useCallback((clusterId: number | null) => {
         setFocusedCluster(clusterId);
     }, []);
+
+    const handleSearchSelect = useCallback((nodeKey: string) => {
+        setNavigateTarget(nodeKey);
+    }, []);
+
+    const hasActiveFilters =
+        filter.minPlays > 0 ||
+        filter.minPageRankPct > 0 ||
+        filter.minEdgeWeight > 0 ||
+        filter.activeSources.size > 0;
 
     return (
         <div className="relative w-full h-full">
@@ -286,7 +305,40 @@ export default function GraphView() {
                     onNavigated={handleNavigated}
                     onSelectNode={setSelectedNode}
                 />
+                <div className="absolute top-12 right-4 z-20 pointer-events-auto">
+                    <SearchBarInner onSelect={handleSearchSelect} />
+                </div>
+                <GraphFilters filter={filter} onStatsChange={setFilterStats} />
             </SigmaContainer>
+
+            {/* Search bar and filter toggle — top left, below header */}
+            <div className="absolute top-12 left-4 z-20 flex items-start gap-2 pointer-events-auto">
+                <button
+                    onClick={() => setShowFilters((prev) => !prev)}
+                    className={`p-2 rounded-lg border transition-colors ${
+                        showFilters || hasActiveFilters
+                            ? "bg-white/10 border-white/20 text-white/70"
+                            : "bg-[#181818] border-white/10 text-white/40 hover:text-white/60"
+                    }`}
+                    title="Toggle filters"
+                >
+                    <SlidersHorizontal size={14} />
+                </button>
+            </div>
+
+            {/* Filter panel */}
+            {showFilters && (
+                <div className="absolute top-12 left-14 z-20 pointer-events-auto">
+                    <FilterPanel
+                        filter={filter}
+                        onFilterChange={setFilter}
+                        totalNodes={totalNodes}
+                        visibleNodes={filterStats.visibleNodes}
+                        maxPlays={filterStats.maxPlays}
+                        maxEdgeWeight={filterStats.maxEdgeWeight}
+                    />
+                </div>
+            )}
 
             {/* Overlays rendered outside SigmaContainer for proper positioning */}
             {hoveredNode && !selectedNode && (
