@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { GraphDatabase } from "../graph/database.js";
 import type { SongKey, GraphNode } from "../graph/types.js";
+import { enrichGraph } from "../analysis/enrich.js";
 
 export interface ServerConfig {
     dbPath: string;
@@ -80,7 +81,10 @@ export function createApp(config: ServerConfig): Hono {
         }
 
         // Fetch full node data for each neighbor
-        const nextNeighbors: Record<string, { node: GraphNode; weight: number }> = {};
+        const nextNeighbors: Record<
+            string,
+            { node: GraphNode; weight: number }
+        > = {};
         for (const [key, weight] of Object.entries(node.next)) {
             const neighborNode = db.getNode(key as SongKey);
             if (neighborNode) {
@@ -88,7 +92,10 @@ export function createApp(config: ServerConfig): Hono {
             }
         }
 
-        const previousNeighbors: Record<string, { node: GraphNode; weight: number }> = {};
+        const previousNeighbors: Record<
+            string,
+            { node: GraphNode; weight: number }
+        > = {};
         for (const [key, weight] of Object.entries(node.previous)) {
             const neighborNode = db.getNode(key as SongKey);
             if (neighborNode) {
@@ -115,6 +122,14 @@ export function createApp(config: ServerConfig): Hono {
             totalEdges: edgeCount,
             metadata: graph.metadata,
         });
+    });
+
+    // GET /graph/analysis — full analysis: stats, rankings, PageRank top songs, cluster summaries
+    app.get("/graph/analysis", (c) => {
+        const topN = parseInt(c.req.query("topN") ?? "20", 10);
+        const graph = db.loadGraph();
+        const { summary } = enrichGraph(graph, { topN });
+        return c.json(summary);
     });
 
     return app;

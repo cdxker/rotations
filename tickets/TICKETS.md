@@ -22,7 +22,7 @@
 - [X] `01-PageRank.md` — Implement PageRank on the listening graph
 - [X] `01-BasicStats.md` — Compute summary statistics and rankings
 - [X] `02-ClusterDetection.md` — Identify clusters of related tracks
-- [ ] `02-EnrichedExport.md` — Export graph with all analysis data attached
+- [X] `02-EnrichedExport.md` — Export graph with all analysis data attached
 
 ## Phase 3 — Visualization
 

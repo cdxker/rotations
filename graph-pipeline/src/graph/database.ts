@@ -17,7 +17,9 @@ CREATE TABLE IF NOT EXISTS nodes (
     lastfm_url TEXT,
     track_id TEXT,
     total_plays INTEGER NOT NULL DEFAULT 0,
-    sources TEXT NOT NULL DEFAULT '[]'
+    sources TEXT NOT NULL DEFAULT '[]',
+    page_rank REAL,
+    cluster_id INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS edges (
@@ -57,8 +59,8 @@ export class GraphDatabase {
      */
     saveGraph(graph: ListeningGraph): void {
         const upsertNode = this.db.prepare(`
-            INSERT INTO nodes (song_key, name, artists, album_name, spotify_id, lastfm_url, track_id, total_plays, sources)
-            VALUES (@songKey, @name, @artists, @albumName, @spotifyId, @lastfmUrl, @trackId, @totalPlays, @sources)
+            INSERT INTO nodes (song_key, name, artists, album_name, spotify_id, lastfm_url, track_id, total_plays, sources, page_rank, cluster_id)
+            VALUES (@songKey, @name, @artists, @albumName, @spotifyId, @lastfmUrl, @trackId, @totalPlays, @sources, @pageRank, @clusterId)
             ON CONFLICT(song_key) DO UPDATE SET
                 name = COALESCE(excluded.name, nodes.name),
                 artists = excluded.artists,
@@ -67,7 +69,9 @@ export class GraphDatabase {
                 lastfm_url = COALESCE(excluded.lastfm_url, nodes.lastfm_url),
                 track_id = COALESCE(excluded.track_id, nodes.track_id),
                 total_plays = nodes.total_plays + excluded.total_plays,
-                sources = excluded.sources
+                sources = excluded.sources,
+                page_rank = COALESCE(excluded.page_rank, nodes.page_rank),
+                cluster_id = COALESCE(excluded.cluster_id, nodes.cluster_id)
         `);
 
         const upsertEdge = this.db.prepare(`
@@ -106,6 +110,8 @@ export class GraphDatabase {
                     trackId: node.trackId ?? null,
                     totalPlays: node.totalPlays,
                     sources: JSON.stringify(mergedSources),
+                    pageRank: node.pageRank ?? null,
+                    clusterId: node.clusterId ?? null,
                 });
             }
 
@@ -181,6 +187,8 @@ export class GraphDatabase {
                 previous: {} as Record<SongKey, number>,
                 totalPlays: row.total_plays,
                 sources: JSON.parse(row.sources),
+                pageRank: row.page_rank ?? undefined,
+                clusterId: row.cluster_id ?? undefined,
             };
         }
 
@@ -254,6 +262,8 @@ export class GraphDatabase {
             previous,
             totalPlays: row.total_plays,
             sources: JSON.parse(row.sources),
+            pageRank: row.page_rank ?? undefined,
+            clusterId: row.cluster_id ?? undefined,
         };
     }
 
@@ -290,6 +300,8 @@ interface NodeRow {
     track_id: string | null;
     total_plays: number;
     sources: string;
+    page_rank: number | null;
+    cluster_id: number | null;
 }
 
 /** Row shape from the edges table. */
