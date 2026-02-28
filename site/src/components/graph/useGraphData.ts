@@ -1,48 +1,12 @@
 import { useEffect, useState } from "react";
 import Graph from "graphology";
+import {
+    fetchGraph,
+    toGraphology,
+    getClusterColor,
+} from "@/lib/graph-api";
 
-const GRAPH_API_BASE =
-    typeof window !== "undefined" && window.location.hostname === "localhost"
-        ? "http://localhost:3001"
-        : "/api/graph";
-
-interface GraphNodeData {
-    name: string;
-    artists: string[];
-    albumName?: string;
-    totalPlays: number;
-    pageRank?: number;
-    clusterId?: number;
-    next: Record<string, number>;
-    previous: Record<string, number>;
-}
-
-interface GraphApiResponse {
-    nodes: Record<string, GraphNodeData>;
-    metadata: {
-        totalScrobbles: number;
-        dateRange: { from: string; to: string };
-    };
-}
-
-/** Cluster color palette matching chart-1 through chart-5 CSS variables (dark mode). */
-const CLUSTER_COLORS = [
-    "#7C3AED", // chart-1: purple
-    "#22D3EE", // chart-2: cyan
-    "#F59E0B", // chart-3: orange-yellow
-    "#A855F7", // chart-4: lighter purple
-    "#EF4444", // chart-5: red
-];
-
-export function getClusterColor(clusterId: number): string {
-    return CLUSTER_COLORS[clusterId % CLUSTER_COLORS.length]!;
-}
-
-/** Compute node radius from play count using log scale. */
-function nodeSize(totalPlays: number, maxPlays: number): number {
-    if (maxPlays <= 1) return 4;
-    return 4 + 16 * Math.log(totalPlays) / Math.log(maxPlays);
-}
+export { getClusterColor };
 
 export type LoadState = "loading" | "loaded" | "error" | "mock";
 
@@ -60,13 +24,10 @@ export function useGraphData(): { graph: Graph | null; state: LoadState; error: 
 
         async function load() {
             try {
-                const res = await fetch(`${GRAPH_API_BASE}/graph`);
-                if (!res.ok) throw new Error(`API error: ${res.status}`);
-                const data: GraphApiResponse = await res.json();
-
+                const data = await fetchGraph();
                 if (cancelled) return;
 
-                const g = buildGraphologyGraph(data);
+                const g = toGraphology(data);
                 setGraph(g);
                 setState("loaded");
             } catch {
@@ -86,40 +47,10 @@ export function useGraphData(): { graph: Graph | null; state: LoadState; error: 
     return { graph, state, error };
 }
 
-function buildGraphologyGraph(data: GraphApiResponse): Graph {
-    const g = new Graph();
-    const entries = Object.entries(data.nodes);
-    const maxPlays = Math.max(...entries.map(([, n]) => n.totalPlays), 1);
-
-    // Add nodes
-    for (const [key, node] of entries) {
-        g.addNode(key, {
-            label: `${node.artists[0]} — ${node.name}`,
-            size: nodeSize(node.totalPlays, maxPlays),
-            color: getClusterColor(node.clusterId ?? 0),
-            totalPlays: node.totalPlays,
-            pageRank: node.pageRank ?? 0,
-            clusterId: node.clusterId ?? 0,
-            // Random initial positions — ForceAtlas2 will arrange them
-            x: Math.random() * 1000,
-            y: Math.random() * 1000,
-        });
-    }
-
-    // Add edges
-    for (const [fromKey, node] of entries) {
-        for (const [toKey, weight] of Object.entries(node.next)) {
-            if (g.hasNode(toKey) && !g.hasEdge(fromKey, toKey)) {
-                g.addEdge(fromKey, toKey, {
-                    weight,
-                    size: Math.max(0.5, Math.min(3, Math.log(weight + 1))),
-                    color: `rgba(255, 255, 255, ${Math.min(0.3, 0.05 + weight * 0.03)})`,
-                });
-            }
-        }
-    }
-
-    return g;
+/** Compute node radius from play count using log scale. */
+function nodeSize(totalPlays: number, maxPlays: number): number {
+    if (maxPlays <= 1) return 4;
+    return 4 + 16 * Math.log(totalPlays) / Math.log(maxPlays);
 }
 
 /** Generate a mock graph for development without the API. */
