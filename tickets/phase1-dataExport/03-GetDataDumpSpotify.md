@@ -38,3 +38,12 @@ Dev
 
 - Spotify recently played is limited to 50 tracks — this is a small dataset compared to Last.fm. The real value from Spotify is playlist ordering data.
 - The existing `site/` project already fetches Spotify playlists (`SpotifyView.tsx`). Review that code for patterns to reuse.
+
+## Progress
+
+- [X] Implement SpotifyClient class with rate limiting and pagination
+- [X] Implement recently played fetcher
+- [X] Implement playlist + tracks fetcher (handles edge cases)
+- [X] Add JSON export function
+- [X] Add tests (8 tests passing)
+- [X] Verify compilation (tsc --noEmit clean)
