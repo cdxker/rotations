@@ -102,7 +102,7 @@ export function SearchBarInner({ onSelect }: SearchBarProps) {
 
     return (
         <div ref={containerRef} className="relative">
-            <div className="flex items-center gap-2 bg-[#181818] border border-white/10 rounded-lg px-3 py-1.5">
+            <div className="flex items-center gap-2 bg-[#121212]/95 backdrop-blur-sm border border-white/10 rounded-full px-4 py-2 shadow-lg">
                 <Search size={14} className="text-white/40 shrink-0" />
                 <input
                     ref={inputRef}
@@ -113,8 +113,8 @@ export function SearchBarInner({ onSelect }: SearchBarProps) {
                         if (results.length > 0) setIsOpen(true)
                     }}
                     onKeyDown={handleKeyDown}
-                    placeholder="Search songs or artists..."
-                    className="bg-transparent text-white/80 text-xs font-mono placeholder:text-white/30 outline-none w-48"
+                    placeholder="Search active tracks..."
+                    className="bg-transparent text-white/80 text-xs font-mono placeholder:text-white/30 outline-none w-56 max-w-[60vw]"
                 />
                 {query && (
                     <button

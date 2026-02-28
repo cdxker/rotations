@@ -1,18 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { SigmaContainer, useLoadGraph, useSigma } from "@react-sigma/core"
 import "@react-sigma/core/lib/style.css"
 import { useGraphData } from "./graph/useGraphData"
 import { GraphEvents } from "./graph/GraphEvents"
 import type { SelectedNode, HoveredEdge } from "./graph/GraphEvents"
 import { NodeDetailPanel } from "./graph/NodeDetailPanel"
-import { useClusterInfo } from "./graph/useClusterInfo"
-import { ClusterLegend } from "./graph/ClusterLegend"
 import { SearchBarInner } from "./graph/SearchBar"
-import { FilterPanel, DEFAULT_FILTER } from "./graph/FilterPanel"
+import { DEFAULT_FILTER } from "./graph/FilterPanel"
 import type { FilterState } from "./graph/FilterPanel"
-import { SlidersHorizontal, Route } from "lucide-react"
-import { PathPanel } from "./graph/PathPanel"
-import type { PathModeState } from "./graph/PathPanel"
 
 /** Load graph data into Sigma and run ForceAtlas2 layout. */
 function GraphInner({
@@ -239,20 +234,9 @@ function GraphNavigator({
     return null
 }
 
-const DEFAULT_PATH_STATE: PathModeState = {
-    from: null,
-    to: null,
-    result: null,
-    loading: false,
-    error: null,
-    algorithm: "shortest",
-}
-
 export default function GraphView() {
-    const { graph } = useGraphData()
-    const clusters = useClusterInfo(graph)
-    const [hiddenClusters, setHiddenClusters] = useState<Set<number>>(new Set())
-    const [focusedCluster, setFocusedCluster] = useState<number | null>(null)
+    const [hiddenClusters] = useState<Set<number>>(() => new Set())
+    const focusedCluster = null
     const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null)
     const [hoveredNode, setHoveredNode] = useState<{
         key: string
@@ -266,73 +250,15 @@ export default function GraphView() {
     const [hoveredEdge, setHoveredEdge] = useState<HoveredEdge | null>(null)
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
     const [navigateTarget, setNavigateTarget] = useState<string | null>(null)
-    const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER)
-    const [filterStats, setFilterStats] = useState({
+    const [filter] = useState<FilterState>(DEFAULT_FILTER)
+    const [, setFilterStats] = useState({
         visibleNodes: 0,
         maxPlays: 200,
         maxEdgeWeight: 50,
     })
-    const [showFilters, setShowFilters] = useState(false)
-    const [pathMode, setPathMode] = useState(false)
-    const [pathState, setPathState] = useState<PathModeState>(DEFAULT_PATH_STATE)
-    const totalNodes = graph?.order ?? 0
-
-    // Compute path node/edge sets for highlighting
-    const pathNodes = useMemo(() => {
-        if (!pathState.result?.found) return undefined
-        return new Set(pathState.result.path.map((s) => s.songKey))
-    }, [pathState.result])
-
-    const pathEdges = useMemo(() => {
-        if (!pathState.result?.found) return undefined
-        const edges = new Set<string>()
-        const steps = pathState.result.path
-        for (let i = 0; i < steps.length - 1; i++) {
-            edges.add(`${steps[i]!.songKey}→${steps[i + 1]!.songKey}`)
-        }
-        return edges
-    }, [pathState.result])
-
-    const handleToggleCluster = useCallback((clusterId: number) => {
-        setHiddenClusters((prev) => {
-            const next = new Set(prev)
-            if (next.has(clusterId)) {
-                next.delete(clusterId)
-            } else {
-                next.add(clusterId)
-            }
-            return next
-        })
-        setFocusedCluster((prev) => (prev === clusterId ? null : prev))
-    }, [])
-
-    const hasActiveFilters =
-        filter.minPlays > 0 ||
-        filter.minPageRankPct > 0 ||
-        filter.minEdgeWeight > 0 ||
-        filter.activeSources.size > 0
 
     return (
         <div className="relative w-full h-full">
-            <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-5 py-3 pointer-events-none">
-                <div className="pointer-events-auto">
-                    <a
-                        href="/"
-                        className="text-white/50 hover:text-white/80 text-xs font-mono transition-colors"
-                    >
-                        &larr; back
-                    </a>
-                </div>
-                <h1 className="text-white/70 text-sm font-mono tracking-wider">LISTENING GRAPH</h1>
-                <div className="w-16" />
-            </div>
-            <ClusterLegend
-                clusters={clusters}
-                hiddenClusters={hiddenClusters}
-                focusedCluster={focusedCluster}
-                onToggleCluster={handleToggleCluster}
-                onFocusCluster={setFocusedCluster}
-            />
             <SigmaContainer
                 style={{
                     width: "100%",
@@ -358,8 +284,6 @@ export default function GraphView() {
                     onMouseMove={setMousePos}
                     hiddenClusters={hiddenClusters}
                     focusedCluster={focusedCluster}
-                    pathNodes={pathMode ? pathNodes : undefined}
-                    pathEdges={pathMode ? pathEdges : undefined}
                     filter={filter}
                     onStatsChange={setFilterStats}
                 />
@@ -368,53 +292,10 @@ export default function GraphView() {
                     onNavigated={() => setNavigateTarget(null)}
                     onSelectNode={setSelectedNode}
                 />
-                <div className="absolute top-12 right-4 z-20 pointer-events-auto">
+                <div className="absolute top-12 left-4 z-20 pointer-events-auto">
                     <SearchBarInner onSelect={setNavigateTarget} />
                 </div>
             </SigmaContainer>
-
-            {/* Filter + path toggle — top left, below header */}
-            <div className="absolute top-12 left-4 z-20 flex items-start gap-2 pointer-events-auto">
-                <button
-                    onClick={() => setShowFilters((prev) => !prev)}
-                    className={`p-2 rounded-lg border transition-colors ${
-                        showFilters || hasActiveFilters
-                            ? "bg-white/10 border-white/20 text-white/70"
-                            : "bg-[#181818] border-white/10 text-white/40 hover:text-white/60"
-                    }`}
-                    title="Toggle filters"
-                >
-                    <SlidersHorizontal size={14} />
-                </button>
-                <button
-                    onClick={() => {
-                        setPathMode((prev) => !prev)
-                        if (pathMode) setPathState(DEFAULT_PATH_STATE)
-                    }}
-                    className={`p-2 rounded-lg border transition-colors ${
-                        pathMode
-                            ? "bg-white/10 border-white/20 text-white/70"
-                            : "bg-[#181818] border-white/10 text-white/40 hover:text-white/60"
-                    }`}
-                    title="Path explorer"
-                >
-                    <Route size={14} />
-                </button>
-            </div>
-
-            {/* Filter panel */}
-            {showFilters && (
-                <div className="absolute top-12 left-14 z-20 pointer-events-auto">
-                    <FilterPanel
-                        filter={filter}
-                        onFilterChange={setFilter}
-                        totalNodes={totalNodes}
-                        visibleNodes={filterStats.visibleNodes}
-                        maxPlays={filterStats.maxPlays}
-                        maxEdgeWeight={filterStats.maxEdgeWeight}
-                    />
-                </div>
-            )}
 
             {/* Overlays rendered outside SigmaContainer for proper positioning */}
             {hoveredNode && !selectedNode && (
@@ -458,20 +339,9 @@ export default function GraphView() {
                     </div>
                 </div>
             )}
-            {selectedNode && !pathMode && (
+            {selectedNode && (
                 <NodeDetailPanel
                     node={selectedNode}
-                    onNavigate={setNavigateTarget}
-                />
-            )}
-            {pathMode && (
-                <PathPanel
-                    state={pathState}
-                    onStateChange={setPathState}
-                    onClose={() => {
-                        setPathMode(false)
-                        setPathState(DEFAULT_PATH_STATE)
-                    }}
                     onNavigate={setNavigateTarget}
                 />
             )}
