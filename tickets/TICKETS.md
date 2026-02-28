@@ -62,4 +62,4 @@
 - [X] `01-Triage-SpotifyPlayTypo.md` — Do Now: rename `responsBody` → `responseBody` (trivial one-liner)
 - [X] `01-Triage-RemoveCleanupPromptFile.md` — Do Now: delete `CLEANUP_PROMPT.md` (completed cleanup artifact)
 - [X] `02-RunCleanupPrompt.md` — Cleanup already completed in Phase 4; applied Do Now fixes (typo + deleted CLEANUP_PROMPT.md)
-- [ ] `03-BugBotCommentSweep.md` — Run BugBot comment pass on active PR and create follow-up tickets for later fixes
+- [X] `03-BugBotCommentSweep.md` — All 7 BugBot comments mapped to existing triage tickets; no new tickets needed
