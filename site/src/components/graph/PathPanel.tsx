@@ -73,14 +73,18 @@ function NodePicker({
         (e: React.KeyboardEvent) => {
             if (e.key === "ArrowDown") {
                 e.preventDefault()
+                e.stopPropagation()
                 setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1))
             } else if (e.key === "ArrowUp") {
                 e.preventDefault()
+                e.stopPropagation()
                 setSelectedIndex((prev) => Math.max(prev - 1, 0))
             } else if (e.key === "Enter" && results[selectedIndex]) {
                 e.preventDefault()
+                e.stopPropagation()
                 handleSelect(results[selectedIndex].key, results[selectedIndex].label)
             } else if (e.key === "Escape") {
+                e.stopPropagation()
                 setIsOpen(false)
                 inputRef.current?.blur()
             }

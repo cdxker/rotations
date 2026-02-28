@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { SigmaContainer, useLoadGraph, useSigma } from "@react-sigma/core"
 import "@react-sigma/core/lib/style.css"
 import { useGraphData } from "./graph/useGraphData"
@@ -256,6 +256,7 @@ export default function GraphView() {
         maxPlays: 200,
         maxEdgeWeight: 50,
     })
+    const clearNavigateTarget = useCallback(() => setNavigateTarget(null), [])
 
     return (
         <div className="relative w-full h-full">
@@ -289,7 +290,7 @@ export default function GraphView() {
                 />
                 <GraphNavigator
                     targetNode={navigateTarget}
-                    onNavigated={() => setNavigateTarget(null)}
+                    onNavigated={clearNavigateTarget}
                     onSelectNode={setSelectedNode}
                 />
                 <div className="absolute top-12 left-4 z-20 pointer-events-auto">
