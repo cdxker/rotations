@@ -182,9 +182,12 @@ interface PathPanelProps {
 }
 
 export function PathPanel({ state, onStateChange, onClose, onNavigate }: PathPanelProps) {
+    const stateRef = useRef(state)
+    stateRef.current = state
+
     const update = useCallback(
-        (partial: Partial<PathModeState>) => onStateChange({ ...state, ...partial }),
-        [state, onStateChange]
+        (partial: Partial<PathModeState>) => onStateChange({ ...stateRef.current, ...partial }),
+        [onStateChange]
     )
 
     // Auto-search when both nodes are selected
@@ -199,7 +202,7 @@ export function PathPanel({ state, onStateChange, onClose, onNavigate }: PathPan
             .then((result) => {
                 if (!cancelled) {
                     onStateChange({
-                        ...state,
+                        ...stateRef.current,
                         loading: false,
                         result,
                         error: result.found ? null : "No path exists between these songs",
@@ -209,7 +212,7 @@ export function PathPanel({ state, onStateChange, onClose, onNavigate }: PathPan
             .catch((err) => {
                 if (!cancelled) {
                     onStateChange({
-                        ...state,
+                        ...stateRef.current,
                         loading: false,
                         error: err instanceof Error ? err.message : "Failed to find path",
                     })
