@@ -34,3 +34,13 @@ Dev
 
 - The graph will be queried by the Phase 1 server (`05-CreateServer.md`) and consumed by Phase 3 visualization.
 - Keep it simple — this is a personal project, not a production system. Don't over-engineer.
+
+## Progress
+
+- [X] Evaluated Neo4j, SQLite, PostgreSQL, TinyBase
+- [X] Decision document at `graph-pipeline/docs/data-storage-decision.md`
+- [X] Considered query patterns, data size, deployment simplicity, stack compatibility
+- [X] Final recommendation: **SQLite via `better-sqlite3`**
+
+### Decision Summary
+SQLite — zero infrastructure, right-sized for 100k scrobbles, portable `.db` file, no server needed. Edges in a dedicated table with indexed foreign keys for efficient neighbor lookups. PageRank computed in-memory.
