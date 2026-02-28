@@ -34,6 +34,20 @@ Dev
 - [ ] Validation checks for touched areas pass.
 - [ ] Add a `## Result` section documenting final cleanup status.
 
+## Result
+
+The cleanup workflow described in `CLEANUP_PROMPT.md` was **already completed in Phase 4** (tickets `01-CodebaseCleanup.md` and `01-AlwaysFocusedView.md`). Results:
+
+- **Baseline**: 5,238 source lines across 30 files
+- **Final**: 5,195 source lines across 25 files (-43 lines, -5 files)
+- All 4 phases of the cleanup prompt were executed with full test validation
+
+**Additional "Do Now" actions from triage:**
+1. Fixed `responsBody` → `responseBody` typo in `site/src/pages/api/spotify/play.ts:45`
+2. Deleted `CLEANUP_PROMPT.md` (completed internal artifact, no longer needed)
+
+**Validation:** All 172 tests pass (125 backend + 47 frontend). No new TypeScript errors.
+
 ## Notes
 
 - Follow commit hygiene and staged-file rules from `AGENTS.md`.
