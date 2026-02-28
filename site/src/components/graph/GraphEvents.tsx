@@ -24,7 +24,6 @@ export interface HoveredEdge {
 
 interface GraphEventsProps {
     onSelectNode: (node: SelectedNode | null) => void
-    externalSelectedKey: string | null
     onHoverNode: (
         info: {
             key: string
@@ -55,7 +54,6 @@ interface GraphEventsProps {
  */
 export function GraphEvents({
     onSelectNode,
-    externalSelectedKey,
     onHoverNode,
     onHoverEdge,
     hiddenClusters,
@@ -69,13 +67,6 @@ export function GraphEvents({
     const registerEvents = useRegisterEvents()
     const [selectedNode, setSelectedNode] = useState<string | null>(null)
     const [hoveredNode, setHoveredNode] = useState<string | null>(null)
-
-    // Sync external selection (e.g. auto-focus on load)
-    useEffect(() => {
-        if (externalSelectedKey !== null) {
-            setSelectedNode(externalSelectedKey)
-        }
-    }, [externalSelectedKey])
 
     // Get neighbor set for highlighting
     const getNeighborSet = useCallback(
