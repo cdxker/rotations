@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useSigma, useRegisterEvents } from "@react-sigma/core"
 import type { NodeAttributes, EdgeAttributes } from "@/lib/graph-api"
+import { computeDepthLayers } from "@/lib/depth-layers"
 import type { FilterState } from "./FilterPanel"
 
 export interface SelectedNode {
@@ -42,6 +43,7 @@ interface GraphEventsProps {
     focusedCluster: number | null
     pathNodes?: Set<string>
     pathEdges?: Set<string>
+    depthMode: boolean
     filter: FilterState
     onStatsChange: (stats: {
         visibleNodes: number
@@ -63,6 +65,7 @@ export function GraphEvents({
     focusedCluster,
     pathNodes,
     pathEdges,
+    depthMode,
     filter,
     onStatsChange,
 }: GraphEventsProps) {
@@ -201,7 +204,7 @@ export function GraphEvents({
     }, [registerEvents, sigma, buildSelectedNode, onSelectNode, onHoverNode, onHoverEdge])
 
 
-    // Apply node reducer for highlighting + cluster filtering + path highlighting
+    // Apply node reducer for highlighting + cluster filtering + path highlighting + depth mode
     useEffect(() => {
         const activeNode = selectedNode ?? hoveredNode
         const hasClusterFilter = hiddenClusters.size > 0 || focusedCluster !== null
@@ -213,8 +216,19 @@ export function GraphEvents({
             return
         }
 
+        // Compute depth layers for depth mode, or just direct neighbors for standard mode
+        const graph = sigma.getGraph()
+        const depthResult =
+            depthMode && activeNode
+                ? computeDepthLayers(graph, activeNode, 3)
+                : null
+
         const neighbors = activeNode ? getNeighborSet(activeNode) : new Set<string>()
         const connectedEdges = activeNode ? getEdgeSet(activeNode) : new Set<string>()
+
+        // Brightness per depth layer: [root, layer1, layer2, layer3]
+        const DEPTH_COLORS = ["#ffffff", "#bbb", "#777", "#444"]
+        const DEPTH_EDGE_OPACITY = [0.5, 0.3, 0.15, 0.08]
 
         sigma.setSetting("nodeReducer", (node, data) => {
             const clusterId = (data as NodeAttributes & typeof data).clusterId ?? 0
@@ -224,7 +238,26 @@ export function GraphEvents({
                 return { ...data, hidden: true }
             }
 
-            // Active node hover/selection highlighting — monochrome brightness hierarchy
+            // Depth mode: 3-layer neighborhood with weight-based brightness
+            if (depthResult && activeNode) {
+                const depth = depthResult.depths.get(node)
+                if (depth !== undefined) {
+                    const weight = depthResult.weights.get(node) ?? 1
+                    const baseColor = DEPTH_COLORS[Math.min(depth, 3)]!
+                    if (depth === 0) {
+                        return { ...data, color: baseColor, highlighted: true, zIndex: 2 }
+                    }
+                    // Scale brightness by weight within the layer
+                    const rgb = parseInt(baseColor.slice(1), 16)
+                    const r = (rgb >> 16) & 0xff
+                    const scaled = Math.round(r * (0.5 + 0.5 * weight))
+                    const hex = `#${scaled.toString(16).padStart(2, "0").repeat(3)}`
+                    return { ...data, color: hex, zIndex: 2 - depth }
+                }
+                return { ...data, color: "#222", label: "", zIndex: -2 }
+            }
+
+            // Standard mode: active node highlighting — monochrome brightness hierarchy
             if (activeNode) {
                 if (node === activeNode) {
                     return { ...data, color: "#ffffff", highlighted: true, zIndex: 1 }
@@ -256,18 +289,35 @@ export function GraphEvents({
         })
 
         sigma.setSetting("edgeReducer", (edge, data) => {
-            const graph = sigma.getGraph()
             const source = graph.source(edge)
             const target = graph.target(edge)
-            const sourceCluster = (graph.getNodeAttributes(source) as NodeAttributes).clusterId ?? 0
-            const targetCluster = (graph.getNodeAttributes(target) as NodeAttributes).clusterId ?? 0
+            const sourceCluster =
+                (graph.getNodeAttributes(source) as NodeAttributes).clusterId ?? 0
+            const targetCluster =
+                (graph.getNodeAttributes(target) as NodeAttributes).clusterId ?? 0
 
             // Hide edges connected to hidden clusters
             if (hiddenClusters.has(sourceCluster) || hiddenClusters.has(targetCluster)) {
                 return { ...data, hidden: true }
             }
 
-            // Active node hover/selection takes priority
+            // Depth mode: show edges within the neighborhood with depth-based opacity
+            if (depthResult && activeNode) {
+                if (depthResult.edges.has(edge)) {
+                    const sourceDepth = depthResult.depths.get(source) ?? 3
+                    const targetDepth = depthResult.depths.get(target) ?? 3
+                    const maxD = Math.max(sourceDepth, targetDepth)
+                    const opacity = DEPTH_EDGE_OPACITY[Math.min(maxD, 3)]!
+                    return {
+                        ...data,
+                        color: `rgba(255, 255, 255, ${opacity})`,
+                        zIndex: 2 - maxD,
+                    }
+                }
+                return { ...data, hidden: true }
+            }
+
+            // Standard mode: active node hover/selection takes priority
             if (activeNode) {
                 if (connectedEdges.has(edge)) {
                     return { ...data, color: "rgba(255, 255, 255, 0.4)", zIndex: 1 }
@@ -299,6 +349,7 @@ export function GraphEvents({
         selectedNode,
         hoveredNode,
         sigma,
+        depthMode,
         getNeighborSet,
         getEdgeSet,
         hiddenClusters,

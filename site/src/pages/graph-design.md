@@ -146,6 +146,27 @@ Album artwork is sourced from Spotify and Last.fm during ingestion:
 - Panel text: `text-white/90` for primary, `text-white/60` for secondary
 - Metric values: `text-white` for emphasis
 
+**Depth mode (3-layer neighborhood):**
+
+When depth mode is toggled on, the view expands from the selected node to 3 outward layers:
+
+- Layer 0 (root): `#ffffff` — selected node, highlighted, zIndex 2
+- Layer 1: `#bbb` base — direct neighbors, brightness scaled by normalized weight within layer
+- Layer 2: `#777` base — two hops out, brightness scaled by weight
+- Layer 3: `#444` base — three hops out, brightness scaled by weight
+- Outside neighborhood: `#222`, labels hidden, zIndex -2
+
+Edge opacity follows the deepest endpoint:
+- Layer 0–1 edges: `0.5` opacity
+- Layer 1–2 edges: `0.3` opacity
+- Layer 2–3 edges: `0.15` opacity
+- Layer 3+ edges: `0.08` opacity
+- Edges outside the neighborhood: hidden
+
+Weight normalization: within each depth layer, edge weights are normalized to 0–1 (max weight in that layer = 1.0). Node brightness is then scaled: `brightness = base * (0.5 + 0.5 * normalizedWeight)`.
+
+Toggle: "Depth" button next to the search bar. Toggling preserves the current selected node.
+
 **Interactive states:**
 
 - Hover node: brighten to full white, show tooltip with name + play count
