@@ -14,29 +14,18 @@ function pickRandom<T>(array: T[]): T {
     return array[Math.floor(Math.random() * array.length)]
 }
 
-function findPlaylistForTrack(
-    trackId: TrackId,
-    tracksByPlaylist: Map<PlaylistId, FuckingTrack[]>
-): PlaylistId | undefined {
-    for (const [playlistId, tracks] of tracksByPlaylist.entries()) {
-        if (tracks.some((t) => t.id === trackId)) {
-            return playlistId
-        }
-    }
-    return undefined
-}
-
 export function shuffleAssociations(): void {
-    console.log("Shuffling associations")
     const playlists = db.getPlaylists()
     if (playlists.length === 0) return
 
     const allTracks: FuckingTrack[] = []
     const tracksByPlaylist = new Map<PlaylistId, FuckingTrack[]>()
+    const trackToPlaylist = new Map<TrackId, PlaylistId>()
 
     for (const playlist of playlists) {
         const tracks = db.getTracks(playlist.id)
         tracksByPlaylist.set(playlist.id, tracks)
+        for (const t of tracks) trackToPlaylist.set(t.id, playlist.id)
         allTracks.push(...tracks)
     }
 
@@ -45,7 +34,7 @@ export function shuffleAssociations(): void {
     const playlistIds = Array.from(tracksByPlaylist.keys())
 
     for (const currentTrack of allTracks) {
-        const currentPlaylistId = findPlaylistForTrack(currentTrack.id, tracksByPlaylist)
+        const currentPlaylistId = trackToPlaylist.get(currentTrack.id)
         if (!currentPlaylistId) continue
 
         // Get playlists other than the current track's playlist
@@ -55,10 +44,7 @@ export function shuffleAssociations(): void {
 
         if (otherPlaylistIds.length >= 2) {
             // Pick 2 unique random playlists
-            const shuffledPlaylists = shuffleArray(otherPlaylistIds)
-            const selectedPlaylists = shuffledPlaylists.slice(0, 2)
-
-            for (const playlistId of selectedPlaylists) {
+            for (const playlistId of shuffleArray(otherPlaylistIds).slice(0, 2)) {
                 const tracks = tracksByPlaylist.get(playlistId)
                 if (tracks && tracks.length > 0) {
                     nextTracks[playlistId] = pickRandom(tracks).id
@@ -90,11 +76,6 @@ export function shuffleAssociations(): void {
             }
         }
 
-        const updatedTrack: FuckingTrack = {
-            ...currentTrack,
-            next_tracks: nextTracks,
-        }
-
-        db.updateTrack(updatedTrack)
+        db.updateTrack({ ...currentTrack, next_tracks: nextTracks })
     }
 }
