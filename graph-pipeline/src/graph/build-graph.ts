@@ -35,6 +35,8 @@ export interface RawSpotifyPlaylistTrack {
     artist: string;
     track: string;
     album: string;
+    /** Spotify playlist ID (URI-safe). Used as grouping key to avoid name collisions. */
+    playlistId: string;
     /** Name of the playlist this track belongs to. */
     playlistName: string;
     /** Zero-based position of this track within the playlist. */
@@ -183,12 +185,12 @@ function processSpotifyPlaylists(
     nodes: Record<SongKey, GraphNode>,
     tracks: RawSpotifyPlaylistTrack[],
 ): number {
-    // Group by playlist, sort by position within each
+    // Group by playlist ID to avoid merging same-name playlists
     const playlists = new Map<string, RawSpotifyPlaylistTrack[]>();
     for (const track of tracks) {
-        const list = playlists.get(track.playlistName) ?? [];
+        const list = playlists.get(track.playlistId) ?? [];
         list.push(track);
-        playlists.set(track.playlistName, list);
+        playlists.set(track.playlistId, list);
     }
 
     let totalPlays = 0;

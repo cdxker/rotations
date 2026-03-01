@@ -210,6 +210,7 @@ export class SpotifyClient {
                     artist: item.track.artists.map((a) => a.name).join(", "),
                     track: item.track.name,
                     album: item.track.album.name,
+                    playlistId,
                     playlistName,
                     position,
                     imageUrl: pickImageUrl(item.track.album.images),

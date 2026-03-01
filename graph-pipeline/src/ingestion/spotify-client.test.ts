@@ -264,6 +264,7 @@ describe("SpotifyClient", () => {
                 artist: "Artist A",
                 track: "Track 1",
                 album: "Album 1",
+                playlistId: "pl1",
                 playlistName: "My Playlist",
                 position: 0,
             });
@@ -274,6 +275,7 @@ describe("SpotifyClient", () => {
                 artist: "Local Artist",
                 track: "Local Song",
                 album: "Local Album",
+                playlistId: "pl1",
                 playlistName: "My Playlist",
                 position: 3,
             });

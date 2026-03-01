@@ -199,6 +199,7 @@ describe("buildGraph", () => {
                         artist: "A",
                         track: "T1",
                         album: "",
+                        playlistId: "pl1",
                         playlistName: "My Playlist",
                         position: 0,
                     },
@@ -207,6 +208,7 @@ describe("buildGraph", () => {
                         artist: "B",
                         track: "T2",
                         album: "",
+                        playlistId: "pl1",
                         playlistName: "My Playlist",
                         position: 1,
                     },
@@ -215,6 +217,7 @@ describe("buildGraph", () => {
                         artist: "C",
                         track: "T3",
                         album: "",
+                        playlistId: "pl1",
                         playlistName: "My Playlist",
                         position: 2,
                     },
@@ -238,6 +241,7 @@ describe("buildGraph", () => {
                         artist: "A",
                         track: "T1",
                         album: "",
+                        playlistId: "pl1",
                         playlistName: "Playlist 1",
                         position: 0,
                     },
@@ -246,6 +250,7 @@ describe("buildGraph", () => {
                         artist: "B",
                         track: "T2",
                         album: "",
+                        playlistId: "pl1",
                         playlistName: "Playlist 1",
                         position: 1,
                     },
@@ -254,6 +259,7 @@ describe("buildGraph", () => {
                         artist: "C",
                         track: "T3",
                         album: "",
+                        playlistId: "pl2",
                         playlistName: "Playlist 2",
                         position: 0,
                     },
@@ -262,6 +268,7 @@ describe("buildGraph", () => {
                         artist: "D",
                         track: "T4",
                         album: "",
+                        playlistId: "pl2",
                         playlistName: "Playlist 2",
                         position: 1,
                     },
@@ -277,6 +284,62 @@ describe("buildGraph", () => {
             // Playlist 2: C -> D
             expect(nodeC.next["d::t4" as SongKey]).toBe(1);
             // No cross-playlist edge A -> C
+            expect(nodeA.next["c::t3" as SongKey]).toBeUndefined();
+        });
+
+        it("keeps same-name playlists with different IDs separate", () => {
+            const input: GraphInput = {
+                spotifyPlaylistTracks: [
+                    {
+                        spotifyId: "s1",
+                        artist: "A",
+                        track: "T1",
+                        album: "",
+                        playlistId: "id-alpha",
+                        playlistName: "Favorites",
+                        position: 0,
+                    },
+                    {
+                        spotifyId: "s2",
+                        artist: "B",
+                        track: "T2",
+                        album: "",
+                        playlistId: "id-alpha",
+                        playlistName: "Favorites",
+                        position: 1,
+                    },
+                    {
+                        spotifyId: "s3",
+                        artist: "C",
+                        track: "T3",
+                        album: "",
+                        playlistId: "id-beta",
+                        playlistName: "Favorites",
+                        position: 0,
+                    },
+                    {
+                        spotifyId: "s4",
+                        artist: "D",
+                        track: "T4",
+                        album: "",
+                        playlistId: "id-beta",
+                        playlistName: "Favorites",
+                        position: 1,
+                    },
+                ],
+            };
+
+            const graph = buildGraph(input);
+            const nodeA = graph.nodes["a::t1" as SongKey]!;
+            const nodeB = graph.nodes["b::t2" as SongKey]!;
+            const nodeC = graph.nodes["c::t3" as SongKey]!;
+
+            // Playlist id-alpha: A -> B
+            expect(nodeA.next["b::t2" as SongKey]).toBe(1);
+            // Playlist id-beta: C -> D
+            expect(nodeC.next["d::t4" as SongKey]).toBe(1);
+            // No cross-playlist edges
+            expect(nodeB.next["c::t3" as SongKey]).toBeUndefined();
             expect(nodeA.next["c::t3" as SongKey]).toBeUndefined();
         });
     });
@@ -377,6 +440,7 @@ describe("buildGraph", () => {
                         artist: "A",
                         track: "T1",
                         album: "",
+                        playlistId: "pl-solo",
                         playlistName: "Solo",
                         position: 0,
                     },
@@ -411,6 +475,7 @@ describe("buildGraph", () => {
                         artist: "D",
                         track: "T4",
                         album: "",
+                        playlistId: "pl-p",
                         playlistName: "P",
                         position: 0,
                     },
