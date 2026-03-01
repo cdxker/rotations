@@ -86,3 +86,5 @@
 - [X] `04-RemoveUnusedKeyIndexParam.md` — Remove unused keyIndex parameter from computeClusterStats
 - [X] `04-OptimizeDepthLayerEdgeIteration.md` — Replace full-graph edge scan with per-node iteration in depth layers
 - [X] `04-FixBootstrapReducerRace.md` — Prevent GraphEvents from clearing bootstrap reducers on initial mount
+- [ ] `05-FixPathPanelCleanupRace.md` — Fix cleanup effect racing with just-resolved promise in PathPanel
+- [ ] `05-FixSourcePlaysSqlMerge.md` — Make source_plays SQL upsert merge additively instead of overwriting
