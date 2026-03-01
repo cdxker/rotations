@@ -38,8 +38,8 @@ export function SearchBarInner({ onSelect }: SearchBarProps) {
         const lowerQuery = query.toLowerCase()
         const matches: SearchResult[] = []
 
-        graph.forEachNode((node, attrs) => {
-            const nodeAttrs = attrs as NodeAttributes
+        for (const node of graph.nodes()) {
+            const nodeAttrs = graph.getNodeAttributes(node) as NodeAttributes
             const label = nodeAttrs.label.toLowerCase()
             if (label.includes(lowerQuery)) {
                 matches.push({
@@ -48,8 +48,8 @@ export function SearchBarInner({ onSelect }: SearchBarProps) {
                     totalPlays: nodeAttrs.totalPlays,
                 })
             }
-            if (matches.length >= 20) return
-        })
+            if (matches.length >= 20) break
+        }
 
         // Sort by play count descending for better relevance
         matches.sort((a, b) => b.totalPlays - a.totalPlays)

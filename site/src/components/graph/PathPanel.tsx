@@ -41,8 +41,8 @@ function NodePicker({
         const lowerQuery = query.toLowerCase()
         const matches: SearchResult[] = []
 
-        graph.forEachNode((node, attrs) => {
-            const nodeAttrs = attrs as NodeAttributes
+        for (const node of graph.nodes()) {
+            const nodeAttrs = graph.getNodeAttributes(node) as NodeAttributes
             if (nodeAttrs.label.toLowerCase().includes(lowerQuery)) {
                 matches.push({
                     key: node,
@@ -50,8 +50,8 @@ function NodePicker({
                     totalPlays: nodeAttrs.totalPlays,
                 })
             }
-            if (matches.length >= 20) return
-        })
+            if (matches.length >= 20) break
+        }
 
         matches.sort((a, b) => b.totalPlays - a.totalPlays)
         setResults(matches.slice(0, 8))
