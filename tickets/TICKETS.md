@@ -78,7 +78,7 @@
 - [X] `02-FixModularityFormula.md` — Fix computeModularity to account for non-adjacent same-community pairs
 - [X] `02-RemoveSigmaInDeadCode.md` — Remove unused sigmaIn array from Louvain implementation
 - [X] `02-FixSourcePlaysMerge.md` — Merge source_plays per-source counts on incremental save instead of replacing
-- [ ] `03-FixSearchEarlyExit.md` — Replace forEachNode with breakable loop in SearchBar and PathPanel search
-- [ ] `03-FixPathPanelLoadingGuard.md` — Reset loading state when path fetch is cancelled mid-flight
-- [ ] `03-FixToGraphologySpreadOverflow.md` — Replace Math.max spread in toGraphology with loop for >65k node graphs
-- [ ] `03-FixPlaylistNameCollision.md` — Key playlist grouping by ID instead of name to prevent same-name merges
+- [X] `03-FixSearchEarlyExit.md` — Replace forEachNode with breakable loop in SearchBar and PathPanel search
+- [X] `03-FixPathPanelLoadingGuard.md` — Reset loading state when path fetch is cancelled mid-flight
+- [X] `03-FixToGraphologySpreadOverflow.md` — Replace Math.max spread in toGraphology with loop for >65k node graphs
+- [X] `03-FixPlaylistNameCollision.md` — Key playlist grouping by ID instead of name to prevent same-name merges
