@@ -14,6 +14,15 @@ import { loadLastfmConfig } from "../config.js";
 
 const DATA_DIR = path.join(import.meta.dirname, "../../data");
 
+/** Decode and validate a raw songKey parameter. Throws an object with `error` and `status` if invalid. */
+function parseSongKey(rawKey: string): SongKey {
+    const decoded = decodeURIComponent(rawKey);
+    if (!decoded || !decoded.includes("::")) {
+        throw { error: "Invalid songKey format. Expected: artist::track", status: 400 };
+    }
+    return decoded as SongKey;
+}
+
 export interface ServerConfig {
     dbPath: string;
 }
@@ -72,13 +81,11 @@ export function createApp(config: ServerConfig): Hono {
 
     // GET /graph/node/:songKey — single node with its edges
     app.get("/graph/node/:songKey", (c) => {
-        const songKey = decodeURIComponent(c.req.param("songKey")) as SongKey;
-
-        if (!songKey || !songKey.includes("::")) {
-            return c.json(
-                { error: "Invalid songKey format. Expected: artist::track" },
-                400,
-            );
+        let songKey: SongKey;
+        try {
+            songKey = parseSongKey(c.req.param("songKey"));
+        } catch (e: any) {
+            return c.json({ error: e.error }, e.status);
         }
 
         const node = db.getNode(songKey);
@@ -91,13 +98,11 @@ export function createApp(config: ServerConfig): Hono {
 
     // GET /graph/neighbors/:songKey — immediate neighbors (next + previous)
     app.get("/graph/neighbors/:songKey", (c) => {
-        const songKey = decodeURIComponent(c.req.param("songKey")) as SongKey;
-
-        if (!songKey || !songKey.includes("::")) {
-            return c.json(
-                { error: "Invalid songKey format. Expected: artist::track" },
-                400,
-            );
+        let songKey: SongKey;
+        try {
+            songKey = parseSongKey(c.req.param("songKey"));
+        } catch (e: any) {
+            return c.json({ error: e.error }, e.status);
         }
 
         const node = db.getNode(songKey);
@@ -170,11 +175,11 @@ export function createApp(config: ServerConfig): Hono {
             );
         }
 
-        if (!from.includes("::") || !to.includes("::")) {
-            return c.json(
-                { error: "Invalid songKey format. Expected: artist::track" },
-                400,
-            );
+        try {
+            parseSongKey(from);
+            parseSongKey(to);
+        } catch (e: any) {
+            return c.json({ error: e.error }, e.status);
         }
 
         if (algorithm !== "shortest" && algorithm !== "strongest") {

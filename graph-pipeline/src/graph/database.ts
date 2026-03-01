@@ -210,24 +210,7 @@ export class GraphDatabase {
         // Build nodes
         for (const row of nodeRows) {
             const key = row.song_key as SongKey;
-            nodes[key] = {
-                name: row.name,
-                artists: JSON.parse(row.artists),
-                albumName: row.album_name ?? undefined,
-                spotifyId: row.spotify_id ?? undefined,
-                lastfmUrl: row.lastfm_url ?? undefined,
-                trackId: row.track_id
-                    ? (row.track_id as `track-${string}`)
-                    : undefined,
-                next: {} as Record<SongKey, number>,
-                previous: {} as Record<SongKey, number>,
-                totalPlays: row.total_plays,
-                sources: JSON.parse(row.sources),
-                pageRank: row.page_rank ?? undefined,
-                clusterId: row.cluster_id ?? undefined,
-                imageUrl: row.image_url ?? undefined,
-                sourcePlays: row.source_plays ? JSON.parse(row.source_plays) : undefined,
-            };
+            nodes[key] = this.rowToNode(row);
         }
 
         // Build edges
@@ -287,24 +270,10 @@ export class GraphDatabase {
             previous[e.from_key as SongKey] = e.weight;
         }
 
-        return {
-            name: row.name,
-            artists: JSON.parse(row.artists),
-            albumName: row.album_name ?? undefined,
-            spotifyId: row.spotify_id ?? undefined,
-            lastfmUrl: row.lastfm_url ?? undefined,
-            trackId: row.track_id
-                ? (row.track_id as `track-${string}`)
-                : undefined,
-            next,
-            previous,
-            totalPlays: row.total_plays,
-            sources: JSON.parse(row.sources),
-            pageRank: row.page_rank ?? undefined,
-            clusterId: row.cluster_id ?? undefined,
-            imageUrl: row.image_url ?? undefined,
-            sourcePlays: row.source_plays ? JSON.parse(row.source_plays) : undefined,
-        };
+        const node = this.rowToNode(row);
+        node.next = next;
+        node.previous = previous;
+        return node;
     }
 
     /** Get the total number of nodes in the database. */
@@ -321,6 +290,28 @@ export class GraphDatabase {
             .prepare("SELECT COUNT(*) as count FROM edges")
             .get() as { count: number };
         return row.count;
+    }
+
+    /** Convert a database NodeRow into a GraphNode (without edges). */
+    private rowToNode(row: NodeRow): GraphNode {
+        return {
+            name: row.name,
+            artists: JSON.parse(row.artists),
+            albumName: row.album_name ?? undefined,
+            spotifyId: row.spotify_id ?? undefined,
+            lastfmUrl: row.lastfm_url ?? undefined,
+            trackId: row.track_id
+                ? (row.track_id as `track-${string}`)
+                : undefined,
+            next: {} as Record<SongKey, number>,
+            previous: {} as Record<SongKey, number>,
+            totalPlays: row.total_plays,
+            sources: JSON.parse(row.sources),
+            pageRank: row.page_rank ?? undefined,
+            clusterId: row.cluster_id ?? undefined,
+            imageUrl: row.image_url ?? undefined,
+            sourcePlays: row.source_plays ? JSON.parse(row.source_plays) : undefined,
+        };
     }
 
     /** Close the database connection. */
