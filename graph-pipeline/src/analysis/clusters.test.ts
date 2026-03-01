@@ -253,6 +253,26 @@ describe("detectClusters", () => {
         expect(clusterB).toBe(clusterC);
     });
 
+    it("self-loop edges are not double-counted", () => {
+        // A has a self-loop (A -> A with weight 3) and an edge to B
+        const graph = makeGraph({
+            "a::t1": makeNode({
+                next: { "a::t1": 3, "b::t2": 5 } as Record<SongKey, number>,
+            }),
+            "b::t2": makeNode({
+                next: { "a::t1": 5 } as Record<SongKey, number>,
+            }),
+        });
+
+        // Should not crash or produce incorrect clustering
+        const result = detectClusters(graph);
+        expect(result.clusterCount).toBeGreaterThan(0);
+
+        // Both nodes should have cluster IDs assigned
+        expect(graph.nodes["a::t1" as SongKey]!.clusterId).toBeDefined();
+        expect(graph.nodes["b::t2" as SongKey]!.clusterId).toBeDefined();
+    });
+
     it("cluster IDs are contiguous starting from 0", () => {
         const graph = makeGraph({
             "a::t1": makeNode({

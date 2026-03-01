@@ -62,7 +62,9 @@ export function detectClusters(
 
             // Add weight in both directions (undirected)
             weights[i]!.set(j, (weights[i]!.get(j) ?? 0) + w);
-            weights[j]!.set(i, (weights[j]!.get(i) ?? 0) + w);
+            if (i !== j) {
+                weights[j]!.set(i, (weights[j]!.get(i) ?? 0) + w);
+            }
             totalWeight += w;
         }
     }
