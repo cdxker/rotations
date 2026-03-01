@@ -67,11 +67,14 @@ export function computeDepthLayers(
     }
 
     // Also include edges between nodes that are both in the depth neighborhood
-    graph.forEachEdge((edge, _attrs, source, target) => {
-        if (depths.has(source) && depths.has(target)) {
-            edges.add(edge)
-        }
-    })
+    // Iterate only edges of neighborhood nodes instead of the entire graph
+    for (const nodeKey of depths.keys()) {
+        graph.forEachEdge(nodeKey, (edge, _attrs, source, target) => {
+            if (depths.has(source) && depths.has(target)) {
+                edges.add(edge)
+            }
+        })
+    }
 
     // Normalize weights per layer
     const weights = new Map<string, number>()
