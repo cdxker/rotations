@@ -72,3 +72,4 @@
 - [X] `01-FixPathPanelStaleAsync.md` — Use functional state updates in async callbacks to prevent stale closure overwrites
 - [X] `01-FixSourceBreakdownSemantics.md` — Track per-source play counts and report scrobbles instead of nodes
 - [X] `01-FixModularityNormalization.md` — Divide by 2m instead of m in modularity formula
+- [ ] `02-FixSidebarNavigationHighlighting.md` — Sidebar neighbor click moves camera but does not update graph highlighting (Sigma reducer issue)
