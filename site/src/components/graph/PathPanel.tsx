@@ -193,7 +193,6 @@ export function PathPanel({ state, onStateChange, onClose, onNavigate }: PathPan
     // Auto-search when both nodes are selected
     useEffect(() => {
         if (!state.from || !state.to) return
-        if (state.loading) return
 
         let cancelled = false
         update({ loading: true, error: null, result: null })
@@ -221,6 +220,7 @@ export function PathPanel({ state, onStateChange, onClose, onNavigate }: PathPan
 
         return () => {
             cancelled = true
+            onStateChange({ ...stateRef.current, loading: false })
         }
     }, [state.from?.key, state.to?.key, state.algorithm])
 
