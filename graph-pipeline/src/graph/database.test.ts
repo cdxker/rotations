@@ -203,6 +203,62 @@ describe("GraphDatabase", () => {
         expect(loaded.metadata.exportTimestamp).toBe("2025-02-01T00:00:00Z");
     });
 
+    it("supports incremental updates — merges source_plays per-source counts", () => {
+        const keyA = toSongKey("Artist A", "Track 1");
+
+        // First save with lastfm plays
+        const graph1: ListeningGraph = {
+            nodes: {
+                [keyA]: {
+                    name: "Track 1",
+                    artists: ["Artist A"],
+                    next: {} as Record<SongKey, number>,
+                    previous: {} as Record<SongKey, number>,
+                    totalPlays: 3,
+                    sources: ["lastfm"],
+                    sourcePlays: { lastfm: 3 },
+                },
+            } as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
+            metadata: {
+                totalScrobbles: 3,
+                dateRange: { from: "2024-01-01T00:00:00Z", to: "2024-06-01T00:00:00Z" },
+                exportTimestamp: "2025-01-01T00:00:00Z",
+            },
+        };
+
+        db.saveGraph(graph1);
+
+        // Second save with spotify plays
+        const graph2: ListeningGraph = {
+            nodes: {
+                [keyA]: {
+                    name: "Track 1",
+                    artists: ["Artist A"],
+                    next: {} as Record<SongKey, number>,
+                    previous: {} as Record<SongKey, number>,
+                    totalPlays: 2,
+                    sources: ["spotify-recent"],
+                    sourcePlays: { "spotify-recent": 2 },
+                },
+            } as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
+            metadata: {
+                totalScrobbles: 2,
+                dateRange: { from: "2024-06-01T00:00:00Z", to: "2024-12-01T00:00:00Z" },
+                exportTimestamp: "2025-02-01T00:00:00Z",
+            },
+        };
+
+        db.saveGraph(graph2);
+
+        const loaded = db.loadGraph();
+
+        // source_plays should be merged additively
+        expect(loaded.nodes[keyA]!.sourcePlays).toEqual({
+            lastfm: 3,
+            "spotify-recent": 2,
+        });
+    });
+
     it("getNode returns a single node with edges", () => {
         const graph = makeTestGraph();
         db.saveGraph(graph);

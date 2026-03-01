@@ -110,16 +110,29 @@ export class GraphDatabase {
         const transaction = this.db.transaction(() => {
             // Insert/update nodes
             for (const [songKey, node] of Object.entries(graph.nodes)) {
-                // Merge sources with existing
+                // Merge sources and source_plays with existing
                 const existingRow = this.db
-                    .prepare("SELECT sources FROM nodes WHERE song_key = ?")
-                    .get(songKey) as { sources: string } | undefined;
+                    .prepare("SELECT sources, source_plays FROM nodes WHERE song_key = ?")
+                    .get(songKey) as { sources: string; source_plays: string | null } | undefined;
                 const existingSources: ListeningSource[] = existingRow
                     ? JSON.parse(existingRow.sources)
                     : [];
                 const mergedSources = [
                     ...new Set([...existingSources, ...node.sources]),
                 ];
+
+                // Merge source_plays additively per source key
+                let mergedSourcePlays: Record<string, number> | null = null;
+                if (node.sourcePlays || existingRow?.source_plays) {
+                    const existing: Record<string, number> = existingRow?.source_plays
+                        ? JSON.parse(existingRow.source_plays)
+                        : {};
+                    const incoming: Record<string, number> = node.sourcePlays ?? {};
+                    mergedSourcePlays = { ...existing };
+                    for (const [src, count] of Object.entries(incoming)) {
+                        mergedSourcePlays[src] = (mergedSourcePlays[src] ?? 0) + count;
+                    }
+                }
 
                 upsertNode.run({
                     songKey,
@@ -134,7 +147,7 @@ export class GraphDatabase {
                     pageRank: node.pageRank ?? null,
                     clusterId: node.clusterId ?? null,
                     imageUrl: node.imageUrl ?? null,
-                    sourcePlays: node.sourcePlays ? JSON.stringify(node.sourcePlays) : null,
+                    sourcePlays: mergedSourcePlays ? JSON.stringify(mergedSourcePlays) : null,
                 });
             }
 
