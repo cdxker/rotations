@@ -73,3 +73,8 @@
 - [X] `01-FixSourceBreakdownSemantics.md` — Track per-source play counts and report scrobbles instead of nodes
 - [X] `01-FixModularityNormalization.md` — Divide by 2m instead of m in modularity formula
 - [ ] `02-FixSidebarNavigationHighlighting.md` — Sidebar neighbor click moves camera but does not update graph highlighting (Sigma reducer issue)
+- [ ] `02-FixLastfmFetcherSpreadOverflow.md` — Replace Math.max spread in checkpoint with loop to handle >65k scrobbles
+- [ ] `02-FixDataPathInconsistency.md` — Unify CWD-relative and import.meta.dirname data paths between fetch and build
+- [ ] `02-FixModularityFormula.md` — Fix computeModularity to account for non-adjacent same-community pairs
+- [ ] `02-RemoveSigmaInDeadCode.md` — Remove unused sigmaIn array from Louvain implementation
+- [ ] `02-FixSourcePlaysMerge.md` — Merge source_plays per-source counts on incremental save instead of replacing
