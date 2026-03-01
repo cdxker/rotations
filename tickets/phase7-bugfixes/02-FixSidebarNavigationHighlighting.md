@@ -6,7 +6,11 @@ Clicking a neighbor node in the right-side `NodeDetailPanel` moves the camera an
 
 ## Owner
 
-Dev
+You (manual task)
+
+## Human-Only Resolution
+
+This ticket is designated **human-only**. Agents should not mark it complete or implement final resolution without explicit human direction.
 
 ## Dependencies
 
@@ -71,6 +75,59 @@ Clicking a node directly on the Sigma canvas (via `clickNode` event) DOES update
 3. Try `sigma.emit("clickNode", { node: nodeKey })` from `navigateToNode` to simulate a real click.
 4. Try accessing the raw Sigma instance (not the react-sigma wrapper) and calling `setSetting` on it directly.
 5. Add a log **inside** the nodeReducer function itself (e.g., for just the active node) to verify whether Sigma is calling the NEW reducer or still using an old one after `setSetting`.
+
+## Debugging Log (2026-03-01)
+
+### Changes attempted in this pass
+
+1. Replaced sidebar/search navigation selection path to use Sigma's native event:
+   - `GraphNavigator` now calls `sigma.emit("clickNode", { node: targetNode })`
+   - Removed manual `onSelectNode(...)` construction in `GraphNavigator`
+2. Added temporary debug logs in:
+   - `GraphView.tsx` (`navigate: begin`, `navigate: emitted sigma clickNode`)
+   - `GraphEvents.tsx` (`sigma clickNode handler`, `reducers: apply`)
+3. Added explicit `sigma.refresh()` after reducer assignment and temporary post-refresh display-data logging for active/previous nodes.
+
+### Evidence from browser logs (user-provided)
+
+- Sidebar click triggers:
+  - `navigate: begin`
+  - `navigate: emitted sigma clickNode`
+  - `sigma clickNode handler`
+  - `reducers: apply`
+- `reducers: apply` receives the expected active node and selection state:
+  - `activeNode` = clicked sidebar node
+  - `externalSelectedKey` = clicked sidebar node
+  - `selectedNode` = clicked sidebar node
+  - `hoveredNode` = `null`
+
+Interpretation:
+- State/event pipeline appears correct for sidebar navigation.
+- Remaining failure is likely in render/display layer application (or environment-specific rendering behavior), not event wiring.
+
+### Contradictory result
+
+- Automated Playwright verification on the same branch and live `/graph` reported PASS for:
+  - `Played after` sidebar click
+  - `Played before` sidebar click
+  - clicked node detected as highlighted (`#ffffff`, `highlighted: true`)
+
+Interpretation:
+- Bug may be intermittent, data-shape specific, browser/session specific, or tied to a rendering timing/state that automation does not reproduce.
+
+### Current hypotheses (working notes)
+
+1. Reducer state is updating, but a render frame may be stale or overwritten in some sessions.
+2. Another Sigma/React effect may be racing and resetting visual state after reducer assignment.
+3. The issue might be visible as neighborhood mismatch (old neighbors still shown) even when root node is updated.
+4. Possible browser/runtime-specific behavior despite correct internal Sigma state.
+
+### Next focused experiments
+
+1. Capture `reducers: post-refresh display` logs from the affected user session to compare active vs previous node display data right after refresh.
+2. Add a one-shot reducer invocation counter/log for `activeNode` and previous active node to confirm which reducer frame is actually being executed.
+3. Temporarily disable camera animation (`animate` -> direct set) to isolate animation/render race effects.
+4. If still unresolved, force Sigma remount on selection change as a diagnostic (not final fix) to determine whether renderer state is stuck.
 
 ## Acceptance Criteria
 

@@ -9,6 +9,11 @@ import { SearchBarInner } from "./graph/SearchBar"
 import { DEFAULT_FILTER } from "./graph/FilterPanel"
 import type { FilterState } from "./graph/FilterPanel"
 
+function graphDebug(...args: unknown[]) {
+    if (typeof window === "undefined") return
+    console.log("[graph-debug]", ...args)
+}
+
 /** Load graph data into Sigma and run ForceAtlas2 layout. */
 function GraphInner({
     onSelectNode,
@@ -198,9 +203,15 @@ function GraphNavigator({
 
         const graph = sigma.getGraph()
         if (!graph.hasNode(targetNode)) {
+            graphDebug("navigate: missing target node", { targetNode })
             onNavigated()
             return
         }
+
+        graphDebug("navigate: begin", {
+            targetNode,
+            currentSelectedFromPanel: targetNode,
+        })
 
         // Center camera on the node
         const x = graph.getNodeAttribute(targetNode, "x")
@@ -210,6 +221,7 @@ function GraphNavigator({
         // Route programmatic navigation through Sigma's native click pipeline so
         // sidebar/search navigation and canvas clicks share the same reducer path.
         sigma.emit("clickNode", { node: targetNode } as any)
+        graphDebug("navigate: emitted sigma clickNode", { targetNode })
         onNavigated()
     }, [targetNode, sigma, onNavigated])
 

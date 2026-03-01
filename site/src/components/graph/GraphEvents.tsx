@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSigma, useRegisterEvents } from "@react-sigma/core"
 import type { NodeAttributes, EdgeAttributes } from "@/lib/graph-api"
 import { computeDepthLayers } from "@/lib/depth-layers"
 import type { FilterState } from "./FilterPanel"
+
+function graphDebug(...args: unknown[]) {
+    if (typeof window === "undefined") return
+    console.log("[graph-debug]", ...args)
+}
 
 export interface SelectedNode {
     key: string
@@ -73,6 +78,24 @@ export function GraphEvents({
     const registerEvents = useRegisterEvents()
     const [selectedNode, setSelectedNode] = useState<string | null>(null)
     const [hoveredNode, setHoveredNode] = useState<string | null>(null)
+    const previousActiveNodeRef = useRef<string | null>(null)
+
+    const summarizeNodeDisplay = useCallback(
+        (nodeKey: string | null) => {
+            if (!nodeKey) return null
+            const d = sigma.getNodeDisplayData(nodeKey)
+            if (!d) return null
+            return {
+                node: nodeKey,
+                color: d.color,
+                highlighted: !!d.highlighted,
+                hidden: !!d.hidden,
+                zIndex: d.zIndex ?? null,
+                size: d.size,
+            }
+        },
+        [sigma]
+    )
 
     // Sync external selection (e.g. auto-focus on load)
     useEffect(() => {
@@ -153,6 +176,7 @@ export function GraphEvents({
     useEffect(() => {
         registerEvents({
             clickNode: ({ node }) => {
+                graphDebug("sigma clickNode handler", { node })
                 setSelectedNode(node)
                 onSelectNode(buildSelectedNode(node))
             },
@@ -207,12 +231,25 @@ export function GraphEvents({
     // Apply node reducer for highlighting + cluster filtering + path highlighting + depth mode
     useEffect(() => {
         const activeNode = selectedNode ?? hoveredNode
+        const previousActiveNode = previousActiveNodeRef.current
         const hasClusterFilter = hiddenClusters.size > 0 || focusedCluster !== null
         const hasPath = pathNodes && pathNodes.size > 0
+        graphDebug("reducers: apply", {
+            activeNode,
+            previousActiveNode,
+            externalSelectedKey,
+            selectedNode,
+            hoveredNode,
+            hasClusterFilter,
+            hasPath,
+            depthMode,
+        })
 
         if (!activeNode && !hasClusterFilter && !hasPath) {
             sigma.setSetting("nodeReducer", null)
             sigma.setSetting("edgeReducer", null)
+            sigma.refresh()
+            previousActiveNodeRef.current = null
             return
         }
 
@@ -345,6 +382,16 @@ export function GraphEvents({
 
             return data
         })
+
+        sigma.refresh()
+        const nextActiveNode = activeNode ?? null
+        requestAnimationFrame(() => {
+            graphDebug("reducers: post-refresh display", {
+                active: summarizeNodeDisplay(nextActiveNode),
+                previous: summarizeNodeDisplay(previousActiveNode),
+            })
+        })
+        previousActiveNodeRef.current = nextActiveNode
     }, [
         selectedNode,
         hoveredNode,
@@ -356,6 +403,7 @@ export function GraphEvents({
         focusedCluster,
         pathNodes,
         pathEdges,
+        summarizeNodeDisplay,
     ])
 
     // --- Filter logic (merged from GraphFilters) ---
