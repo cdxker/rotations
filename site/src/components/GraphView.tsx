@@ -187,11 +187,9 @@ function GraphInner({
 function GraphNavigator({
     targetNode,
     onNavigated,
-    onSelectNode,
 }: {
     targetNode: string | null
     onNavigated: () => void
-    onSelectNode: (node: SelectedNode | null) => void
 }) {
     const sigma = useSigma()
 
@@ -199,42 +197,21 @@ function GraphNavigator({
         if (!targetNode) return
 
         const graph = sigma.getGraph()
-        if (!graph.hasNode(targetNode)) return
+        if (!graph.hasNode(targetNode)) {
+            onNavigated()
+            return
+        }
 
         // Center camera on the node
         const x = graph.getNodeAttribute(targetNode, "x")
         const y = graph.getNodeAttribute(targetNode, "y")
         sigma.getCamera().animate({ x, y, ratio: 0.3 }, { duration: 300 })
 
-        // Build selected node info
-        const attrs = graph.getNodeAttributes(targetNode)
-        const neighbors: SelectedNode["neighbors"] = []
-
-        graph.forEachOutEdge(targetNode, (_edge, edgeAttrs, _source, target) => {
-            if (graph.hasNode(target)) {
-                neighbors.push({
-                    key: target,
-                    attrs: graph.getNodeAttributes(target) as any,
-                    weight: edgeAttrs.weight,
-                    direction: "outgoing",
-                })
-            }
-        })
-        graph.forEachInEdge(targetNode, (_edge, edgeAttrs, source) => {
-            if (graph.hasNode(source)) {
-                neighbors.push({
-                    key: source,
-                    attrs: graph.getNodeAttributes(source) as any,
-                    weight: edgeAttrs.weight,
-                    direction: "incoming",
-                })
-            }
-        })
-        neighbors.sort((a, b) => b.weight - a.weight)
-
-        onSelectNode({ key: targetNode, attrs: attrs as any, neighbors })
+        // Route programmatic navigation through Sigma's native click pipeline so
+        // sidebar/search navigation and canvas clicks share the same reducer path.
+        sigma.emit("clickNode", { node: targetNode } as any)
         onNavigated()
-    }, [targetNode, sigma, onSelectNode, onNavigated])
+    }, [targetNode, sigma, onNavigated])
 
     return null
 }
@@ -299,7 +276,6 @@ export default function GraphView() {
                 <GraphNavigator
                     targetNode={navigateTarget}
                     onNavigated={clearNavigateTarget}
-                    onSelectNode={setSelectedNode}
                 />
                 <div className="absolute top-12 left-4 z-20 pointer-events-auto flex items-start gap-2">
                     <SearchBarInner onSelect={setNavigateTarget} />
