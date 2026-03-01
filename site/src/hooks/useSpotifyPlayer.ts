@@ -6,20 +6,18 @@ export interface UseSpotifyPlayerConfig {
     name: string
     /** If provided, the hook will not initialize until this is truthy */
     enabled?: boolean
-    /** Called when the player is ready with its device ID */
-    onReady?: (deviceId: string) => void
+    /** Called when the player is ready with its device ID and player instance */
+    onReady: (deviceId: string, player: SpotifyPlayerInstance) => void
     /** Called when the player becomes not ready */
     onNotReady?: () => void
     /** Called when the player state changes */
     onPlayerStateChanged?: (state: unknown) => void
     /** Called when an error occurs (initialization, authentication, account) */
     onError?: (type: "initialization" | "authentication" | "account") => void
-    /** Called with the player instance once created */
-    onPlayerCreated?: (player: SpotifyPlayerInstance) => void
-    /** If provided, sets up a position polling interval at the given ms rate */
-    positionPollIntervalMs?: number
-    /** Called with the current position when polling */
-    onPositionChange?: (positionMs: number) => void
+    /** Called during cleanup so callers can clear their external references */
+    onCleanup?: () => void
+    /** If provided, sets up a position polling interval */
+    positionPolling?: { intervalMs: number; onChange: (ms: number) => void }
 }
 
 /**
@@ -41,15 +39,15 @@ export function useSpotifyPlayer(config: UseSpotifyPlayerConfig): {
         onNotReady,
         onPlayerStateChanged,
         onError,
-        onPlayerCreated,
-        positionPollIntervalMs,
-        onPositionChange,
+        onCleanup,
+        positionPolling,
     } = config
 
     useEffect(() => {
         if (!enabled) return
 
         let mounted = true
+        let pollInterval: ReturnType<typeof setInterval> | null = null
 
         const initPlayer = async () => {
             const res = await fetch("/api/spotify/token")
@@ -78,7 +76,7 @@ export function useSpotifyPlayer(config: UseSpotifyPlayerConfig): {
                 player.addListener("ready", (state) => {
                     const { device_id } = state as { device_id: string }
                     deviceIdRef.current = device_id
-                    onReady?.(device_id)
+                    onReady(device_id, player)
                 })
 
                 player.addListener("not_ready", () => {
@@ -99,17 +97,16 @@ export function useSpotifyPlayer(config: UseSpotifyPlayerConfig): {
                     player.addListener("account_error", () => onError("account"))
                 }
 
-                if (positionPollIntervalMs && onPositionChange) {
-                    setInterval(() => {
+                if (positionPolling) {
+                    pollInterval = setInterval(() => {
                         player.getCurrentState().then((state) => {
-                            if (state) onPositionChange(state.position)
+                            if (state) positionPolling.onChange(state.position)
                         })
-                    }, positionPollIntervalMs)
+                    }, positionPolling.intervalMs)
                 }
 
                 player.connect()
                 playerRef.current = player
-                onPlayerCreated?.(player)
             }
 
             // If SDK already loaded, initialize immediately
@@ -122,8 +119,10 @@ export function useSpotifyPlayer(config: UseSpotifyPlayerConfig): {
 
         return () => {
             mounted = false
+            if (pollInterval) clearInterval(pollInterval)
             playerRef.current?.disconnect()
             playerRef.current = null
+            onCleanup?.()
         }
         // We intentionally only re-run when `enabled` or `name` changes.
         // Callbacks are expected to be stable (or wrapped in useCallback by callers).

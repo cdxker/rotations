@@ -130,9 +130,8 @@ interface PathPanelProps {
 
 export function PathPanel({ state, onStateChange, onClose, onNavigate }: PathPanelProps) {
     const stateRef = useRef(state)
-    useEffect(() => {
-        stateRef.current = state
-    })
+    // eslint-disable-next-line react-hooks/refs
+    stateRef.current = state
 
     const update = useCallback(
         (partial: Partial<PathModeState>) => onStateChange({ ...stateRef.current, ...partial }),

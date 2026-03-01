@@ -66,14 +66,17 @@ export function SpotifyProvider({ children }: SpotifyProviderProps) {
     )
 
     const handleReady = useCallback(
-        (deviceId: string) => setSpotifyDeviceId(deviceId),
-        [setSpotifyDeviceId]
+        (deviceId: string, player: SpotifyPlayerInstance) => {
+            setSpotifyDeviceId(deviceId)
+            setSpotifyPlayer(player)
+        },
+        [setSpotifyDeviceId, setSpotifyPlayer]
     )
     const handleNotReady = useCallback(() => setSpotifyDeviceId(null), [setSpotifyDeviceId])
-    const handlePlayerCreated = useCallback(
-        (player: SpotifyPlayerInstance) => setSpotifyPlayer(player),
-        [setSpotifyPlayer]
-    )
+    const handleCleanup = useCallback(() => {
+        setSpotifyPlayer(null)
+        setSpotifyDeviceId(null)
+    }, [setSpotifyPlayer, setSpotifyDeviceId])
     const handlePositionChange = useCallback(
         (positionMs: number) => setCurrentTimeMs(positionMs),
         [setCurrentTimeMs]
@@ -84,9 +87,8 @@ export function SpotifyProvider({ children }: SpotifyProviderProps) {
         enabled: !!spotifyUser,
         onReady: handleReady,
         onNotReady: handleNotReady,
-        onPlayerCreated: handlePlayerCreated,
-        positionPollIntervalMs: 250,
-        onPositionChange: handlePositionChange,
+        onCleanup: handleCleanup,
+        positionPolling: { intervalMs: 250, onChange: handlePositionChange },
     })
 
     const spotifyLogin = () => {

@@ -180,9 +180,11 @@ export function createApp(config: ServerConfig): Hono {
             );
         }
 
+        let fromKey: SongKey;
+        let toKey: SongKey;
         try {
-            parseSongKey(from);
-            parseSongKey(to);
+            fromKey = parseSongKey(from);
+            toKey = parseSongKey(to);
         } catch (e: unknown) {
             const err = e as { error: string };
             return c.json({ error: err.error }, 400);
@@ -198,8 +200,8 @@ export function createApp(config: ServerConfig): Hono {
         const graph = db.loadGraph();
         const result =
             algorithm === "strongest"
-                ? strongestPath(graph, from as SongKey, to as SongKey)
-                : shortestPath(graph, from as SongKey, to as SongKey);
+                ? strongestPath(graph, fromKey, toKey)
+                : shortestPath(graph, fromKey, toKey);
 
         return c.json(result);
     });
