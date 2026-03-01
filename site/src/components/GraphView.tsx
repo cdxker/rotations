@@ -77,7 +77,9 @@ function GraphInner({
 
         const g = sigma.getGraph()
         if (!g.hasNode(navigateTarget)) {
-            console.debug("[graph-debug]", "navigate: missing target node", { targetNode: navigateTarget })
+            console.debug("[graph-debug]", "navigate: missing target node", {
+                targetNode: navigateTarget,
+            })
             onNavigated()
             return
         }
@@ -95,7 +97,9 @@ function GraphInner({
         // Route programmatic navigation through Sigma's native click pipeline so
         // sidebar/search navigation and canvas clicks share the same reducer path.
         sigma.emit("clickNode", { node: navigateTarget } as any)
-        console.debug("[graph-debug]", "navigate: emitted sigma clickNode", { targetNode: navigateTarget })
+        console.debug("[graph-debug]", "navigate: emitted sigma clickNode", {
+            targetNode: navigateTarget,
+        })
         onNavigated()
     }, [navigateTarget, sigma, onNavigated])
 
@@ -143,7 +147,8 @@ function GraphInner({
         graph.forEachEdge(randomKey, (e) => edgeSet.add(e))
 
         sigma.setSetting("nodeReducer", (node, data) => {
-            if (node === randomKey) return { ...data, color: "#ffffff", highlighted: true, zIndex: 1 }
+            if (node === randomKey)
+                return { ...data, color: "#ffffff", highlighted: true, zIndex: 1 }
             if (neighborSet.has(node)) return { ...data, color: "#999", zIndex: 0 }
             return { ...data, color: "#333", label: "", zIndex: -1 }
         })
@@ -326,12 +331,7 @@ export default function GraphView() {
                     </div>
                 </div>
             )}
-            {selectedNode && (
-                <NodeDetailPanel
-                    node={selectedNode}
-                    onNavigate={setNavigateTarget}
-                />
-            )}
+            {selectedNode && <NodeDetailPanel node={selectedNode} onNavigate={setNavigateTarget} />}
         </div>
     )
 }

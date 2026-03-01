@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef, type KeyboardEvent } from "react"
 import { X, Route, ArrowRight, Search } from "lucide-react"
 import { useSigma } from "@react-sigma/core"
 import { fetchPath } from "@/lib/graph-api"
@@ -40,7 +40,7 @@ function NodePicker({
     )
 
     const handleKeyDown = useCallback(
-        (e: React.KeyboardEvent) => {
+        (e: KeyboardEvent) => {
             const selected = hookKeyDown(e)
             if (selected) {
                 handleSelect(selected.key, selected.label)
@@ -130,7 +130,9 @@ interface PathPanelProps {
 
 export function PathPanel({ state, onStateChange, onClose, onNavigate }: PathPanelProps) {
     const stateRef = useRef(state)
-    stateRef.current = state
+    useEffect(() => {
+        stateRef.current = state
+    })
 
     const update = useCallback(
         (partial: Partial<PathModeState>) => onStateChange({ ...stateRef.current, ...partial }),

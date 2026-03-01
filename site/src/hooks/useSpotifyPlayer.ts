@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, type RefObject } from "react"
 import type { SpotifyPlayerInstance } from "@/shared/spotify-sdk"
 
 export interface UseSpotifyPlayerConfig {
@@ -28,8 +28,8 @@ export interface UseSpotifyPlayerConfig {
  * duplicating the SDK initialization logic.
  */
 export function useSpotifyPlayer(config: UseSpotifyPlayerConfig): {
-    playerRef: React.RefObject<SpotifyPlayerInstance | null>
-    deviceIdRef: React.RefObject<string | null>
+    playerRef: RefObject<SpotifyPlayerInstance | null>
+    deviceIdRef: RefObject<string | null>
 } {
     const playerRef = useRef<SpotifyPlayerInstance | null>(null)
     const deviceIdRef = useRef<string | null>(null)
@@ -125,9 +125,8 @@ export function useSpotifyPlayer(config: UseSpotifyPlayerConfig): {
             playerRef.current?.disconnect()
             playerRef.current = null
         }
-    // We intentionally only re-run when `enabled` or `name` changes.
-    // Callbacks are expected to be stable (or wrapped in useCallback by callers).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // We intentionally only re-run when `enabled` or `name` changes.
+        // Callbacks are expected to be stable (or wrapped in useCallback by callers).
     }, [enabled, name])
 
     return { playerRef, deviceIdRef }

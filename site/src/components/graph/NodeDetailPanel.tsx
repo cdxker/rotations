@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import type { SelectedNode } from "./GraphEvents"
 
 interface NodeDetailPanelProps {
@@ -81,7 +82,7 @@ export function NodeDetailPanel({ node, onNavigate }: NodeDetailPanelProps) {
     )
 }
 
-function Stat({ label, value }: { label: string; value: React.ReactNode }) {
+function Stat({ label, value }: { label: string; value: ReactNode }) {
     return (
         <div>
             <span className="text-white/40 text-[10px] font-mono uppercase tracking-wider">

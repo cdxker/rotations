@@ -1,4 +1,4 @@
-import { useCallback } from "react"
+import { useCallback, type KeyboardEvent } from "react"
 import { Search, X } from "lucide-react"
 import { useSigma } from "@react-sigma/core"
 import { useNodeSearch } from "./useNodeSearch"
@@ -36,7 +36,7 @@ export function SearchBarInner({ onSelect }: SearchBarProps) {
     )
 
     const handleKeyDown = useCallback(
-        (e: React.KeyboardEvent) => {
+        (e: KeyboardEvent) => {
             const selected = hookKeyDown(e)
             if (selected) {
                 handleSelect(selected.key)

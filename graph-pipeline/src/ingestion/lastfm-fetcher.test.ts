@@ -297,9 +297,7 @@ describe("fetchLastfmScrobbles", () => {
         }
 
         vi.spyOn(globalThis, "fetch").mockResolvedValue(
-            new Response(
-                JSON.stringify(makeApiResponse(tracks, 1, 1, TOTAL)),
-            ),
+            new Response(JSON.stringify(makeApiResponse(tracks, 1, 1, TOTAL))),
         );
 
         // Should not throw RangeError: Maximum call stack size exceeded

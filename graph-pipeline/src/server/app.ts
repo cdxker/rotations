@@ -18,7 +18,10 @@ const DATA_DIR = path.join(import.meta.dirname, "../../data");
 function parseSongKey(rawKey: string): SongKey {
     const decoded = decodeURIComponent(rawKey);
     if (!decoded || !decoded.includes("::")) {
-        throw { error: "Invalid songKey format. Expected: artist::track", status: 400 };
+        throw {
+            error: "Invalid songKey format. Expected: artist::track",
+            status: 400,
+        };
     }
     return decoded as SongKey;
 }
@@ -84,8 +87,9 @@ export function createApp(config: ServerConfig): Hono {
         let songKey: SongKey;
         try {
             songKey = parseSongKey(c.req.param("songKey"));
-        } catch (e: any) {
-            return c.json({ error: e.error }, e.status);
+        } catch (e: unknown) {
+            const err = e as { error: string };
+            return c.json({ error: err.error }, 400);
         }
 
         const node = db.getNode(songKey);
@@ -101,8 +105,9 @@ export function createApp(config: ServerConfig): Hono {
         let songKey: SongKey;
         try {
             songKey = parseSongKey(c.req.param("songKey"));
-        } catch (e: any) {
-            return c.json({ error: e.error }, e.status);
+        } catch (e: unknown) {
+            const err = e as { error: string };
+            return c.json({ error: err.error }, 400);
         }
 
         const node = db.getNode(songKey);
@@ -178,8 +183,9 @@ export function createApp(config: ServerConfig): Hono {
         try {
             parseSongKey(from);
             parseSongKey(to);
-        } catch (e: any) {
-            return c.json({ error: e.error }, e.status);
+        } catch (e: unknown) {
+            const err = e as { error: string };
+            return c.json({ error: err.error }, 400);
         }
 
         if (algorithm !== "shortest" && algorithm !== "strongest") {
@@ -253,7 +259,10 @@ export function createApp(config: ServerConfig): Hono {
             }
             const client = new SpotifyClient(auth);
             const dump = await client.fetchAll();
-            await client.exportToJson(path.join(DATA_DIR, "spotify-dump.json"), dump);
+            await client.exportToJson(
+                path.join(DATA_DIR, "spotify-dump.json"),
+                dump,
+            );
 
             return c.json({
                 status: "complete",

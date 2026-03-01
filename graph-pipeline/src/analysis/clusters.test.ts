@@ -221,7 +221,7 @@ describe("detectClusters", () => {
             }),
         });
 
-        const result = detectClusters(graph);
+        detectClusters(graph);
 
         // All three should be in the same cluster
         const clusterA = graph.nodes["a::t1" as SongKey]!.clusterId;
@@ -267,7 +267,7 @@ describe("detectClusters", () => {
             }),
         });
 
-        const result = detectClusters(graph);
+        detectClusters(graph);
 
         const ids = new Set<number>();
         for (const node of Object.values(graph.nodes)) {

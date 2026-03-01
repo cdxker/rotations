@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react"
 import type Sigma from "sigma"
 import type { NodeAttributes } from "@/lib/graph-api"
 
@@ -66,7 +66,7 @@ export function useNodeSearch(sigma: Sigma, options: UseNodeSearchOptions = {}) 
     }, [])
 
     const handleKeyDown = useCallback(
-        (e: React.KeyboardEvent) => {
+        (e: KeyboardEvent) => {
             if (e.key === "ArrowDown") {
                 e.preventDefault()
                 e.stopPropagation()

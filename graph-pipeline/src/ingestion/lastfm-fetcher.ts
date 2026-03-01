@@ -191,7 +191,8 @@ export async function fetchLastfmScrobbles(
         if (page % 10 === 0) {
             let latestTimestamp = 0;
             for (const s of newScrobbles) {
-                if (s.timestamp > latestTimestamp) latestTimestamp = s.timestamp;
+                if (s.timestamp > latestTimestamp)
+                    latestTimestamp = s.timestamp;
             }
             const checkpoint: FetchCheckpoint = {
                 lastTimestamp: latestTimestamp,

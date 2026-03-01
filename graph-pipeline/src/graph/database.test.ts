@@ -221,7 +221,10 @@ describe("GraphDatabase", () => {
             } as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
             metadata: {
                 totalScrobbles: 3,
-                dateRange: { from: "2024-01-01T00:00:00Z", to: "2024-06-01T00:00:00Z" },
+                dateRange: {
+                    from: "2024-01-01T00:00:00Z",
+                    to: "2024-06-01T00:00:00Z",
+                },
                 exportTimestamp: "2025-01-01T00:00:00Z",
             },
         };
@@ -243,7 +246,10 @@ describe("GraphDatabase", () => {
             } as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
             metadata: {
                 totalScrobbles: 2,
-                dateRange: { from: "2024-06-01T00:00:00Z", to: "2024-12-01T00:00:00Z" },
+                dateRange: {
+                    from: "2024-06-01T00:00:00Z",
+                    to: "2024-12-01T00:00:00Z",
+                },
                 exportTimestamp: "2025-02-01T00:00:00Z",
             },
         };
@@ -302,9 +308,15 @@ describe("GraphDatabase", () => {
 
         expect(db.getNodeCount()).toBe(Object.keys(graph.nodes).length);
         expect(db.getEdgeCount()).toBe(2);
-        expect(second.nodes[keyA]!.totalPlays).toBe(first.nodes[keyA]!.totalPlays);
-        expect(second.nodes[keyB]!.totalPlays).toBe(first.nodes[keyB]!.totalPlays);
-        expect(second.nodes[keyA]!.next[keyB]).toBe(first.nodes[keyA]!.next[keyB]);
+        expect(second.nodes[keyA]!.totalPlays).toBe(
+            first.nodes[keyA]!.totalPlays,
+        );
+        expect(second.nodes[keyB]!.totalPlays).toBe(
+            first.nodes[keyB]!.totalPlays,
+        );
+        expect(second.nodes[keyA]!.next[keyB]).toBe(
+            first.nodes[keyA]!.next[keyB],
+        );
     });
 
     it("handles empty graph", () => {

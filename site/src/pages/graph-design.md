@@ -157,6 +157,7 @@ When depth mode is toggled on, the view expands from the selected node to 3 outw
 - Outside neighborhood: `#222`, labels hidden, zIndex -2
 
 Edge opacity follows the deepest endpoint:
+
 - Layer 0–1 edges: `0.5` opacity
 - Layer 1–2 edges: `0.3` opacity
 - Layer 2–3 edges: `0.15` opacity

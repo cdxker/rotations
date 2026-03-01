@@ -68,7 +68,9 @@ export class GraphDatabase {
 
     /** Clear all graph data (nodes, edges, metadata) from the database. */
     clearGraph(): void {
-        this.db.exec("DELETE FROM edges; DELETE FROM nodes; DELETE FROM metadata;");
+        this.db.exec(
+            "DELETE FROM edges; DELETE FROM nodes; DELETE FROM metadata;",
+        );
     }
 
     /**
@@ -112,8 +114,12 @@ export class GraphDatabase {
             for (const [songKey, node] of Object.entries(graph.nodes)) {
                 // Merge sources and source_plays with existing
                 const existingRow = this.db
-                    .prepare("SELECT sources, source_plays FROM nodes WHERE song_key = ?")
-                    .get(songKey) as { sources: string; source_plays: string | null } | undefined;
+                    .prepare(
+                        "SELECT sources, source_plays FROM nodes WHERE song_key = ?",
+                    )
+                    .get(songKey) as
+                    | { sources: string; source_plays: string | null }
+                    | undefined;
                 const existingSources: ListeningSource[] = existingRow
                     ? JSON.parse(existingRow.sources)
                     : [];
@@ -124,13 +130,16 @@ export class GraphDatabase {
                 // Merge source_plays additively per source key
                 let mergedSourcePlays: Record<string, number> | null = null;
                 if (node.sourcePlays || existingRow?.source_plays) {
-                    const existing: Record<string, number> = existingRow?.source_plays
-                        ? JSON.parse(existingRow.source_plays)
-                        : {};
-                    const incoming: Record<string, number> = node.sourcePlays ?? {};
+                    const existing: Record<string, number> =
+                        existingRow?.source_plays
+                            ? JSON.parse(existingRow.source_plays)
+                            : {};
+                    const incoming: Record<string, number> =
+                        node.sourcePlays ?? {};
                     mergedSourcePlays = { ...existing };
                     for (const [src, count] of Object.entries(incoming)) {
-                        mergedSourcePlays[src] = (mergedSourcePlays[src] ?? 0) + count;
+                        mergedSourcePlays[src] =
+                            (mergedSourcePlays[src] ?? 0) + count;
                     }
                 }
 
@@ -147,7 +156,9 @@ export class GraphDatabase {
                     pageRank: node.pageRank ?? null,
                     clusterId: node.clusterId ?? null,
                     imageUrl: node.imageUrl ?? null,
-                    sourcePlays: mergedSourcePlays ? JSON.stringify(mergedSourcePlays) : null,
+                    sourcePlays: mergedSourcePlays
+                        ? JSON.stringify(mergedSourcePlays)
+                        : null,
                 });
             }
 
@@ -310,7 +321,9 @@ export class GraphDatabase {
             pageRank: row.page_rank ?? undefined,
             clusterId: row.cluster_id ?? undefined,
             imageUrl: row.image_url ?? undefined,
-            sourcePlays: row.source_plays ? JSON.parse(row.source_plays) : undefined,
+            sourcePlays: row.source_plays
+                ? JSON.parse(row.source_plays)
+                : undefined,
         };
     }
 

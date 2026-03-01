@@ -2,10 +2,10 @@ import { useEffect, useState, useCallback } from "react"
 import PlayerLayout from "./PlayerLayout"
 import { PlaylistGridCard } from "./PlaylistGridCard"
 import type {
-    SpotifyPlaylist,
+    FuckingPlaylist,
+    FuckingTrack,
     SpotifyPlaylistsResponse,
     SpotifyPlaylistTracksResponse,
-    SpotifyTrack,
     SpotifyUserProfile,
 } from "@/shared/types"
 import { useSpotifyPlayer } from "@/hooks/useSpotifyPlayer"
@@ -20,9 +20,9 @@ interface PlayerTrack {
 
 const SpotifyView = () => {
     const [user, setUser] = useState<SpotifyUserProfile | null>(null)
-    const [playlists, setPlaylists] = useState<SpotifyPlaylist[]>([])
-    const [selectedPlaylist, setSelectedPlaylist] = useState<SpotifyPlaylist | null>(null)
-    const [tracks, setTracks] = useState<SpotifyTrack[]>([])
+    const [playlists, setPlaylists] = useState<FuckingPlaylist[]>([])
+    const [selectedPlaylist, setSelectedPlaylist] = useState<FuckingPlaylist | null>(null)
+    const [tracks, setTracks] = useState<FuckingTrack[]>([])
     const [loading, setLoading] = useState(true)
     const [tracksLoading, setTracksLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -81,20 +81,19 @@ const SpotifyView = () => {
         fetchData()
     }, [])
 
-    const handlePlaylistClick = async (playlist: SpotifyPlaylist) => {
+    const handlePlaylistClick = async (playlist: FuckingPlaylist) => {
         setSelectedPlaylist(playlist)
         setTracksLoading(true)
         setTracks([])
         setError(null)
 
         try {
-            const res = await fetch(`/api/spotify/playlists/${playlist.id}/tracks?limit=50`)
+            const spotifyId = playlist.id.replace("play-spotify-", "")
+            const res = await fetch(`/api/spotify/playlists/${spotifyId}/tracks?limit=50`)
             if (!res.ok) throw new Error("Failed to fetch tracks")
 
             const data: SpotifyPlaylistTracksResponse = await res.json()
             const trackList = data.items
-                .filter((item) => item.track && !item.track.is_local)
-                .map((item) => item.track as SpotifyTrack)
             setTracks(trackList)
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load tracks")
@@ -103,16 +102,19 @@ const SpotifyView = () => {
         }
     }
 
-    const handleTrackClick = async (track: SpotifyTrack) => {
+    const handleTrackClick = async (track: FuckingTrack) => {
         if (!selectedPlaylist || !deviceIdRef.current) return
+        const spotifyPlaylistId = selectedPlaylist.id.replace("play-spotify-", "")
+        const spotifyTrackId = track.audio.type === "spotify" ? track.audio.id : null
+        if (!spotifyTrackId) return
         try {
             await fetch("/api/spotify/play", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     device_id: deviceIdRef.current,
-                    context_uri: selectedPlaylist.uri,
-                    offset: { uri: track.uri },
+                    context_uri: `spotify:playlist:${spotifyPlaylistId}`,
+                    offset: { uri: `spotify:track:${spotifyTrackId}` },
                 }),
             })
         } catch (err) {
@@ -158,18 +160,16 @@ const SpotifyView = () => {
                                 >
                                     &larr; Back
                                 </button>
-                                {selectedPlaylist.images?.[0]?.url && (
+                                {selectedPlaylist.track_cover_uri && (
                                     <img
-                                        src={selectedPlaylist.images[0].url}
+                                        src={selectedPlaylist.track_cover_uri}
                                         alt={selectedPlaylist.name}
                                         className="w-16 h-16 rounded"
                                     />
                                 )}
                                 <div>
                                     <h1 className="text-2xl font-bold">{selectedPlaylist.name}</h1>
-                                    <p className="text-white/50">
-                                        {selectedPlaylist.tracks.total} tracks
-                                    </p>
+                                    <p className="text-white/50">{tracks.length} tracks</p>
                                 </div>
                             </>
                         ) : (
@@ -202,45 +202,45 @@ const SpotifyView = () => {
                             {tracksLoading ? (
                                 <p className="text-white/50">Loading tracks...</p>
                             ) : (
-                                tracks.map((track, index) => (
-                                    <button
-                                        key={track.id}
-                                        onClick={() => handleTrackClick(track)}
-                                        disabled={!isReady}
-                                        className={`w-full flex items-center gap-4 p-3 rounded hover:bg-white/10 transition-colors text-left ${
-                                            currentTrack?.uri === track.uri ? "bg-white/10" : ""
-                                        } ${!isReady ? "opacity-50 cursor-not-allowed" : ""}`}
-                                    >
-                                        <span className="text-white/30 w-6 text-right text-sm">
-                                            {index + 1}
-                                        </span>
-                                        <img
-                                            src={
-                                                track.album.images?.[2]?.url ||
-                                                track.album.images?.[0]?.url
-                                            }
-                                            alt={track.album.name}
-                                            className="w-10 h-10 rounded"
-                                        />
-                                        <div className="flex-1 min-w-0">
-                                            <p
-                                                className={`truncate ${
-                                                    currentTrack?.uri === track.uri
-                                                        ? "text-green-400"
-                                                        : "text-white"
-                                                }`}
-                                            >
-                                                {track.name}
-                                            </p>
-                                            <p className="text-sm text-white/50 truncate">
-                                                {track.artists.map((a) => a.name).join(", ")}
-                                            </p>
-                                        </div>
-                                        <span className="text-white/30 text-sm">
-                                            {formatTime(track.duration_ms)}
-                                        </span>
-                                    </button>
-                                ))
+                                tracks.map((track, index) => {
+                                    const spotifyUri =
+                                        track.audio.type === "spotify"
+                                            ? `spotify:track:${track.audio.id}`
+                                            : track.id
+                                    return (
+                                        <button
+                                            key={track.id}
+                                            onClick={() => handleTrackClick(track)}
+                                            disabled={!isReady}
+                                            className={`w-full flex items-center gap-4 p-3 rounded hover:bg-white/10 transition-colors text-left ${
+                                                currentTrack?.uri === spotifyUri
+                                                    ? "bg-white/10"
+                                                    : ""
+                                            } ${!isReady ? "opacity-50 cursor-not-allowed" : ""}`}
+                                        >
+                                            <span className="text-white/30 w-6 text-right text-sm">
+                                                {index + 1}
+                                            </span>
+                                            <div className="flex-1 min-w-0">
+                                                <p
+                                                    className={`truncate ${
+                                                        currentTrack?.uri === spotifyUri
+                                                            ? "text-green-400"
+                                                            : "text-white"
+                                                    }`}
+                                                >
+                                                    {track.name}
+                                                </p>
+                                                <p className="text-sm text-white/50 truncate">
+                                                    {track.artists.join(", ")}
+                                                </p>
+                                            </div>
+                                            <span className="text-white/30 text-sm">
+                                                {formatTime(track.time_ms)}
+                                            </span>
+                                        </button>
+                                    )
+                                })
                             )}
                         </div>
                     ) : (
@@ -249,8 +249,8 @@ const SpotifyView = () => {
                                 <PlaylistGridCard
                                     key={playlist.id}
                                     name={playlist.name}
-                                    imageUrl={playlist.images?.[0]?.url}
-                                    subtitle={`${playlist.tracks.total} tracks`}
+                                    imageUrl={playlist.track_cover_uri || undefined}
+                                    subtitle={playlist.artists.join(", ")}
                                     onClick={() => handlePlaylistClick(playlist)}
                                 />
                             ))}

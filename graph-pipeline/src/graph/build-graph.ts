@@ -268,13 +268,9 @@ export function buildGraph(input: GraphInput): ListeningGraph {
         if (t > maxTs) maxTs = t;
     }
     const from =
-        allTimestamps.length > 0
-            ? new Date(minTs * 1000).toISOString()
-            : "";
+        allTimestamps.length > 0 ? new Date(minTs * 1000).toISOString() : "";
     const to =
-        allTimestamps.length > 0
-            ? new Date(maxTs * 1000).toISOString()
-            : "";
+        allTimestamps.length > 0 ? new Date(maxTs * 1000).toISOString() : "";
 
     return {
         nodes,

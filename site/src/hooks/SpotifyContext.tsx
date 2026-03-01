@@ -1,11 +1,4 @@
-import {
-    createContext,
-    useState,
-    useEffect,
-    useContext,
-    type ReactNode,
-    useCallback,
-} from "react"
+import { createContext, useState, useEffect, useContext, type ReactNode, useCallback } from "react"
 import type {
     FuckingPlaylist,
     SpotifyPlaylistTracksResponse,

@@ -369,7 +369,9 @@ describe("SpotifyClient", () => {
             const outPath = join(tmpDir, "dump.json");
 
             const client = await createClient();
-            const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+            const consoleSpy = vi
+                .spyOn(console, "log")
+                .mockImplementation(() => {});
             const result = await client.exportToJson(outPath, dump);
             consoleSpy.mockRestore();
 

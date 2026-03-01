@@ -65,9 +65,27 @@ interface NodeClassification {
     clearLabel: boolean
 }
 
-const HIDDEN: NodeClassification = { color: "", zIndex: 0, highlighted: false, hidden: true, clearLabel: false }
-const DEFAULT: NodeClassification = { color: "", zIndex: 0, highlighted: false, hidden: false, clearLabel: false }
-const DIMMED: NodeClassification = { color: "#222", zIndex: -1, highlighted: false, hidden: false, clearLabel: true }
+const HIDDEN: NodeClassification = {
+    color: "",
+    zIndex: 0,
+    highlighted: false,
+    hidden: true,
+    clearLabel: false,
+}
+const DEFAULT: NodeClassification = {
+    color: "",
+    zIndex: 0,
+    highlighted: false,
+    hidden: false,
+    clearLabel: false,
+}
+const DIMMED: NodeClassification = {
+    color: "#222",
+    zIndex: -1,
+    highlighted: false,
+    hidden: false,
+    clearLabel: true,
+}
 
 /** Classify a node's visual role in the current highlight context. */
 function classifyNode(
@@ -79,7 +97,7 @@ function classifyNode(
     hiddenClusters: Set<number>,
     focusedCluster: number | null,
     pathNodes: Set<string> | undefined,
-    hasPath: boolean,
+    hasPath: boolean
 ): NodeClassification {
     if (hiddenClusters.has(clusterId)) return HIDDEN
 
@@ -87,26 +105,56 @@ function classifyNode(
     if (depthResult && activeNode) {
         const depth = depthResult.depths.get(node)
         if (depth === undefined) {
-            return { color: "#222", zIndex: -2, highlighted: false, hidden: false, clearLabel: true }
+            return {
+                color: "#222",
+                zIndex: -2,
+                highlighted: false,
+                hidden: false,
+                clearLabel: true,
+            }
         }
         if (depth === 0) {
-            return { color: "#ffffff", zIndex: 2, highlighted: true, hidden: false, clearLabel: false }
+            return {
+                color: "#ffffff",
+                zIndex: 2,
+                highlighted: true,
+                hidden: false,
+                clearLabel: false,
+            }
         }
         const weight = depthResult.weights.get(node) ?? 1
         const baseColor = DEPTH_COLORS[Math.min(depth, 3)]!
         const r = (parseInt(baseColor.slice(1), 16) >> 16) & 0xff
         const scaled = Math.round(r * (0.5 + 0.5 * weight))
         const hex = `#${scaled.toString(16).padStart(2, "0").repeat(3)}`
-        return { color: hex, zIndex: 2 - depth, highlighted: false, hidden: false, clearLabel: false }
+        return {
+            color: hex,
+            zIndex: 2 - depth,
+            highlighted: false,
+            hidden: false,
+            clearLabel: false,
+        }
     }
 
     // Standard mode: active node highlighting
     if (activeNode) {
         if (node === activeNode) {
-            return { color: "#ffffff", zIndex: 1, highlighted: true, hidden: false, clearLabel: false }
+            return {
+                color: "#ffffff",
+                zIndex: 1,
+                highlighted: true,
+                hidden: false,
+                clearLabel: false,
+            }
         }
         if (neighbors.has(node)) {
-            return { color: "#999", zIndex: 0, highlighted: false, hidden: false, clearLabel: false }
+            return {
+                color: "#999",
+                zIndex: 0,
+                highlighted: false,
+                hidden: false,
+                clearLabel: false,
+            }
         }
         return { color: "#333", zIndex: -1, highlighted: false, hidden: false, clearLabel: true }
     }
@@ -153,7 +201,7 @@ export function GraphEvents({
     // Sync external selection (e.g. auto-focus on load)
     useEffect(() => {
         if (externalSelectedKey !== null) {
-            setSelectedNode(externalSelectedKey)
+            queueMicrotask(() => setSelectedNode(externalSelectedKey))
         }
     }, [externalSelectedKey])
 
@@ -226,12 +274,20 @@ export function GraphEvents({
                     y: graph.getNodeAttribute(node, "y"),
                 })
                 onHoverNode({
-                    key: node, label: attrs.label, artists: attrs.artists,
-                    totalPlays: attrs.totalPlays, pageRank: attrs.pageRank,
-                    imageUrl: attrs.imageUrl, x: pos.x, y: pos.y,
+                    key: node,
+                    label: attrs.label,
+                    artists: attrs.artists,
+                    totalPlays: attrs.totalPlays,
+                    pageRank: attrs.pageRank,
+                    imageUrl: attrs.imageUrl,
+                    x: pos.x,
+                    y: pos.y,
                 })
             },
-            leaveNode: () => { setHoveredNode(null); onHoverNode(null) },
+            leaveNode: () => {
+                setHoveredNode(null)
+                onHoverNode(null)
+            },
             enterEdge: ({ edge }) => {
                 const graph = sigma.getGraph()
                 const ea = graph.getEdgeAttributes(edge) as EdgeAttributes
@@ -240,8 +296,11 @@ export function GraphEvents({
                 const sa = graph.getNodeAttributes(source) as NodeAttributes
                 const ta = graph.getNodeAttributes(target) as NodeAttributes
                 onHoverEdge({
-                    source, target,
-                    sourceLabel: sa.label, targetLabel: ta.label, weight: ea.weight,
+                    source,
+                    target,
+                    sourceLabel: sa.label,
+                    targetLabel: ta.label,
+                    weight: ea.weight,
                 })
             },
             leaveEdge: () => onHoverEdge(null),
@@ -264,16 +323,23 @@ export function GraphEvents({
         }
 
         const graph = sigma.getGraph()
-        const depthResult = depthMode && activeNode
-            ? computeDepthLayers(graph, activeNode, 3) : null
+        const depthResult =
+            depthMode && activeNode ? computeDepthLayers(graph, activeNode, 3) : null
         const neighbors = activeNode ? getNeighborSet(activeNode) : new Set<string>()
         const connectedEdges = activeNode ? getEdgeSet(activeNode) : new Set<string>()
 
         sigma.setSetting("nodeReducer", (node, data) => {
             const clusterId = (data as NodeAttributes & typeof data).clusterId ?? 0
             const cls = classifyNode(
-                node, clusterId, activeNode, neighbors, depthResult,
-                hiddenClusters, focusedCluster, pathNodes, hasPath,
+                node,
+                clusterId,
+                activeNode,
+                neighbors,
+                depthResult,
+                hiddenClusters,
+                focusedCluster,
+                pathNodes,
+                hasPath
             )
             if (cls.hidden) return { ...data, hidden: true }
             const result = { ...data } as typeof data & Record<string, unknown>
@@ -296,9 +362,13 @@ export function GraphEvents({
                 if (!depthResult.edges.has(edge)) return { ...data, hidden: true }
                 const maxD = Math.max(
                     depthResult.depths.get(source) ?? 3,
-                    depthResult.depths.get(target) ?? 3,
+                    depthResult.depths.get(target) ?? 3
                 )
-                return { ...data, color: `rgba(255, 255, 255, ${DEPTH_EDGE_OPACITY[Math.min(maxD, 3)]})`, zIndex: 2 - maxD }
+                return {
+                    ...data,
+                    color: `rgba(255, 255, 255, ${DEPTH_EDGE_OPACITY[Math.min(maxD, 3)]})`,
+                    zIndex: 2 - maxD,
+                }
             }
 
             if (activeNode) {
@@ -324,9 +394,17 @@ export function GraphEvents({
 
         sigma.refresh()
     }, [
-        selectedNode, hoveredNode, sigma, depthMode,
-        getNeighborSet, getEdgeSet, hiddenClusters,
-        focusedCluster, pathNodes, pathEdges, externalSelectedKey,
+        selectedNode,
+        hoveredNode,
+        sigma,
+        depthMode,
+        getNeighborSet,
+        getEdgeSet,
+        hiddenClusters,
+        focusedCluster,
+        pathNodes,
+        pathEdges,
+        externalSelectedKey,
     ])
 
     useGraphFilter(sigma, filter, onStatsChange)

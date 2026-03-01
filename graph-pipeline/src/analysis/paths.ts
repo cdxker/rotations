@@ -26,8 +26,21 @@ export interface PathResult {
     minEdgeWeight: number;
 }
 
-function emptyResult(from: SongKey, to: SongKey, algorithm: PathResult["algorithm"]): PathResult {
-    return { from, to, found: false, algorithm, path: [], hops: 0, totalWeight: 0, minEdgeWeight: 0 };
+function emptyResult(
+    from: SongKey,
+    to: SongKey,
+    algorithm: PathResult["algorithm"],
+): PathResult {
+    return {
+        from,
+        to,
+        found: false,
+        algorithm,
+        path: [],
+        hops: 0,
+        totalWeight: 0,
+        minEdgeWeight: 0,
+    };
 }
 
 /**
@@ -39,7 +52,8 @@ export function shortestPath(
     from: SongKey,
     to: SongKey,
 ): PathResult {
-    if (!graph.nodes[from] || !graph.nodes[to]) return emptyResult(from, to, "shortest");
+    if (!graph.nodes[from] || !graph.nodes[to])
+        return emptyResult(from, to, "shortest");
     if (from === to) return buildResult(graph, [from], "shortest");
 
     const visited = new Set<SongKey>();
@@ -89,7 +103,8 @@ export function strongestPath(
     from: SongKey,
     to: SongKey,
 ): PathResult {
-    if (!graph.nodes[from] || !graph.nodes[to]) return emptyResult(from, to, "strongest");
+    if (!graph.nodes[from] || !graph.nodes[to])
+        return emptyResult(from, to, "strongest");
     if (from === to) return buildResult(graph, [from], "strongest");
 
     // best[node] = best minimum-edge-weight to reach node from `from`

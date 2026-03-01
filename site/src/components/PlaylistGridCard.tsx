@@ -33,11 +33,7 @@ export function PlaylistGridCard({
             {children}
             <div className="aspect-square mb-4 bg-white/10 rounded overflow-hidden">
                 {imageUrl ? (
-                    <img
-                        src={imageUrl}
-                        alt={name}
-                        className="w-full h-full object-cover"
-                    />
+                    <img src={imageUrl} alt={name} className="w-full h-full object-cover" />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center text-white/30">
                         No Image
