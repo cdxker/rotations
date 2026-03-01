@@ -202,8 +202,13 @@ export function toGraphology(
 
     if (entries.length === 0) return graph
 
-    const maxPlays = Math.max(...entries.map(([, n]) => n.totalPlays), 1)
-    const maxPageRank = Math.max(...entries.map(([, n]) => n.pageRank ?? 0), 1e-10)
+    let maxPlays = 1
+    let maxPageRank = 1e-10
+    for (const [, n] of entries) {
+        if (n.totalPlays > maxPlays) maxPlays = n.totalPlays
+        const pr = n.pageRank ?? 0
+        if (pr > maxPageRank) maxPageRank = pr
+    }
 
     // Add nodes — brightness encodes importance (pageRank)
     for (const [key, node] of entries) {

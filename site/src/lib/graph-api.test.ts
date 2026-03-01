@@ -215,6 +215,15 @@ describe("toGraphology", () => {
         expect(attrs.clusterId).toBe(0)
     })
 
+    it("handles >65k nodes without stack overflow", () => {
+        const nodes: Record<string, GraphNode> = {}
+        for (let i = 0; i < 70_000; i++) {
+            nodes[`a${i}::t${i}`] = makeNode({ totalPlays: i + 1, pageRank: (i + 1) / 70_000 })
+        }
+        const graph = toGraphology(makeGraph(nodes))
+        expect(graph.order).toBe(70_000)
+    })
+
     it("handles multiple edges between different nodes", () => {
         const graph = toGraphology(
             makeGraph({
