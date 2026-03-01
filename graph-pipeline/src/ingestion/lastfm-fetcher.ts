@@ -189,9 +189,10 @@ export async function fetchLastfmScrobbles(
 
         // Save checkpoint every 10 pages
         if (page % 10 === 0) {
-            const latestTimestamp = Math.max(
-                ...newScrobbles.map((s) => s.timestamp),
-            );
+            let latestTimestamp = 0;
+            for (const s of newScrobbles) {
+                if (s.timestamp > latestTimestamp) latestTimestamp = s.timestamp;
+            }
             const checkpoint: FetchCheckpoint = {
                 lastTimestamp: latestTimestamp,
                 scrobbleCount: existingScrobbles.length + newScrobbles.length,

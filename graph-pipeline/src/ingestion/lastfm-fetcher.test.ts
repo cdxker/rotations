@@ -285,6 +285,32 @@ describe("fetchLastfmScrobbles", () => {
         );
     });
 
+    it("handles >65k scrobbles without RangeError in checkpoint", async () => {
+        // Return all 70k tracks on a single page to avoid sleep delays,
+        // then verify no RangeError from the final checkpoint Math.max replacement
+        const TOTAL = 70_000;
+        const tracks = [];
+        for (let i = 0; i < TOTAL; i++) {
+            tracks.push(
+                makeApiTrack("Artist", `Track ${i}`, "Album", String(1000 + i)),
+            );
+        }
+
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(
+            new Response(
+                JSON.stringify(makeApiResponse(tracks, 1, 1, TOTAL)),
+            ),
+        );
+
+        // Should not throw RangeError: Maximum call stack size exceeded
+        const result = await fetchLastfmScrobbles(client, {
+            dataDir: tmpDir,
+            onProgress: () => {},
+        });
+
+        expect(result.length).toBe(TOTAL);
+    }, 30_000);
+
     it("fullRefresh ignores checkpoint", async () => {
         // Create a fake checkpoint
         const { writeFile } = await import("node:fs/promises");
