@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useCallback } from "react"
 import PlayerLayout from "./PlayerLayout"
 import type {
     SpotifyPlaylist,
@@ -7,20 +7,14 @@ import type {
     SpotifyTrack,
     SpotifyUserProfile,
 } from "@/shared/types"
-import type { SpotifyPlayerInstance } from "@/shared/spotify-sdk"
+import { useSpotifyPlayer } from "@/hooks/useSpotifyPlayer"
+import { formatTime } from "@/lib/utils"
 
 interface PlayerTrack {
     uri: string
     name: string
     artists: { name: string }[]
     album: { name: string; images: { url: string }[] }
-}
-
-function formatDuration(ms: number): string {
-    if (!Number.isFinite(ms) || ms < 0) return "0:00"
-    const minutes = Math.floor(ms / 60000)
-    const seconds = Math.floor((ms % 60000) / 1000)
-    return `${minutes}:${seconds.toString().padStart(2, "0")}`
 }
 
 const SpotifyView = () => {
@@ -35,8 +29,26 @@ const SpotifyView = () => {
     const [isReady, setIsReady] = useState(false)
     const [isPaused, setIsPaused] = useState(true)
     const [currentTrack, setCurrentTrack] = useState<PlayerTrack | null>(null)
-    const playerRef = useRef<SpotifyPlayerInstance | null>(null)
-    const deviceIdRef = useRef<string | null>(null)
+
+    const handleReady = useCallback(() => setIsReady(true), [])
+    const handleNotReady = useCallback(() => setIsReady(false), [])
+    const handleError = useCallback(() => setIsReady(false), [])
+    const handlePlayerStateChanged = useCallback((state: unknown) => {
+        const typedState = state as {
+            paused: boolean
+            track_window: { current_track: PlayerTrack }
+        }
+        setIsPaused(typedState.paused)
+        setCurrentTrack(typedState.track_window.current_track)
+    }, [])
+
+    const { playerRef, deviceIdRef } = useSpotifyPlayer({
+        name: "Rotations Web Player",
+        onReady: handleReady,
+        onNotReady: handleNotReady,
+        onPlayerStateChanged: handlePlayerStateChanged,
+        onError: handleError,
+    })
 
     useEffect(() => {
         const fetchData = async () => {
@@ -66,71 +78,6 @@ const SpotifyView = () => {
         }
 
         fetchData()
-    }, [])
-
-    useEffect(() => {
-        let mounted = true
-
-        const initPlayer = async () => {
-            const res = await fetch("/api/spotify/token")
-            const data = await res.json()
-            if (!data.token || !mounted) return
-
-            const token = data.token
-
-            if (!document.querySelector('script[src="https://sdk.scdn.co/spotify-player.js"]')) {
-                const script = document.createElement("script")
-                script.src = "https://sdk.scdn.co/spotify-player.js"
-                script.async = true
-                document.body.appendChild(script)
-            }
-
-            window.onSpotifyWebPlaybackSDKReady = () => {
-                if (playerRef.current || !mounted || !window.Spotify) return
-
-                const player = new window.Spotify.Player({
-                    name: "Rotations Web Player",
-                    getOAuthToken: (cb) => cb(token),
-                    volume: 0.5,
-                })
-
-                player.addListener("ready", (state) => {
-                    const { device_id } = state as { device_id: string }
-                    deviceIdRef.current = device_id
-                    setIsReady(true)
-                })
-
-                player.addListener("not_ready", () => setIsReady(false))
-
-                player.addListener("player_state_changed", (state) => {
-                    if (!state) return
-                    const typedState = state as {
-                        paused: boolean
-                        track_window: { current_track: PlayerTrack }
-                    }
-                    setIsPaused(typedState.paused)
-                    setCurrentTrack(typedState.track_window.current_track)
-                })
-
-                player.addListener("initialization_error", () => setIsReady(false))
-                player.addListener("authentication_error", () => setIsReady(false))
-                player.addListener("account_error", () => setIsReady(false))
-
-                player.connect()
-                playerRef.current = player
-            }
-
-            if (window.Spotify) {
-                window.onSpotifyWebPlaybackSDKReady()
-            }
-        }
-
-        initPlayer()
-
-        return () => {
-            mounted = false
-            playerRef.current?.disconnect()
-        }
     }, [])
 
     const handlePlaylistClick = async (playlist: SpotifyPlaylist) => {
@@ -289,7 +236,7 @@ const SpotifyView = () => {
                                             </p>
                                         </div>
                                         <span className="text-white/30 text-sm">
-                                            {formatDuration(track.duration_ms)}
+                                            {formatTime(track.duration_ms)}
                                         </span>
                                     </button>
                                 ))

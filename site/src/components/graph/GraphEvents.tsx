@@ -4,11 +4,6 @@ import type { NodeAttributes, EdgeAttributes } from "@/lib/graph-api"
 import { computeDepthLayers } from "@/lib/depth-layers"
 import type { FilterState } from "./FilterPanel"
 
-function graphDebug(...args: unknown[]) {
-    if (typeof window === "undefined") return
-    console.log("[graph-debug]", ...args)
-}
-
 export interface SelectedNode {
     key: string
     attrs: NodeAttributes
@@ -176,7 +171,7 @@ export function GraphEvents({
     useEffect(() => {
         registerEvents({
             clickNode: ({ node }) => {
-                graphDebug("sigma clickNode handler", { node })
+                console.debug("[graph-debug]", "sigma clickNode handler", { node })
                 setSelectedNode(node)
                 onSelectNode(buildSelectedNode(node))
             },
@@ -234,7 +229,7 @@ export function GraphEvents({
         const previousActiveNode = previousActiveNodeRef.current
         const hasClusterFilter = hiddenClusters.size > 0 || focusedCluster !== null
         const hasPath = pathNodes && pathNodes.size > 0
-        graphDebug("reducers: apply", {
+        console.debug("[graph-debug]", "reducers: apply", {
             activeNode,
             previousActiveNode,
             externalSelectedKey,
@@ -390,7 +385,7 @@ export function GraphEvents({
         sigma.refresh()
         const nextActiveNode = activeNode ?? null
         requestAnimationFrame(() => {
-            graphDebug("reducers: post-refresh display", {
+            console.debug("[graph-debug]", "reducers: post-refresh display", {
                 active: summarizeNodeDisplay(nextActiveNode),
                 previous: summarizeNodeDisplay(previousActiveNode),
             })

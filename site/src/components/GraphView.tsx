@@ -9,11 +9,6 @@ import { SearchBarInner } from "./graph/SearchBar"
 import { DEFAULT_FILTER } from "./graph/FilterPanel"
 import type { FilterState } from "./graph/FilterPanel"
 
-function graphDebug(...args: unknown[]) {
-    if (typeof window === "undefined") return
-    console.log("[graph-debug]", ...args)
-}
-
 /** Load graph data into Sigma and run ForceAtlas2 layout. */
 function GraphInner({
     onSelectNode,
@@ -146,28 +141,13 @@ function GraphInner({
         )
     }
 
-    if (state === "mock" && error) {
+    if (state === "error" && error) {
         return (
-            <>
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
-                    <div className="bg-[#181818] border border-white/10 rounded-lg px-4 py-2">
-                        <p className="text-white/50 text-xs font-mono">{error}</p>
-                    </div>
+            <div className="absolute inset-0 flex items-center justify-center z-10">
+                <div className="bg-[#181818] border border-white/10 rounded-lg px-4 py-2">
+                    <p className="text-red-400/70 text-xs font-mono">{error}</p>
                 </div>
-                <GraphEvents
-                    onSelectNode={onSelectNode}
-                    externalSelectedKey={selectedNode?.key ?? null}
-                    onHoverNode={onHoverNode}
-                    onHoverEdge={onHoverEdge}
-                    hiddenClusters={hiddenClusters}
-                    focusedCluster={focusedCluster}
-                    pathNodes={pathNodes}
-                    pathEdges={pathEdges}
-                    depthMode={depthMode}
-                    filter={filter}
-                    onStatsChange={onStatsChange}
-                />
-            </>
+            </div>
         )
     }
 
@@ -203,12 +183,12 @@ function GraphNavigator({
 
         const graph = sigma.getGraph()
         if (!graph.hasNode(targetNode)) {
-            graphDebug("navigate: missing target node", { targetNode })
+            console.debug("[graph-debug]", "navigate: missing target node", { targetNode })
             onNavigated()
             return
         }
 
-        graphDebug("navigate: begin", {
+        console.debug("[graph-debug]", "navigate: begin", {
             targetNode,
             currentSelectedFromPanel: targetNode,
         })
@@ -221,7 +201,7 @@ function GraphNavigator({
         // Route programmatic navigation through Sigma's native click pipeline so
         // sidebar/search navigation and canvas clicks share the same reducer path.
         sigma.emit("clickNode", { node: targetNode } as any)
-        graphDebug("navigate: emitted sigma clickNode", { targetNode })
+        console.debug("[graph-debug]", "navigate: emitted sigma clickNode", { targetNode })
         onNavigated()
     }, [targetNode, sigma, onNavigated])
 
