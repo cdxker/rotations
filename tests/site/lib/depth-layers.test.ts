@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import Graph from "graphology"
-import { computeDepthLayers } from "./depth-layers"
+import { computeDepthLayers } from "@/lib/depth-layers"
 
 function makeLinearGraph(): Graph {
     // A -> B -> C -> D -> E (linear chain)

@@ -88,3 +88,13 @@
 - [X] `04-FixBootstrapReducerRace.md` — Prevent GraphEvents from clearing bootstrap reducers on initial mount
 - [ ] `05-FixPathPanelCleanupRace.md` — Fix cleanup effect racing with just-resolved promise in PathPanel
 - [ ] `05-FixSourcePlaysSqlMerge.md` — Make source_plays SQL upsert merge additively instead of overwriting
+
+## Phase 8 — Unclanking (Code Cleanup ~2,000 lines)
+
+- [X] `00-BackendTestDedup.md` — Extract duplicated test helpers into shared file, trim verbose tests (~650 lines)
+- [X] `00-FrontendDeadCodeDedup.md` — Delete PlaylistsView, dedup Spotify init, remove mock data, clean debug utils (~490 lines)
+- [X] `01-FrontendComponentConsolidation.md` — Extract useNodeSearch hook, PlaylistGridCard, inline GraphNavigator (~280 lines)
+- [X] `01-BackendSourceDedup.md` — Extract parseSongKey, tokenRequest, rowToNode, requireEnv helpers (~100 lines)
+- [X] `02-GraphEventsReducerCleanup.md` — Extract filter hook, consolidate reducers, remove debug logging (~100 lines)
+- [X] `02-MicroOptimizationsHygiene.md` — Trim JSDoc, fix Vercel best practices, sweep unused code (~200 lines)
+- [X] `03-LintAndFormat.md` — Run lint + format across both projects, fix any issues, final verification

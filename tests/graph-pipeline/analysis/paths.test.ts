@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { shortestPath, strongestPath } from "./paths.js";
-import type { SongKey } from "../graph/types.js";
+import { shortestPath, strongestPath } from "../../../graph-pipeline/src/analysis/paths.js";
+import type { SongKey } from "../../../graph-pipeline/src/graph/types.js";
 import { buildTestGraph } from "../test-helpers.js";
 
 describe("shortestPath", () => {

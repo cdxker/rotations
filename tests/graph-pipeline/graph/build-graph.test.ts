@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { buildGraph, type GraphInput } from "./build-graph.js";
-import type { SongKey } from "./types.js";
+import { buildGraph, type GraphInput } from "../../../graph-pipeline/src/graph/build-graph.js";
+import type { SongKey } from "../../../graph-pipeline/src/graph/types.js";
 
 afterEach(() => {
     vi.restoreAllMocks();

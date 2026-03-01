@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { LastfmClient } from "./lastfm-client.js";
+import { LastfmClient } from "../../../graph-pipeline/src/ingestion/lastfm-client.js";
 
 const TEST_CONFIG = { apiKey: "test-key", username: "test-user" };
 

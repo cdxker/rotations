@@ -3,9 +3,9 @@ import { existsSync } from "node:fs";
 import { readFile, rm, mkdir } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import { LastfmClient } from "./lastfm-client.js";
-import { fetchLastfmScrobbles } from "./lastfm-fetcher.js";
-import type { RawScrobble } from "../graph/build-graph.js";
+import { LastfmClient } from "../../../graph-pipeline/src/ingestion/lastfm-client.js";
+import { fetchLastfmScrobbles } from "../../../graph-pipeline/src/ingestion/lastfm-fetcher.js";
+import type { RawScrobble } from "../../../graph-pipeline/src/graph/build-graph.js";
 
 const TEST_CONFIG = { apiKey: "test-key", username: "test-user" };
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { SpotifyAuth, type SpotifyTokens } from "./spotify-auth.js";
+import { SpotifyAuth, type SpotifyTokens } from "../../../graph-pipeline/src/ingestion/spotify-auth.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -252,7 +252,7 @@ describe("loadSpotifyConfig", () => {
         process.env.SPOTIFY_CLIENT_ID = "test-id";
         process.env.SPOTIFY_CLIENT_SECRET = "test-secret";
 
-        const { loadSpotifyConfig } = await import("../config.js");
+        const { loadSpotifyConfig } = await import("../../../graph-pipeline/src/config.js");
         const config = loadSpotifyConfig();
         expect(config).toEqual({
             clientId: "test-id",
@@ -265,7 +265,7 @@ describe("loadSpotifyConfig", () => {
         delete process.env.SPOTIFY_CLIENT_ID;
         process.env.SPOTIFY_CLIENT_SECRET = "test-secret";
 
-        const { loadSpotifyConfig } = await import("../config.js");
+        const { loadSpotifyConfig } = await import("../../../graph-pipeline/src/config.js");
         expect(() => loadSpotifyConfig()).toThrow(
             "SPOTIFY_CLIENT_ID is not set",
         );
@@ -275,7 +275,7 @@ describe("loadSpotifyConfig", () => {
         process.env.SPOTIFY_CLIENT_ID = "test-id";
         delete process.env.SPOTIFY_CLIENT_SECRET;
 
-        const { loadSpotifyConfig } = await import("../config.js");
+        const { loadSpotifyConfig } = await import("../../../graph-pipeline/src/config.js");
         expect(() => loadSpotifyConfig()).toThrow(
             "SPOTIFY_CLIENT_SECRET is not set",
         );

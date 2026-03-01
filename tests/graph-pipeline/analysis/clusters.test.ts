@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { detectClusters } from "./clusters.js";
-import type { SongKey } from "../graph/types.js";
+import { detectClusters } from "../../../graph-pipeline/src/analysis/clusters.js";
+import type { SongKey } from "../../../graph-pipeline/src/graph/types.js";
 import { makeNode, makeGraph } from "../test-helpers.js";
 
 describe("detectClusters", () => {

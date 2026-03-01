@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { SpotifyClient, type SpotifyDump } from "./spotify-client.js";
-import { SpotifyAuth } from "./spotify-auth.js";
+import { SpotifyClient, type SpotifyDump } from "../../../graph-pipeline/src/ingestion/spotify-client.js";
+import { SpotifyAuth } from "../../../graph-pipeline/src/ingestion/spotify-auth.js";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync, readFileSync } from "node:fs";

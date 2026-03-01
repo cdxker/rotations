@@ -12,6 +12,8 @@ tickets/
 ├── phase4-polish/        — Cleanup, UX improvements, and refinements
 ├── phase5-visual-refresh/ — Visual hierarchy redesign, artwork support, and depth exploration
 ├── phase6-triage/        — Review-comment triage tickets and disposition decisions
+├── phase7-bugfixes/      — Bug fixes from triage
+├── phase8-unclanking/    — Aggressive code cleanup targeting ~2,000 line reduction
 ```
 
 ## Numbering = Dependency Chain

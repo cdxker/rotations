@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { computeStats } from "./stats.js";
-import type { ListeningGraph, SongKey, GraphNode } from "../graph/types.js";
-import { toSongKey } from "../graph/types.js";
+import { computeStats } from "../../../graph-pipeline/src/analysis/stats.js";
+import type { ListeningGraph, SongKey, GraphNode } from "../../../graph-pipeline/src/graph/types.js";
+import { toSongKey } from "../../../graph-pipeline/src/graph/types.js";
 
 function makeGraph(): ListeningGraph {
     const keyA = toSongKey("Artist A", "Song 1");

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { createApp } from "./app.js";
-import { GraphDatabase } from "../graph/database.js";
-import { buildGraph } from "../graph/build-graph.js";
+import { createApp } from "../../../graph-pipeline/src/server/app.js";
+import { GraphDatabase } from "../../../graph-pipeline/src/graph/database.js";
+import { buildGraph } from "../../../graph-pipeline/src/graph/build-graph.js";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync } from "node:fs";

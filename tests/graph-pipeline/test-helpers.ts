@@ -1,4 +1,4 @@
-import type { ListeningGraph, SongKey, GraphNode } from "./graph/types.js";
+import type { ListeningGraph, SongKey, GraphNode } from "../../graph-pipeline/src/graph/types.js";
 
 /** Create a minimal GraphNode with sensible defaults, overridable via partial. */
 export function makeNode(overrides: Partial<GraphNode> = {}): GraphNode {
