@@ -197,7 +197,6 @@ export function detectClusters(
         keys,
         community,
         weights,
-        keyIndex,
         clusterCount,
         maxTopSongs,
     );
@@ -244,7 +243,6 @@ function computeClusterStats(
     keys: SongKey[],
     community: number[],
     weights: Map<number, number>[],
-    keyIndex: Map<SongKey, number>,
     clusterCount: number,
     maxTopSongs: number,
 ): ClusterStats[] {

@@ -83,6 +83,6 @@
 - [X] `03-FixToGraphologySpreadOverflow.md` — Replace Math.max spread in toGraphology with loop for >65k node graphs
 - [X] `03-FixPlaylistNameCollision.md` — Key playlist grouping by ID instead of name to prevent same-name merges
 - [X] `04-FixSelfLoopDoubleWeight.md` — Fix self-loop edges getting double weight in cluster adjacency
-- [ ] `04-RemoveUnusedKeyIndexParam.md` — Remove unused keyIndex parameter from computeClusterStats
+- [X] `04-RemoveUnusedKeyIndexParam.md` — Remove unused keyIndex parameter from computeClusterStats
 - [ ] `04-OptimizeDepthLayerEdgeIteration.md` — Replace full-graph edge scan with per-node iteration in depth layers
 - [ ] `04-FixBootstrapReducerRace.md` — Prevent GraphEvents from clearing bootstrap reducers on initial mount
