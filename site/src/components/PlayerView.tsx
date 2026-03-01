@@ -162,7 +162,9 @@ function PlaylistsContent({ onPlaylistClick }: { onPlaylistClick: (id: PlaylistI
                 ))}
             </div>
             {playlists.length === 0 && (
-                <div className="text-white/40 text-center py-16">No playlists yet. Add some music!</div>
+                <div className="text-white/40 text-center py-16">
+                    No playlists yet. Add some music!
+                </div>
             )}
         </div>
     )
@@ -185,7 +187,8 @@ function PlayerView({ initialView = "player" }: { initialView?: ViewMode }) {
     }, [])
 
     useEffect(() => {
-        const targetPath = view === "playlists" ? "/more" : view === "spotify-add" ? "/spotify/add" : "/"
+        const targetPath =
+            view === "playlists" ? "/more" : view === "spotify-add" ? "/spotify/add" : "/"
         if (window.location.pathname !== targetPath) {
             window.history.pushState({}, "", targetPath)
         }

@@ -6,7 +6,7 @@ export interface SpotifyPlayerInstance {
     nextTrack: () => Promise<void>
     previousTrack: () => Promise<void>
     seek: (position_ms: number) => Promise<void>
-    getCurrentState: () => Promise<{ position: number}>
+    getCurrentState: () => Promise<{ position: number }>
 }
 
 export interface SpotifyPlayerAPI {

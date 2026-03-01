@@ -31,7 +31,9 @@ export const TimeSlider = ({ expanded, onViewChange }: TimeSliderProps) => {
                         variant="outline"
                         size="sm"
                         className="lg:size-default"
-                        onClick={() => onViewChange ? onViewChange("playlists") : navigate("/more")}
+                        onClick={() =>
+                            onViewChange ? onViewChange("playlists") : navigate("/more")
+                        }
                     >
                         View full rotation
                     </Button>
@@ -40,13 +42,15 @@ export const TimeSlider = ({ expanded, onViewChange }: TimeSliderProps) => {
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => onViewChange ? onViewChange("player") : navigate("/")}
+                        onClick={() => (onViewChange ? onViewChange("player") : navigate("/"))}
                     >
                         Return to Player
                     </Button>
                 )}
                 <div className="flex gap-2 items-center lg:flex-col lg:items-start">
-                    <SpotifyStatus onNavigate={onViewChange ? () => onViewChange("spotify-add") : undefined} />
+                    <SpotifyStatus
+                        onNavigate={onViewChange ? () => onViewChange("spotify-add") : undefined}
+                    />
                     <AddBandcampButton text="Add Album" />
                 </div>
             </div>
@@ -74,7 +78,11 @@ export const TimeSlider = ({ expanded, onViewChange }: TimeSliderProps) => {
                         </span>
                     </div>
                     <div className="flex items-center justify-center space-x-3">
-                        <SkipBack color="#fff" className="cursor-pointer" onClick={handlePrevTrack} />
+                        <SkipBack
+                            color="#fff"
+                            className="cursor-pointer"
+                            onClick={handlePrevTrack}
+                        />
                         {/* <Rewind color="#fff" />*/}
                         <div
                             className="rounded-full bg-white text-black px-2 py-2 cursor-pointer"
