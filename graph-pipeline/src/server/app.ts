@@ -1,3 +1,4 @@
+import path from "node:path";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { GraphDatabase } from "../graph/database.js";
@@ -10,6 +11,8 @@ import { SpotifyAuth } from "../ingestion/spotify-auth.js";
 import { SpotifyClient } from "../ingestion/spotify-client.js";
 import { buildGraph } from "../graph/build-graph.js";
 import { loadLastfmConfig } from "../config.js";
+
+const DATA_DIR = path.join(import.meta.dirname, "../../data");
 
 export interface ServerConfig {
     dbPath: string;
@@ -245,7 +248,7 @@ export function createApp(config: ServerConfig): Hono {
             }
             const client = new SpotifyClient(auth);
             const dump = await client.fetchAll();
-            await client.exportToJson("data/spotify-dump.json", dump);
+            await client.exportToJson(path.join(DATA_DIR, "spotify-dump.json"), dump);
 
             return c.json({
                 status: "complete",
@@ -261,8 +264,8 @@ export function createApp(config: ServerConfig): Hono {
             const { readFile } = await import("node:fs/promises");
             const { existsSync } = await import("node:fs");
 
-            const lastfmPath = "data/lastfm-scrobbles.json";
-            const spotifyPath = "data/spotify-dump.json";
+            const lastfmPath = path.join(DATA_DIR, "lastfm-scrobbles.json");
+            const spotifyPath = path.join(DATA_DIR, "spotify-dump.json");
 
             if (!existsSync(lastfmPath) && !existsSync(spotifyPath)) {
                 return c.json(
