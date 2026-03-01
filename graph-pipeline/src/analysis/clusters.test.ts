@@ -206,6 +206,27 @@ describe("detectClusters", () => {
 
         // Modularity should be positive for meaningful clustering
         expect(result.modularity).toBeGreaterThan(0);
+        // With well-separated clusters, modularity should be close to 0.5
+        expect(result.modularity).toBeCloseTo(0.4756, 3);
+    });
+
+    it("two-node single-community graph has modularity 0", () => {
+        // Two nodes connected, both in one community => Q = L/m - (d/(2m))^2
+        // L = 1 (one edge weight 1), m = 1, d = 1+1 = 2
+        // Q = 1/1 - (2/2)^2 = 1 - 1 = 0
+        const graph = makeGraph({
+            "a::t1": makeNode({
+                next: { "b::t2": 1 } as Record<SongKey, number>,
+            }),
+            "b::t2": makeNode({
+                next: { "a::t1": 1 } as Record<SongKey, number>,
+            }),
+        });
+
+        const result = detectClusters(graph);
+
+        expect(result.clusterCount).toBe(1);
+        expect(result.modularity).toBeCloseTo(0, 5);
     });
 
     it("strongly connected group stays together", () => {

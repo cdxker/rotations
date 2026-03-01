@@ -110,8 +110,6 @@ export function detectClusters(
     // Initialize: each node in its own community
     const community: number[] = Array.from({ length: n }, (_, i) => i);
 
-    // Sum of weights within each community (self-loops counted)
-    const sigmaIn: number[] = new Array(n).fill(0);
     // Sum of degrees of nodes in each community
     const sigmaTot: number[] = [...degree];
 
@@ -139,7 +137,6 @@ export function detectClusters(
 
             // Remove i from its current community
             sigmaTot[currentComm]! -= ki;
-            sigmaIn[currentComm]! -= kiIn;
 
             // Find the community that gives the best modularity gain
             // Standard Louvain formula: ΔQ = k_{i,in}/m - Σ_tot * k_i / (2m²)
@@ -163,10 +160,8 @@ export function detectClusters(
             }
 
             // Move i to best community
-            const kiBest = neighborComms.get(bestComm) ?? 0;
             community[i] = bestComm;
             sigmaTot[bestComm]! += ki;
-            sigmaIn[bestComm]! += kiBest;
 
             if (bestComm !== currentComm) {
                 improved = true;
@@ -215,15 +210,31 @@ function computeModularity(
     m: number,
     n: number,
 ): number {
-    let q = 0;
+    // Per-community formula: Q = Σ_c [L_c/m − (d_c/(2m))²]
+    // L_c = sum of edge weights within community c (each undirected edge counted once)
+    // d_c = sum of degrees of nodes in community c
+    const communityL = new Map<number, number>();
+    const communityD = new Map<number, number>();
+
     for (let i = 0; i < n; i++) {
+        const c = community[i]!;
+        communityD.set(c, (communityD.get(c) ?? 0) + degree[i]!);
+
         for (const [j, w] of weights[i]!) {
-            if (community[i] === community[j]) {
-                q += w - (degree[i]! * degree[j]!) / (2 * m);
+            // Only count each edge once (i < j) to avoid double-counting
+            if (community[j] === c && i < j) {
+                communityL.set(c, (communityL.get(c) ?? 0) + w);
             }
         }
     }
-    return q / (2 * m);
+
+    let q = 0;
+    for (const c of communityD.keys()) {
+        const lc = communityL.get(c) ?? 0;
+        const dc = communityD.get(c)!;
+        q += lc / m - (dc / (2 * m)) ** 2;
+    }
+    return q;
 }
 
 function computeClusterStats(
