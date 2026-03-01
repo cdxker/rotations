@@ -1,13 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback } from "react"
 import { Search, X } from "lucide-react"
 import { useSigma } from "@react-sigma/core"
-import type { NodeAttributes } from "@/lib/graph-api"
-
-interface SearchResult {
-    key: string
-    label: string
-    totalPlays: number
-}
+import { useNodeSearch } from "./useNodeSearch"
 
 interface SearchBarProps {
     onSelect: (nodeKey: string) => void
@@ -19,90 +13,37 @@ interface SearchBarProps {
  */
 export function SearchBarInner({ onSelect }: SearchBarProps) {
     const sigma = useSigma()
-    const [query, setQuery] = useState("")
-    const [results, setResults] = useState<SearchResult[]>([])
-    const [isOpen, setIsOpen] = useState(false)
-    const [selectedIndex, setSelectedIndex] = useState(0)
-    const inputRef = useRef<HTMLInputElement>(null)
-    const containerRef = useRef<HTMLDivElement>(null)
-
-    // Search the graph when query changes
-    useEffect(() => {
-        if (!query.trim()) {
-            setResults([])
-            setIsOpen(false)
-            return
-        }
-
-        const graph = sigma.getGraph()
-        const lowerQuery = query.toLowerCase()
-        const matches: SearchResult[] = []
-
-        for (const node of graph.nodes()) {
-            const nodeAttrs = graph.getNodeAttributes(node) as NodeAttributes
-            const label = nodeAttrs.label.toLowerCase()
-            if (label.includes(lowerQuery)) {
-                matches.push({
-                    key: node,
-                    label: nodeAttrs.label,
-                    totalPlays: nodeAttrs.totalPlays,
-                })
-            }
-            if (matches.length >= 20) break
-        }
-
-        // Sort by play count descending for better relevance
-        matches.sort((a, b) => b.totalPlays - a.totalPlays)
-
-        setResults(matches.slice(0, 10))
-        setSelectedIndex(0)
-        setIsOpen(matches.length > 0)
-    }, [query, sigma])
+    const {
+        query,
+        setQuery,
+        results,
+        isOpen,
+        setIsOpen,
+        selectedIndex,
+        handleKeyDown: hookKeyDown,
+        clear,
+        inputRef,
+        containerRef,
+    } = useNodeSearch(sigma, { maxResults: 10 })
 
     const handleSelect = useCallback(
         (nodeKey: string) => {
             onSelect(nodeKey)
-            setQuery("")
-            setResults([])
-            setIsOpen(false)
+            clear()
             inputRef.current?.blur()
         },
-        [onSelect]
+        [onSelect, clear, inputRef]
     )
 
     const handleKeyDown = useCallback(
         (e: React.KeyboardEvent) => {
-            if (e.key === "ArrowDown") {
-                e.preventDefault()
-                e.stopPropagation()
-                setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1))
-            } else if (e.key === "ArrowUp") {
-                e.preventDefault()
-                e.stopPropagation()
-                setSelectedIndex((prev) => Math.max(prev - 1, 0))
-            } else if (e.key === "Enter" && results[selectedIndex]) {
-                e.preventDefault()
-                e.stopPropagation()
-                handleSelect(results[selectedIndex].key)
-            } else if (e.key === "Escape") {
-                e.stopPropagation()
-                setIsOpen(false)
-                inputRef.current?.blur()
+            const selected = hookKeyDown(e)
+            if (selected) {
+                handleSelect(selected.key)
             }
         },
-        [results, selectedIndex, handleSelect]
+        [hookKeyDown, handleSelect]
     )
-
-    // Close dropdown when clicking outside
-    useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-                setIsOpen(false)
-            }
-        }
-        document.addEventListener("mousedown", handleClickOutside)
-        return () => document.removeEventListener("mousedown", handleClickOutside)
-    }, [])
 
     return (
         <div ref={containerRef} className="relative">
@@ -122,11 +63,7 @@ export function SearchBarInner({ onSelect }: SearchBarProps) {
                 />
                 {query && (
                     <button
-                        onClick={() => {
-                            setQuery("")
-                            setResults([])
-                            setIsOpen(false)
-                        }}
+                        onClick={clear}
                         className="text-white/30 hover:text-white/60 transition-colors"
                     >
                         <X size={12} />

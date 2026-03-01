@@ -23,6 +23,8 @@ function GraphInner({
     depthMode,
     filter,
     onStatsChange,
+    navigateTarget,
+    onNavigated,
 }: {
     onSelectNode: (node: SelectedNode | null) => void
     selectedNode: SelectedNode | null
@@ -51,6 +53,8 @@ function GraphInner({
         maxPlays: number
         maxEdgeWeight: number
     }) => void
+    navigateTarget: string | null
+    onNavigated: () => void
 }) {
     const { graph, state, error } = useGraphData()
     const loadGraph = useLoadGraph()
@@ -66,6 +70,34 @@ function GraphInner({
         container.addEventListener("mousemove", handleMouseMove)
         return () => container.removeEventListener("mousemove", handleMouseMove)
     }, [sigma, onMouseMove])
+
+    // Navigate sigma camera to a node
+    useEffect(() => {
+        if (!navigateTarget) return
+
+        const g = sigma.getGraph()
+        if (!g.hasNode(navigateTarget)) {
+            console.debug("[graph-debug]", "navigate: missing target node", { targetNode: navigateTarget })
+            onNavigated()
+            return
+        }
+
+        console.debug("[graph-debug]", "navigate: begin", {
+            targetNode: navigateTarget,
+            currentSelectedFromPanel: navigateTarget,
+        })
+
+        // Center camera on the node
+        const x = g.getNodeAttribute(navigateTarget, "x")
+        const y = g.getNodeAttribute(navigateTarget, "y")
+        sigma.getCamera().animate({ x, y, ratio: 0.3 }, { duration: 300 })
+
+        // Route programmatic navigation through Sigma's native click pipeline so
+        // sidebar/search navigation and canvas clicks share the same reducer path.
+        sigma.emit("clickNode", { node: navigateTarget } as any)
+        console.debug("[graph-debug]", "navigate: emitted sigma clickNode", { targetNode: navigateTarget })
+        onNavigated()
+    }, [navigateTarget, sigma, onNavigated])
 
     // Load graph into Sigma when data is ready, auto-focus a random node.
     // Bootstrap reducers are set in the same tick as loadGraph so the graph
@@ -168,46 +200,6 @@ function GraphInner({
     )
 }
 
-/** Navigate sigma camera to a node. Needs access to useSigma. */
-function GraphNavigator({
-    targetNode,
-    onNavigated,
-}: {
-    targetNode: string | null
-    onNavigated: () => void
-}) {
-    const sigma = useSigma()
-
-    useEffect(() => {
-        if (!targetNode) return
-
-        const graph = sigma.getGraph()
-        if (!graph.hasNode(targetNode)) {
-            console.debug("[graph-debug]", "navigate: missing target node", { targetNode })
-            onNavigated()
-            return
-        }
-
-        console.debug("[graph-debug]", "navigate: begin", {
-            targetNode,
-            currentSelectedFromPanel: targetNode,
-        })
-
-        // Center camera on the node
-        const x = graph.getNodeAttribute(targetNode, "x")
-        const y = graph.getNodeAttribute(targetNode, "y")
-        sigma.getCamera().animate({ x, y, ratio: 0.3 }, { duration: 300 })
-
-        // Route programmatic navigation through Sigma's native click pipeline so
-        // sidebar/search navigation and canvas clicks share the same reducer path.
-        sigma.emit("clickNode", { node: targetNode } as any)
-        console.debug("[graph-debug]", "navigate: emitted sigma clickNode", { targetNode })
-        onNavigated()
-    }, [targetNode, sigma, onNavigated])
-
-    return null
-}
-
 export default function GraphView() {
     const [hiddenClusters] = useState<Set<number>>(() => new Set())
     const focusedCluster = null
@@ -264,9 +256,7 @@ export default function GraphView() {
                     depthMode={depthMode}
                     filter={filter}
                     onStatsChange={setFilterStats}
-                />
-                <GraphNavigator
-                    targetNode={navigateTarget}
+                    navigateTarget={navigateTarget}
                     onNavigated={clearNavigateTarget}
                 />
                 <div className="absolute top-12 left-4 z-20 pointer-events-auto flex items-start gap-2">

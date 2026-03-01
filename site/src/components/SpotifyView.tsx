@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react"
 import PlayerLayout from "./PlayerLayout"
+import { PlaylistGridCard } from "./PlaylistGridCard"
 import type {
     SpotifyPlaylist,
     SpotifyPlaylistsResponse,
@@ -245,31 +246,13 @@ const SpotifyView = () => {
                     ) : (
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                             {playlists.map((playlist) => (
-                                <button
+                                <PlaylistGridCard
                                     key={playlist.id}
+                                    name={playlist.name}
+                                    imageUrl={playlist.images?.[0]?.url}
+                                    subtitle={`${playlist.tracks.total} tracks`}
                                     onClick={() => handlePlaylistClick(playlist)}
-                                    className="group bg-white/5 rounded-lg p-4 hover:bg-white/10 transition-colors text-left"
-                                >
-                                    <div className="aspect-square mb-4 bg-white/10 rounded overflow-hidden">
-                                        {playlist.images?.[0]?.url ? (
-                                            <img
-                                                src={playlist.images[0].url}
-                                                alt={playlist.name}
-                                                className="w-full h-full object-cover"
-                                            />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-white/30">
-                                                No Image
-                                            </div>
-                                        )}
-                                    </div>
-                                    <h3 className="font-medium truncate group-hover:text-green-400 transition-colors">
-                                        {playlist.name}
-                                    </h3>
-                                    <p className="text-sm text-white/50 truncate">
-                                        {playlist.tracks.total} tracks
-                                    </p>
-                                </button>
+                                />
                             ))}
                         </div>
                     )}
