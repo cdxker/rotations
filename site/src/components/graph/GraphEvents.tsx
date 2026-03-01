@@ -246,9 +246,13 @@ export function GraphEvents({
         })
 
         if (!activeNode && !hasClusterFilter && !hasPath) {
-            sigma.setSetting("nodeReducer", null)
-            sigma.setSetting("edgeReducer", null)
-            sigma.refresh()
+            // Don't clear bootstrap reducers if a selection is in-flight from the parent
+            // (externalSelectedKey is set but hasn't propagated to local state yet)
+            if (!externalSelectedKey) {
+                sigma.setSetting("nodeReducer", null)
+                sigma.setSetting("edgeReducer", null)
+                sigma.refresh()
+            }
             previousActiveNodeRef.current = null
             return
         }

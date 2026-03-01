@@ -85,4 +85,4 @@
 - [X] `04-FixSelfLoopDoubleWeight.md` — Fix self-loop edges getting double weight in cluster adjacency
 - [X] `04-RemoveUnusedKeyIndexParam.md` — Remove unused keyIndex parameter from computeClusterStats
 - [X] `04-OptimizeDepthLayerEdgeIteration.md` — Replace full-graph edge scan with per-node iteration in depth layers
-- [ ] `04-FixBootstrapReducerRace.md` — Prevent GraphEvents from clearing bootstrap reducers on initial mount
+- [X] `04-FixBootstrapReducerRace.md` — Prevent GraphEvents from clearing bootstrap reducers on initial mount
