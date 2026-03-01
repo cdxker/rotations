@@ -54,7 +54,7 @@
 - [X] `01-Triage-TimestampSpreadOverflow.md` — Schedule: `Math.min(...arr)` crashes at >65k scrobbles
 - [X] `01-Triage-VitestDirnameInESM.md` — Closed (Invalid): Vitest injects CJS globals in config files; tests pass
 - [X] `01-Triage-ImportMetaDirnameUsage.md` — Closed (Not Planned): Node 22 supports `import.meta.dirname`; no older runtime requirement
-- [X] `01-Triage-SearchNoEarlyExit.md` — Closed (Invalid): both search implementations already early-exit at 20 matches
+- [X] `01-Triage-SearchNoEarlyExit.md` — Reopened: `forEachNode` does not support early exit; `return` is a no-op → see `03-FixSearchEarlyExit.md`
 - [X] `01-Triage-PathPanelStaleAsyncState.md` — Schedule: stale closure spreads `...state` in async callbacks
 - [X] `01-Triage-GraphViewDoubleDataBuild.md` — Closed (Invalid): `useGraphData()` called once with empty dep array; no StrictMode
 - [X] `01-Triage-SourceBreakdownSemantics.md` — Schedule: counts nodes per source but spec says scrobbles per source
@@ -78,3 +78,7 @@
 - [X] `02-FixModularityFormula.md` — Fix computeModularity to account for non-adjacent same-community pairs
 - [X] `02-RemoveSigmaInDeadCode.md` — Remove unused sigmaIn array from Louvain implementation
 - [X] `02-FixSourcePlaysMerge.md` — Merge source_plays per-source counts on incremental save instead of replacing
+- [ ] `03-FixSearchEarlyExit.md` — Replace forEachNode with breakable loop in SearchBar and PathPanel search
+- [ ] `03-FixPathPanelLoadingGuard.md` — Reset loading state when path fetch is cancelled mid-flight
+- [ ] `03-FixToGraphologySpreadOverflow.md` — Replace Math.max spread in toGraphology with loop for >65k node graphs
+- [ ] `03-FixPlaylistNameCollision.md` — Key playlist grouping by ID instead of name to prevent same-name merges
