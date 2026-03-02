@@ -52,6 +52,12 @@ function App() {
         >
           MDS
         </button>
+        <button
+          className={`px-3 py-1.5 rounded text-sm ${layout === 'weighted-mds' ?  'bg-neutral-800 text-white': 'bg-white text-black' }`}
+          onClick={() => setLayout('weighted-mds')}
+        >
+          Weighted MDS
+        </button>
       </div>
       <SigmaContainer
         style={{ height: '100vh', width: '100vw' }}

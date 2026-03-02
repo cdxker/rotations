@@ -2,14 +2,16 @@ import type Graph from 'graphology'
 import type { NodeAttributes, EdgeAttributes } from '#/lib/types'
 import { calculateMdsPositions } from './mds'
 import { calculatePageRankPositions } from './pageRank'
+import { calculateWeightedMdsPositions } from './weighted-mds'
 
-export type LayoutMode = 'pagerank' | 'mds'
+export type LayoutMode = 'pagerank' | 'mds' | 'weighted-mds'
 
 type PositionMap = Map<string, { x: number; y: number }>
 
 const cache: Record<LayoutMode, PositionMap | undefined> = {
   pagerank: undefined,
   mds: undefined,
+  'weighted-mds': undefined,
 }
 
 export default function setNodePositions(
@@ -21,7 +23,9 @@ export default function setNodePositions(
     positions =
       mode === 'mds'
         ? calculateMdsPositions(graph)
-        : calculatePageRankPositions(graph)
+        : mode === 'weighted-mds'
+          ? calculateWeightedMdsPositions(graph)
+          : calculatePageRankPositions(graph)
     cache[mode] = positions
   }
 

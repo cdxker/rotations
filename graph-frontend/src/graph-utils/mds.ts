@@ -31,6 +31,18 @@ export function calculateMdsPositions(
     }
   }
 
+  return mdsFromDistances(keys, dist, n)
+}
+
+/**
+ * Shared: run classical MDS on a precomputed distance matrix.
+ * Exported so weighted-mds.ts can reuse it.
+ */
+export function mdsFromDistances(
+  keys: string[],
+  dist: Float64Array,
+  n: number,
+): Map<string, { x: number; y: number }> {
   // Replace any remaining Infinity with a large finite value
   // (disconnected components) so MDS doesn't blow up.
   let maxFinite = 1
@@ -42,7 +54,7 @@ export function calculateMdsPositions(
     if (!isFinite(dist[k])) dist[k] = infReplace
   }
 
-  // --- 2. Classical MDS (double-centering on squared distances) ---
+  // Classical MDS (double-centering on squared distances)
   const dsq = new Float64Array(n * n)
   for (let k = 0; k < n * n; k++) dsq[k] = dist[k] * dist[k]
 
@@ -62,7 +74,6 @@ export function calculateMdsPositions(
   }
   grandMean /= n
 
-  // B = -0.5 * (D² - rowMean - colMean + grandMean)
   const B = new Float64Array(n * n)
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
@@ -71,10 +82,8 @@ export function calculateMdsPositions(
     }
   }
 
-  // --- 3. Extract top 2 eigenvectors via power iteration ---
   const coords = powerIterationTop2(B, n)
 
-  // --- 4. Build result map ---
   const result = new Map<string, { x: number; y: number }>()
   for (let i = 0; i < n; i++) {
     result.set(keys[i], { x: coords.x[i], y: coords.y[i] })
