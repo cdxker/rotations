@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { addDays, addMonths, addYears, format } from "date-fns"
+import { addDays, addMonths, addYears, differenceInCalendarDays, format } from "date-fns"
 import { Calendar as CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
 import { type DateRange } from "react-day-picker"
 
@@ -23,6 +23,8 @@ const PRESETS = [
 interface DatePickerProps {
   dateRange: DateRange | undefined
   onDateRangeChange: (range: DateRange | undefined) => void
+  /** Sorted array of all unique play date strings (YYYY-MM-DD) across the graph. */
+  allPlayDays: string[]
 }
 
 function formatRange(range: DateRange | undefined): string {
@@ -31,20 +33,67 @@ function formatRange(range: DateRange | undefined): string {
   return `${format(range.from, "LLL dd, y")} - ${format(range.to, "LLL dd, y")}`
 }
 
-export function DatePicker({ dateRange, onDateRangeChange }: DatePickerProps) {
+/** Convert a YYYY-MM-DD string to a Date (local midnight). */
+function dayToDate(day: string): Date {
+  const [y, m, d] = day.split("-").map(Number)
+  return new Date(y, m - 1, d)
+}
+
+function toDay(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
+
+export function DatePicker({ dateRange, onDateRangeChange, allPlayDays }: DatePickerProps) {
   const [open, setOpen] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
 
-  function shiftRange(days: number) {
-    if (!dateRange?.from) {
-      const d = new Date()
-      onDateRangeChange({ from: d, to: d })
+  function jumpToNextPlay() {
+    if (!dateRange?.from || allPlayDays.length === 0) {
+      // No range — jump to the latest play date
+      if (allPlayDays.length > 0) {
+        const d = dayToDate(allPlayDays[allPlayDays.length - 1])
+        onDateRangeChange({ from: d, to: d })
+      }
       return
     }
-    onDateRangeChange({
-      from: addDays(dateRange.from, days),
-      to: dateRange.to ? addDays(dateRange.to, days) : addDays(dateRange.from, days),
-    })
+
+    const rangeDuration = differenceInCalendarDays(dateRange.to ?? dateRange.from, dateRange.from)
+    const currentTo = toDay(dateRange.to ?? dateRange.from)
+
+    // Find the first play day strictly after the current range end
+    const nextDay = allPlayDays.find((d) => d > currentTo)
+    if (!nextDay) return // already at the latest
+
+    const newFrom = dayToDate(nextDay)
+    onDateRangeChange({ from: newFrom, to: addDays(newFrom, rangeDuration) })
+  }
+
+  function jumpToPrevPlay() {
+    if (!dateRange?.from || allPlayDays.length === 0) {
+      // No range — jump to the earliest play date
+      if (allPlayDays.length > 0) {
+        const d = dayToDate(allPlayDays[0])
+        onDateRangeChange({ from: d, to: d })
+      }
+      return
+    }
+
+    const rangeDuration = differenceInCalendarDays(dateRange.to ?? dateRange.from, dateRange.from)
+    const currentFrom = toDay(dateRange.from)
+
+    // Find the last play day strictly before the current range start
+    let prevDay: string | undefined
+    for (let i = allPlayDays.length - 1; i >= 0; i--) {
+      if (allPlayDays[i] < currentFrom) {
+        prevDay = allPlayDays[i]
+        break
+      }
+    }
+    if (!prevDay) return // already at the earliest
+
+    const newTo = dayToDate(prevDay)
+    const newFrom = addDays(newTo, -rangeDuration)
+    onDateRangeChange({ from: newFrom, to: newTo })
   }
 
   return (
@@ -53,7 +102,7 @@ export function DatePicker({ dateRange, onDateRangeChange }: DatePickerProps) {
         variant="outline"
         size="icon"
         className="bg-neutral-900 border-neutral-700 text-white hover:bg-neutral-800 hover:text-white"
-        onClick={() => shiftRange(-1)}
+        onClick={jumpToPrevPlay}
       >
         <ChevronLeftIcon className="size-4" />
       </Button>
@@ -138,7 +187,7 @@ export function DatePicker({ dateRange, onDateRangeChange }: DatePickerProps) {
         variant="outline"
         size="icon"
         className="bg-neutral-900 border-neutral-700 text-white hover:bg-neutral-800 hover:text-white"
-        onClick={() => shiftRange(1)}
+        onClick={jumpToNextPlay}
       >
         <ChevronRightIcon className="size-4" />
       </Button>

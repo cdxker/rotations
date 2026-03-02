@@ -63,9 +63,21 @@ function RenderGraph({ layout, dateRange }: { layout: LayoutMode; dateRange: Dat
 }
 
 function App() {
-  const { state, error } = useGraph()
+  const { state, error, graph } = useGraph()
   const [layout, setLayout] = useState<LayoutMode>('pagerank')
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
+
+  // Collect all unique play dates (day-level strings, sorted) from the graph
+  const allPlayDays = useMemo(() => {
+    if (!graph) return []
+    const days = new Set<string>()
+    graph.forEachNode((_key, attrs) => {
+      for (const d of (attrs.playDates ?? [])) {
+        days.add(d.slice(0, 10))
+      }
+    })
+    return [...days].sort()
+  }, [graph])
 
   if (state === 'loading') return <div className="bg-black text-white min-h-screen flex items-center justify-center">Loading graph…</div>
   if (state === 'error') return <div className="bg-black text-white min-h-screen flex items-center justify-center">Error: {error}</div>
@@ -73,7 +85,7 @@ function App() {
   return (
     <main className="bg-black text-white min-h-screen">
       <div className="absolute top-4 left-4 z-10">
-        <DatePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
+        <DatePicker dateRange={dateRange} onDateRangeChange={setDateRange} allPlayDays={allPlayDays} />
       </div>
       <div className="absolute top-4 right-4 z-10 flex gap-2">
         <button
