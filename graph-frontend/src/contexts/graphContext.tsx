@@ -6,74 +6,8 @@ import {
   type ReactNode,
 } from "react"
 import Graph from "graphology"
-
-/** Canonical song identity: `lowercase(artist)::lowercase(track_name)`. */
-export type SongKey = `${string}::${string}`
-
-/** Data source that contributed a scrobble or track ordering. */
-export type ListeningSource = "lastfm" | "spotify-recent" | "spotify-playlist"
-
-/** A node in the listening graph representing a single song. */
-export interface GraphNode {
-  name: string
-  artists: string[]
-  albumName?: string
-  spotifyId?: string
-  lastfmUrl?: string
-  imageUrl?: string
-  next: Record<SongKey, number>
-  previous: Record<SongKey, number>
-  totalPlays: number
-  sources: ListeningSource[]
-  pageRank: number
-}
-
-/** Metadata about the graph export. */
-export interface GraphMetadata {
-  totalScrobbles: number
-  dateRange: { from: string; to: string }
-  exportTimestamp: string
-  lastfmUsername?: string
-  spotifyUsername?: string
-}
-
-/** The full listening graph as returned by GET /graph. */
-export interface ListeningGraph {
-  nodes: Record<SongKey, GraphNode>
-  metadata: GraphMetadata
-}
-
-// ---------------------------------------------------------------------------
-// Graphology attribute types
-// ---------------------------------------------------------------------------
-
-/** Attributes stored on each graphology node. */
-export interface NodeAttributes {
-  label: string
-  artists: string[]
-  albumName?: string
-  spotifyId?: string
-  lastfmUrl?: string
-  imageUrl?: string
-  totalPlays: number
-  sources: string[]
-  pageRank: number
-  size: number
-  color: string
-  x: number
-  y: number
-}
-
-/** Attributes stored on each graphology edge. */
-export interface EdgeAttributes {
-  weight: number
-  size: number
-  color: string
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+import { mdsLayout } from "#/layouts/mdsLayout"
+import type { EdgeAttributes, ListeningGraph, NodeAttributes } from "#/lib/types"
 
 const GRAPH_API_BASE =
   import.meta.env.VITE_GRAPH_API_URL ?? "http://localhost:3001"
@@ -100,20 +34,6 @@ async function fetchGraph(): Promise<ListeningGraph> {
   return response.json()
 }
 
-function hashAngle(key: string): number {
-  let hash = 0
-  for (let i = 0; i < key.length; i++) {
-    hash = (hash * 31 + key.charCodeAt(i)) >>> 0
-  }
-  return (hash % 10000) / 10000 * Math.PI * 2
-}
-
-function calculatePosition(key: string, importance: number) {
-  return {
-    x: Math.cos(hashAngle(key)) * Math.pow(1 - importance, 2) * 500,
-    y: Math.sin(hashAngle(key)) * Math.pow(1 - importance, 2) * 500,
-  }
-}
 
 function toGraphology(
   listeningGraph: ListeningGraph,
@@ -145,7 +65,8 @@ function toGraphology(
       pageRank: node.pageRank ?? 0,
       size: nodeSize(node.totalPlays, maxPlays),
       color: nodeBrightness(importance),
-      ...calculatePosition(key, importance)
+      x: 0,
+      y: 0,
     })
   }
 
@@ -162,12 +83,15 @@ function toGraphology(
     }
   }
 
+  // Compute MDS positions from hop distances
+  const positions = mdsLayout(graph)
+  for (const [key, pos] of positions) {
+    graph.setNodeAttribute(key, "x", pos.x * 500)
+    graph.setNodeAttribute(key, "y", pos.y * 500)
+  }
+
   return graph
 }
-
-// ---------------------------------------------------------------------------
-// Context
-// ---------------------------------------------------------------------------
 
 export type LoadState = "loading" | "loaded" | "error"
 

@@ -1,13 +1,14 @@
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 import type Graph from "graphology"
 import { singleSourceLength } from "graphology-shortest-path/unweighted"
-import type { NodeAttributes, EdgeAttributes } from "#/contexts/graphContext"
 
 /**
  * Compute 2D positions for graph nodes using Classical (Torgerson) MDS
  * on all-pairs shortest-path hop distances.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function mdsLayout(
-  graph: Graph<NodeAttributes, EdgeAttributes>,
+  graph: Graph<any, any>,
 ): Map<string, { x: number; y: number }> {
   const keys = graph.nodes()
   const n = keys.length
