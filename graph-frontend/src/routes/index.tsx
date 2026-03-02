@@ -41,15 +41,51 @@ function RenderGraph({ layout, dateRange, isDark }: { layout: LayoutMode; dateRa
     return counts
   }, [dateRange, graph])
 
-  // Pre-compute max plays in range for sizing
-  const maxPlaysInRange = useMemo(() => {
-    if (!filteredPlayCounts) return 1
-    let max = 1
-    for (const count of filteredPlayCounts.values()) {
-      if (count > max) max = count
+  // Compute per-node sizing metric based on the active layout algorithm
+  const nodeMetrics = useMemo(() => {
+    if (!graph) return null
+    const metrics = new Map<string, number>()
+
+    if (layout === 'pagerank') {
+      graph.forEachNode((key, attrs) => {
+        metrics.set(key, attrs.pageRank)
+      })
+    } else if (layout === 'mds') {
+      graph.forEachNode((key) => {
+        metrics.set(key, graph.degree(key))
+      })
+    } else {
+      // weighted-mds: weighted degree (sum of edge weights)
+      graph.forEachNode((key) => {
+        let wd = 0
+        graph.forEachEdge(key, (_edge, attrs) => {
+          wd += attrs.weight
+        })
+        metrics.set(key, wd)
+      })
     }
+
+    return metrics
+  }, [graph, layout])
+
+  // Max metric among active (visible) nodes only, so sizes rescale dynamically
+  const maxMetric = useMemo(() => {
+    if (!nodeMetrics) return 1
+    let max = 1e-10
+
+    if (filteredPlayCounts) {
+      for (const key of filteredPlayCounts.keys()) {
+        const val = nodeMetrics.get(key)
+        if (val !== undefined && val > max) max = val
+      }
+    } else {
+      for (const val of nodeMetrics.values()) {
+        if (val > max) max = val
+      }
+    }
+
     return max
-  }, [filteredPlayCounts])
+  }, [nodeMetrics, filteredPlayCounts])
 
   // Update sigma reducers to hide nodes/edges not matching the filter and rescale sizes
   useEffect(() => {
@@ -62,10 +98,13 @@ function RenderGraph({ layout, dateRange, isDark }: { layout: LayoutMode; dateRa
     sigma.setSetting('labelColor', { color: isDark ? '#ffffff' : '#000000' })
 
     sigma.setSetting('nodeReducer', (_node: string, data: Record<string, unknown>) => {
-      if (!filteredPlayCounts) return { ...data }
-      const count = filteredPlayCounts.get(_node)
-      if (!count) return { ...data, hidden: true }
-      const size = 4 + (16 * Math.log(count)) / Math.log(maxPlaysInRange)
+      if (filteredPlayCounts && !filteredPlayCounts.has(_node)) {
+        return { ...data, hidden: true }
+      }
+      const metric = nodeMetrics?.get(_node) ?? 0
+      const size = metric > 0 && maxMetric > 0
+        ? 4 + 16 * Math.log1p(metric) / Math.log1p(maxMetric)
+        : 4
       return { ...data, size }
     })
     sigma.setSetting('edgeReducer', (edge: string, data: Record<string, unknown>) => {
@@ -82,7 +121,7 @@ function RenderGraph({ layout, dateRange, isDark }: { layout: LayoutMode; dateRa
       return { ...data, hidden: true }
     })
     sigma.refresh()
-  }, [filteredPlayCounts, maxPlaysInRange, sigma, isDark])
+  }, [filteredPlayCounts, nodeMetrics, maxMetric, sigma, isDark])
 
   return null
 }

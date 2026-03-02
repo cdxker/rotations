@@ -32,11 +32,6 @@ const COMPONENT_COLORS = [
   "#ff3399", // pink
 ]
 
-/** Compute node radius from play count using log scale. */
-function nodeSize(totalPlays: number, maxPlays: number): number {
-  return 4 + (16 * Math.log(totalPlays)) / Math.log(maxPlays)
-}
-
 /** Fetch the full graph JSON from the API. */
 async function fetchGraph(): Promise<ListeningGraph> {
   const response = await fetch(`${GRAPH_API_BASE}/graph`)
@@ -57,10 +52,8 @@ function toGraphology(
 
   if (entries.length === 0) return graph
 
-  let maxPlays = 1
   let maxPageRank = 1e-10
   for (const [, n] of entries) {
-    if (n.totalPlays > maxPlays) maxPlays = n.totalPlays
     const pr = n.pageRank ?? 0
     if (pr > maxPageRank) maxPageRank = pr
   }
@@ -77,7 +70,7 @@ function toGraphology(
       sources: node.sources,
       pageRank: node.pageRank ?? 0,
       playDates: node.playDates ?? [],
-      size: nodeSize(node.totalPlays, maxPlays),
+      size: 4, // placeholder; nodeReducer in RenderGraph sets actual size per layout
       color: "#ffffff", // placeholder, overwritten by component coloring
       x: 0,
       y: 0,
