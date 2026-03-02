@@ -6,6 +6,8 @@ import {
     toSongKey,
 } from "./types.js";
 
+const ONE_HOUR_IN_SESCONDS = 60 * 60;
+
 /** A single scrobble from Last.fm's user.getRecentTracks API. */
 export interface RawScrobble {
     artist: string;
@@ -72,6 +74,7 @@ function getOrCreateNode(
             previous: {} as Record<SongKey, number>,
             totalPlays: 0,
             sources: [],
+            playDates: [],
         };
         nodes[key] = node;
     }
@@ -129,14 +132,16 @@ function processLastfmScrobbles(
             scrobble.imageUrl,
         );
         node.totalPlays++;
+        node.playDates.push(new Date(scrobble.timestamp * 1000).toISOString());
         addSource(node, "lastfm");
         keys.push(key);
         timestamps.push(scrobble.timestamp);
     }
 
-    // Create edges from consecutive pairs
     for (let i = 0; i < keys.length - 1; i++) {
-        addEdge(nodes, keys[i]!, keys[i + 1]!);
+        if (timestamps[i + 1]! - timestamps[i]! <= ONE_HOUR_IN_SESCONDS) {
+            addEdge(nodes, keys[i]!, keys[i + 1]!);
+        }
     }
 
     return { totalPlays: keys.length, timestamps };
@@ -167,6 +172,7 @@ function processSpotifyRecentTracks(
             track.imageUrl,
         );
         node.totalPlays++;
+        node.playDates.push(new Date(track.playedAt).toISOString());
         node.spotifyId = node.spotifyId ?? track.spotifyId;
         addSource(node, "spotify-recent");
         keys.push(key);
@@ -271,6 +277,11 @@ export function buildGraph(input: GraphInput): ListeningGraph {
         allTimestamps.length > 0 ? new Date(minTs * 1000).toISOString() : "";
     const to =
         allTimestamps.length > 0 ? new Date(maxTs * 1000).toISOString() : "";
+
+    // Sort each node's playDates chronologically
+    for (const node of Object.values(nodes)) {
+        node.playDates.sort();
+    }
 
     return {
         nodes,

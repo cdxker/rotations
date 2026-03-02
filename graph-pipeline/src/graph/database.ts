@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS nodes (
     page_rank REAL,
     cluster_id INTEGER,
     image_url TEXT,
-    source_plays TEXT
+    source_plays TEXT,
+    play_dates TEXT NOT NULL DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS edges (
@@ -56,6 +57,7 @@ export class GraphDatabase {
         const migrations = [
             "ALTER TABLE nodes ADD COLUMN image_url TEXT",
             "ALTER TABLE nodes ADD COLUMN source_plays TEXT",
+            "ALTER TABLE nodes ADD COLUMN play_dates TEXT NOT NULL DEFAULT '[]'",
         ];
         for (const sql of migrations) {
             try {
@@ -80,8 +82,8 @@ export class GraphDatabase {
      */
     saveGraph(graph: ListeningGraph): void {
         const upsertNode = this.db.prepare(`
-            INSERT INTO nodes (song_key, name, artists, album_name, spotify_id, lastfm_url, track_id, total_plays, sources, page_rank, cluster_id, image_url, source_plays)
-            VALUES (@songKey, @name, @artists, @albumName, @spotifyId, @lastfmUrl, @trackId, @totalPlays, @sources, @pageRank, @clusterId, @imageUrl, @sourcePlays)
+            INSERT INTO nodes (song_key, name, artists, album_name, spotify_id, lastfm_url, track_id, total_plays, sources, page_rank, cluster_id, image_url, source_plays, play_dates)
+            VALUES (@songKey, @name, @artists, @albumName, @spotifyId, @lastfmUrl, @trackId, @totalPlays, @sources, @pageRank, @clusterId, @imageUrl, @sourcePlays, @playDates)
             ON CONFLICT(song_key) DO UPDATE SET
                 name = COALESCE(excluded.name, nodes.name),
                 artists = excluded.artists,
@@ -94,7 +96,8 @@ export class GraphDatabase {
                 page_rank = COALESCE(excluded.page_rank, nodes.page_rank),
                 cluster_id = COALESCE(excluded.cluster_id, nodes.cluster_id),
                 image_url = COALESCE(excluded.image_url, nodes.image_url),
-                source_plays = COALESCE(excluded.source_plays, nodes.source_plays)
+                source_plays = COALESCE(excluded.source_plays, nodes.source_plays),
+                play_dates = excluded.play_dates
         `);
 
         const upsertEdge = this.db.prepare(`
@@ -159,6 +162,7 @@ export class GraphDatabase {
                     sourcePlays: mergedSourcePlays
                         ? JSON.stringify(mergedSourcePlays)
                         : null,
+                    playDates: JSON.stringify(node.playDates),
                 });
             }
 
@@ -324,6 +328,7 @@ export class GraphDatabase {
             sourcePlays: row.source_plays
                 ? JSON.parse(row.source_plays)
                 : undefined,
+            playDates: row.play_dates ? JSON.parse(row.play_dates) : [],
         };
     }
 
@@ -348,6 +353,7 @@ interface NodeRow {
     cluster_id: number | null;
     image_url: string | null;
     source_plays: string | null;
+    play_dates: string | null;
 }
 
 /** Row shape from the edges table. */

@@ -62,6 +62,8 @@ export interface GraphNode {
     pageRank?: number;
     clusterId?: number;
     imageUrl?: string;
+    /** ISO 8601 timestamps of every play across all sources, chronologically sorted. */
+    playDates: string[];
 }
 
 export interface GraphMetadata {
