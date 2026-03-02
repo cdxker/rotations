@@ -39,7 +39,79 @@ export function calculateWeightedMdsPositions(
     dijkstraSingleSource(i, n, adj, dist)
   }
 
-  return mdsFromDistances(keys, dist, n)
+  // Log-scale distances to compress the extreme range caused by 1/weight.
+  // This prevents huge gaps between loosely connected nodes while still
+  // keeping relative ordering intact.
+  for (let k = 0; k < n * n; k++) {
+    if (dist[k] > 0 && isFinite(dist[k])) {
+      dist[k] = Math.log1p(dist[k])
+    }
+  }
+
+  const positions = mdsFromDistances(keys, dist, n)
+
+  // Post-process: push overlapping nodes apart so every node is visible.
+  spreadOverlappingNodes(positions, 30)
+
+  return positions
+}
+
+/**
+ * Iteratively push nodes apart that are closer than `minDist`,
+ * then re-center the layout.
+ */
+function spreadOverlappingNodes(
+  positions: Map<string, { x: number; y: number }>,
+  minDist: number,
+): void {
+  const nodes: [string, { x: number; y: number }][] = Array.from(
+    positions.entries(),
+  )
+  const n = nodes.length
+  if (n < 2) return
+
+  const ITERATIONS = 50
+  const STRENGTH = 0.5
+
+  for (let iter = 0; iter < ITERATIONS; iter++) {
+    let anyOverlap = false
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const a = nodes[i][1]
+        const b = nodes[j][1]
+        const dx = b.x - a.x
+        const dy = b.y - a.y
+        const d = Math.sqrt(dx * dx + dy * dy)
+        if (d < minDist) {
+          anyOverlap = true
+          const overlap = minDist - d
+          const push = (overlap * STRENGTH) / 2
+          // Use a random-ish angle when nodes are exactly coincident
+          const nx = d > 0.001 ? dx / d : Math.cos(i + j)
+          const ny = d > 0.001 ? dy / d : Math.sin(i + j)
+          a.x -= nx * push
+          a.y -= ny * push
+          b.x += nx * push
+          b.y += ny * push
+        }
+      }
+    }
+    if (!anyOverlap) break
+  }
+
+  // Re-center around origin
+  let cx = 0,
+    cy = 0
+  for (const [, p] of nodes) {
+    cx += p.x
+    cy += p.y
+  }
+  cx /= n
+  cy /= n
+  for (const [, p] of nodes) {
+    p.x -= cx
+    p.y -= cy
+  }
 }
 
 /** Simple single-source Dijkstra writing into the dist matrix at row `src`. */

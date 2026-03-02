@@ -66,7 +66,6 @@ function toGraphology(
   }
 
   for (const [key, node] of entries) {
-    const importance = (node.pageRank ?? 0) / maxPageRank
     graph.addNode(key, {
       label: `${node.artists[0] ?? "Unknown"} — ${node.name}`,
       artists: node.artists,
@@ -77,6 +76,7 @@ function toGraphology(
       totalPlays: node.totalPlays,
       sources: node.sources,
       pageRank: node.pageRank ?? 0,
+      playDates: node.playDates ?? [],
       size: nodeSize(node.totalPlays, maxPlays),
       color: "#ffffff", // placeholder, overwritten by component coloring
       x: 0,

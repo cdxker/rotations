@@ -17,6 +17,7 @@ export interface GraphNode {
   totalPlays: number
   sources: ListeningSource[]
   pageRank: number
+  playDates: string[]
 }
 
 /** Metadata about the graph export. */
@@ -49,6 +50,7 @@ export interface NodeAttributes {
   totalPlays: number
   sources: string[]
   pageRank: number
+  playDates: string[]
   size: number
   color: string
   x: number

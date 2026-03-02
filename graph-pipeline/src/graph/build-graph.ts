@@ -74,6 +74,7 @@ function getOrCreateNode(
             previous: {} as Record<SongKey, number>,
             totalPlays: 0,
             sources: [],
+            playDates: [],
         };
         nodes[key] = node;
     }
@@ -131,6 +132,7 @@ function processLastfmScrobbles(
             scrobble.imageUrl,
         );
         node.totalPlays++;
+        node.playDates.push(new Date(scrobble.timestamp * 1000).toISOString());
         addSource(node, "lastfm");
         keys.push(key);
         timestamps.push(scrobble.timestamp);
@@ -170,6 +172,7 @@ function processSpotifyRecentTracks(
             track.imageUrl,
         );
         node.totalPlays++;
+        node.playDates.push(new Date(track.playedAt).toISOString());
         node.spotifyId = node.spotifyId ?? track.spotifyId;
         addSource(node, "spotify-recent");
         keys.push(key);
@@ -274,6 +277,11 @@ export function buildGraph(input: GraphInput): ListeningGraph {
         allTimestamps.length > 0 ? new Date(minTs * 1000).toISOString() : "";
     const to =
         allTimestamps.length > 0 ? new Date(maxTs * 1000).toISOString() : "";
+
+    // Sort each node's playDates chronologically
+    for (const node of Object.values(nodes)) {
+        node.playDates.sort();
+    }
 
     return {
         nodes,
