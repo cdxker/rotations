@@ -91,7 +91,7 @@ function App() {
   const { state, error } = useGraph()
   const [layout, setLayout] = useState<LayoutMode>('pagerank')
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
-  const [isDark, setIsDark] = useState(false)
+  const [isDark, setIsDark] = useState(true)
 
   // Toggle .dark class on <html> so dark: variants work everywhere
   useEffect(() => {
@@ -108,25 +108,25 @@ function App() {
       </div>
       <div className="absolute top-4 right-4 z-10 flex gap-2">
         <button
-          className={`px-3 py-1.5 rounded text-sm ${layout === 'pagerank' ? 'bg-neutral-200 dark:bg-neutral-800 text-black dark:text-white' : 'bg-neutral-800 dark:bg-white text-white dark:text-black'}`}
+          className={`px-3 py-1.5  text-sm ${layout === 'pagerank' ? 'bg-neutral-200 dark:bg-neutral-800 text-black dark:text-white' : 'bg-neutral-800 dark:bg-white text-white dark:text-black'}`}
           onClick={() => setLayout('pagerank')}
         >
           PageRank
         </button>
         <button
-          className={`px-3 py-1.5 rounded text-sm ${layout === 'mds' ? 'bg-neutral-200 dark:bg-neutral-800 text-black dark:text-white' : 'bg-neutral-800 dark:bg-white text-white dark:text-black'}`}
+          className={`px-3 py-1.5  text-sm ${layout === 'mds' ? 'bg-neutral-200 dark:bg-neutral-800 text-black dark:text-white' : 'bg-neutral-800 dark:bg-white text-white dark:text-black'}`}
           onClick={() => setLayout('mds')}
         >
           MDS
         </button>
         <button
-          className={`px-3 py-1.5 rounded text-sm ${layout === 'weighted-mds' ? 'bg-neutral-200 dark:bg-neutral-800 text-black dark:text-white' : 'bg-neutral-800 dark:bg-white text-white dark:text-black'}`}
+          className={`px-3 py-1.5  text-sm ${layout === 'weighted-mds' ? 'bg-neutral-200 dark:bg-neutral-800 text-black dark:text-white' : 'bg-neutral-800 dark:bg-white text-white dark:text-black'}`}
           onClick={() => setLayout('weighted-mds')}
         >
           Weighted MDS
         </button>
         <button
-          className="px-3 py-1.5 rounded text-sm bg-neutral-800 dark:bg-white text-white dark:text-black"
+          className="px-3 py-1.5  text-sm bg-neutral-800 dark:bg-white text-white dark:text-black"
           onClick={() => setIsDark(!isDark)}
         >
           {isDark ? <SunIcon className="size-4" /> : <MoonIcon className="size-4" />}
