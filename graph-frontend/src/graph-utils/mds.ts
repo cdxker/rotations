@@ -1,14 +1,13 @@
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 import type Graph from "graphology"
 import { singleSourceLength } from "graphology-shortest-path/unweighted"
+import type { NodeAttributes, EdgeAttributes } from "#/lib/types"
 
 /**
  * Compute 2D positions for graph nodes using Classical (Torgerson) MDS
  * on all-pairs shortest-path hop distances.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function mdsLayout(
-  graph: Graph<any, any>,
+export function calculateMdsPositions(
+  graph: Graph<NodeAttributes, EdgeAttributes>,
 ): Map<string, { x: number; y: number }> {
   const keys = graph.nodes()
   const n = keys.length
@@ -19,7 +18,6 @@ export function mdsLayout(
 
   // --- 1. All-pairs shortest path (BFS, undirected hops) ---
   const dist = new Float64Array(n * n)
-  // Default: Infinity for unreachable pairs
   dist.fill(Infinity)
   for (let i = 0; i < n; i++) dist[i * n + i] = 0
 
@@ -45,11 +43,9 @@ export function mdsLayout(
   }
 
   // --- 2. Classical MDS (double-centering on squared distances) ---
-  // D² matrix
   const dsq = new Float64Array(n * n)
   for (let k = 0; k < n * n; k++) dsq[k] = dist[k] * dist[k]
 
-  // Row means, column means, grand mean
   const rowMean = new Float64Array(n)
   const colMean = new Float64Array(n)
   let grandMean = 0
@@ -98,7 +94,6 @@ function powerIterationTop2(
     mat: Float64Array,
   ): { value: number; vector: Float64Array } {
     let v = new Float64Array(n)
-    // Seed with pseudo-random values
     for (let i = 0; i < n; i++) v[i] = Math.sin(i * 0.7 + 1.3)
     normalize(v)
 
@@ -108,13 +103,12 @@ function powerIterationTop2(
       eigenvalue = dot(v, Mv, n)
       normalize(Mv)
       const diff = maxAbsDiff(Mv, v, n)
-      v = Mv
+      v = Mv as Float64Array<ArrayBuffer>
       if (diff < TOL) break
     }
     return { value: eigenvalue, vector: v }
   }
 
-  // First eigenvector
   const e1 = topEigen(M)
 
   // Deflate: M' = M - λ₁ v₁ v₁ᵀ
@@ -126,10 +120,8 @@ function powerIterationTop2(
     }
   }
 
-  // Second eigenvector
   const e2 = topEigen(deflated)
 
-  // Scale eigenvectors by sqrt(eigenvalue)
   const sx = Math.sqrt(Math.max(0, e1.value))
   const sy = Math.sqrt(Math.max(0, e2.value))
 

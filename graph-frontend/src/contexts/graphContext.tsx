@@ -6,7 +6,6 @@ import {
   type ReactNode,
 } from "react"
 import Graph from "graphology"
-import { mdsLayout } from "#/layouts/mdsLayout"
 import type { EdgeAttributes, ListeningGraph, NodeAttributes } from "#/lib/types"
 
 const GRAPH_API_BASE =
@@ -81,13 +80,6 @@ function toGraphology(
         color: `rgba(255, 255, 255, ${Math.min(0.25, 0.03 + weight * 0.02)})`,
       })
     }
-  }
-
-  // Compute MDS positions from hop distances
-  const positions = mdsLayout(graph)
-  for (const [key, pos] of positions) {
-    graph.setNodeAttribute(key, "x", pos.x * 500)
-    graph.setNodeAttribute(key, "y", pos.y * 500)
   }
 
   return graph
