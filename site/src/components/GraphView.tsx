@@ -20,7 +20,6 @@ function GraphInner({
     focusedCluster,
     pathNodes,
     pathEdges,
-    depthMode,
     filter,
     onStatsChange,
     navigateTarget,
@@ -46,7 +45,6 @@ function GraphInner({
     focusedCluster: number | null
     pathNodes?: Set<string>
     pathEdges?: Set<string>
-    depthMode: boolean
     filter: FilterState
     onStatsChange: (stats: {
         visibleNodes: number
@@ -198,7 +196,6 @@ function GraphInner({
             focusedCluster={focusedCluster}
             pathNodes={pathNodes}
             pathEdges={pathEdges}
-            depthMode={depthMode}
             filter={filter}
             onStatsChange={onStatsChange}
         />
@@ -228,7 +225,6 @@ export default function GraphView() {
         maxPlays: 200,
         maxEdgeWeight: 50,
     })
-    const [depthMode, setDepthMode] = useState(false)
     const clearNavigateTarget = useCallback(() => setNavigateTarget(null), [])
 
     return (
@@ -258,7 +254,6 @@ export default function GraphView() {
                     onMouseMove={setMousePos}
                     hiddenClusters={hiddenClusters}
                     focusedCluster={focusedCluster}
-                    depthMode={depthMode}
                     filter={filter}
                     onStatsChange={setFilterStats}
                     navigateTarget={navigateTarget}
@@ -266,17 +261,6 @@ export default function GraphView() {
                 />
                 <div className="absolute top-12 left-4 z-20 pointer-events-auto flex items-start gap-2">
                     <SearchBarInner onSelect={setNavigateTarget} />
-                    <button
-                        onClick={() => setDepthMode((d) => !d)}
-                        className={`px-3 py-1.5 rounded-md text-xs font-mono transition-colors ${
-                            depthMode
-                                ? "bg-white/20 text-white border border-white/30"
-                                : "bg-white/5 text-white/50 border border-white/10 hover:bg-white/10"
-                        }`}
-                        title="Toggle depth exploration (3 layers)"
-                    >
-                        Depth
-                    </button>
                 </div>
             </SigmaContainer>
 
