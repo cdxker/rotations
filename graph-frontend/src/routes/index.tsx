@@ -23,41 +23,53 @@ function RenderGraph({ layout, dateRange }: { layout: LayoutMode; dateRange: Dat
     }
   }, [graph, layout, loadGraph])
 
-  // Build a set of node keys that fall within the selected date range
-  const matchingNodes = useMemo(() => {
+  // Build a map of node keys → play count within the selected date range
+  const filteredPlayCounts = useMemo(() => {
     if (!dateRange?.from || !graph) return null
     const fromStr = dateRange.from.toISOString().slice(0, 10)
     const toStr = (dateRange.to ?? dateRange.from).toISOString().slice(0, 10)
-    const matches = new Set<string>()
+    const counts = new Map<string, number>()
     graph.forEachNode((key, attrs) => {
-      if (attrs.playDates?.some((d: string) => {
+      let count = 0
+      for (const d of (attrs.playDates ?? [])) {
         const day = d.slice(0, 10)
-        return day >= fromStr && day <= toStr
-      })) {
-        matches.add(key)
+        if (day >= fromStr && day <= toStr) count++
       }
+      if (count > 0) counts.set(key, count)
     })
-    return matches
+    return counts
   }, [dateRange, graph])
 
-  // Update sigma reducers to hide nodes/edges not matching the filter
+  // Pre-compute max plays in range for sizing
+  const maxPlaysInRange = useMemo(() => {
+    if (!filteredPlayCounts) return 1
+    let max = 1
+    for (const count of filteredPlayCounts.values()) {
+      if (count > max) max = count
+    }
+    return max
+  }, [filteredPlayCounts])
+
+  // Update sigma reducers to hide nodes/edges not matching the filter and rescale sizes
   useEffect(() => {
     if (!sigma) return
     const g = sigma.getGraph()
     sigma.setSetting('nodeReducer', (_node: string, data: Record<string, unknown>) => {
-      if (!matchingNodes) return { ...data }
-      if (matchingNodes.has(_node)) return { ...data }
-      return { ...data, hidden: true }
+      if (!filteredPlayCounts) return { ...data }
+      const count = filteredPlayCounts.get(_node)
+      if (!count) return { ...data, hidden: true }
+      const size = 4 + (16 * Math.log(count)) / Math.log(maxPlaysInRange)
+      return { ...data, size }
     })
     sigma.setSetting('edgeReducer', (edge: string, data: Record<string, unknown>) => {
-      if (!matchingNodes) return { ...data }
+      if (!filteredPlayCounts) return { ...data }
       const source = g.source(edge)
       const target = g.target(edge)
-      if (matchingNodes.has(source) && matchingNodes.has(target)) return { ...data }
+      if (filteredPlayCounts.has(source) && filteredPlayCounts.has(target)) return { ...data }
       return { ...data, hidden: true }
     })
     sigma.refresh()
-  }, [matchingNodes, sigma])
+  }, [filteredPlayCounts, maxPlaysInRange, sigma])
 
   return null
 }
