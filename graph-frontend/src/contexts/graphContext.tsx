@@ -6,16 +6,31 @@ import {
   type ReactNode,
 } from "react"
 import Graph from "graphology"
+import { connectedComponents } from "graphology-components"
 import type { EdgeAttributes, ListeningGraph, NodeAttributes } from "#/lib/types"
 
 const GRAPH_API_BASE =
   import.meta.env.VITE_GRAPH_API_URL ?? "http://localhost:3001"
 
-/** Compute a monochrome node color from importance (0–1 scale). */
-function nodeBrightness(importance: number): string {
-  const level = Math.round(64 + 140 * Math.max(0, Math.min(1, importance)))
-  return `rgb(${level}, ${level}, ${level})`
-}
+/** Distinct high-contrast colors for connected components. */
+const COMPONENT_COLORS = [
+  "#ff3366", // hot pink
+  "#00ffcc", // cyan/mint
+  "#ffcc00", // yellow
+  "#7b4dff", // purple
+  "#ff6600", // orange
+  "#00ccff", // sky blue
+  "#ff0099", // magenta
+  "#33ff66", // green
+  "#ff4444", // red
+  "#00ffff", // aqua
+  "#ffff00", // bright yellow
+  "#cc33ff", // violet
+  "#ff8833", // tangerine
+  "#33ccff", // light blue
+  "#66ff33", // lime
+  "#ff3399", // pink
+]
 
 /** Compute node radius from play count using log scale. */
 function nodeSize(totalPlays: number, maxPlays: number): number {
@@ -63,7 +78,7 @@ function toGraphology(
       sources: node.sources,
       pageRank: node.pageRank ?? 0,
       size: nodeSize(node.totalPlays, maxPlays),
-      color: nodeBrightness(importance),
+      color: "#ffffff", // placeholder, overwritten by component coloring
       x: 0,
       y: 0,
     })
@@ -79,6 +94,15 @@ function toGraphology(
         size: Math.max(0.5, Math.min(3, Math.log(weight + 1))),
         color: `rgba(255, 255, 255, ${Math.min(0.25, 0.03 + weight * 0.02)})`,
       })
+    }
+  }
+
+  // Color each disconnected component a different high-contrast color
+  const components = connectedComponents(graph)
+  for (let i = 0; i < components.length; i++) {
+    const color = COMPONENT_COLORS[i % COMPONENT_COLORS.length]
+    for (const key of components[i]) {
+      graph.setNodeAttribute(key, "color", color)
     }
   }
 
