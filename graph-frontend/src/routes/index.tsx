@@ -8,7 +8,7 @@ import setNodePositions, { type LayoutMode } from '../graph-utils/setNodePositio
 
 export const Route = createFileRoute('/')({ component: App })
 
-function LoadGraph({ layout }: { layout: LayoutMode }) {
+function RenderGraph({ layout }: { layout: LayoutMode }) {
   const loadGraph = useLoadGraph()
   const sigma = useSigma()
   const { graph } = useGraph()
@@ -67,7 +67,7 @@ function App() {
           }),
         }}
       >
-        <LoadGraph layout={layout} />
+        <RenderGraph layout={layout} />
       </SigmaContainer>
     </main>
   )
