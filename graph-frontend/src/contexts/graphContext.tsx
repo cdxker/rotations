@@ -92,7 +92,7 @@ function toGraphology(
       graph.addDirectedEdge(fromKey, toKey, {
         weight,
         size: Math.max(0.5, Math.min(3, Math.log(weight + 1))),
-        color: `rgba(255, 255, 255, ${Math.min(0.25, 0.03 + weight * 0.02)})`,
+        color: `rgba(0, 0, 0, ${Math.min(0.6, 0.15 + weight * 0.05)})`,
       })
     }
   }

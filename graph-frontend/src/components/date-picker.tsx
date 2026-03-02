@@ -1,9 +1,7 @@
 import { useState } from "react"
-import { addDays, addMonths, addYears, differenceInCalendarDays, format } from "date-fns"
-import { Calendar as CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
+import { addDays, addMonths, addYears, format } from "date-fns"
 import { type DateRange } from "react-day-picker"
 
-import { cn } from "#/lib/utils"
 import { Button } from "#/components/ui/button"
 import { Calendar } from "#/components/ui/calendar"
 import {
@@ -13,6 +11,7 @@ import {
 } from "#/components/ui/popover"
 
 const PRESETS = [
+  { label: "Today", range: () => { const d = new Date(); return { from: d, to: d } } },
   { label: "Past 2 days", range: () => ({ from: addDays(new Date(), -2), to: new Date() }) },
   { label: "Past week", range: () => ({ from: addDays(new Date(), -7), to: new Date() }) },
   { label: "Past month", range: () => ({ from: addMonths(new Date(), -1), to: new Date() }) },
@@ -23,174 +22,103 @@ const PRESETS = [
 interface DatePickerProps {
   dateRange: DateRange | undefined
   onDateRangeChange: (range: DateRange | undefined) => void
-  /** Sorted array of all unique play date strings (YYYY-MM-DD) across the graph. */
-  allPlayDays: string[]
 }
 
 function formatRange(range: DateRange | undefined): string {
-  if (!range?.from) return "All time"
-  if (!range.to) return format(range.from, "LLL dd, y")
-  return `${format(range.from, "LLL dd, y")} - ${format(range.to, "LLL dd, y")}`
+  if (!range?.from) return ""
+  if (!range.to || format(range.from, "PP") === format(range.to, "PP")) return format(range.from, "LLL dd, y")
+  return `${format(range.from, "LLL dd, y")} – ${format(range.to, "LLL dd, y")}`
 }
 
-/** Convert a YYYY-MM-DD string to a Date (local midnight). */
-function dayToDate(day: string): Date {
-  const [y, m, d] = day.split("-").map(Number)
-  return new Date(y, m - 1, d)
-}
-
-function toDay(date: Date): string {
-  return date.toISOString().slice(0, 10)
-}
-
-export function DatePicker({ dateRange, onDateRangeChange, allPlayDays }: DatePickerProps) {
+export function DatePicker({ dateRange, onDateRangeChange }: DatePickerProps) {
   const [open, setOpen] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
+  const [activeLabel, setActiveLabel] = useState<string>("All time")
 
-  function jumpToNextPlay() {
-    if (!dateRange?.from || allPlayDays.length === 0) {
-      // No range — jump to the latest play date
-      if (allPlayDays.length > 0) {
-        const d = dayToDate(allPlayDays[allPlayDays.length - 1])
-        onDateRangeChange({ from: d, to: d })
-      }
-      return
-    }
-
-    const rangeDuration = differenceInCalendarDays(dateRange.to ?? dateRange.from, dateRange.from)
-    const currentTo = toDay(dateRange.to ?? dateRange.from)
-
-    // Find the first play day strictly after the current range end
-    const nextDay = allPlayDays.find((d) => d > currentTo)
-    if (!nextDay) return // already at the latest
-
-    const newFrom = dayToDate(nextDay)
-    onDateRangeChange({ from: newFrom, to: addDays(newFrom, rangeDuration) })
-  }
-
-  function jumpToPrevPlay() {
-    if (!dateRange?.from || allPlayDays.length === 0) {
-      // No range — jump to the earliest play date
-      if (allPlayDays.length > 0) {
-        const d = dayToDate(allPlayDays[0])
-        onDateRangeChange({ from: d, to: d })
-      }
-      return
-    }
-
-    const rangeDuration = differenceInCalendarDays(dateRange.to ?? dateRange.from, dateRange.from)
-    const currentFrom = toDay(dateRange.from)
-
-    // Find the last play day strictly before the current range start
-    let prevDay: string | undefined
-    for (let i = allPlayDays.length - 1; i >= 0; i--) {
-      if (allPlayDays[i] < currentFrom) {
-        prevDay = allPlayDays[i]
-        break
-      }
-    }
-    if (!prevDay) return // already at the earliest
-
-    const newTo = dayToDate(prevDay)
-    const newFrom = addDays(newTo, -rangeDuration)
-    onDateRangeChange({ from: newFrom, to: newTo })
+  function selectPreset(label: string, range: DateRange | undefined) {
+    setActiveLabel(label)
+    onDateRangeChange(range)
+    setOpen(false)
   }
 
   return (
-    <div className="flex items-center gap-1">
-      <Button
-        variant="outline"
-        size="icon"
-        className="bg-neutral-900 border-neutral-700 text-white hover:bg-neutral-800 hover:text-white"
-        onClick={jumpToPrevPlay}
-      >
-        <ChevronLeftIcon className="size-4" />
-      </Button>
-      <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) setShowCalendar(false) }}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            className={cn(
-              "w-[280px] justify-start text-left font-normal",
-              "bg-neutral-900 border-neutral-700 text-white hover:bg-neutral-800 hover:text-white",
-              !dateRange && "text-neutral-400",
-            )}
-          >
-            <CalendarIcon className="size-4" />
-            {formatRange(dateRange)}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0 bg-neutral-900 border-neutral-700" align="start">
-          {!showCalendar ? (
-            <div className="flex flex-col p-2 gap-1">
-              {PRESETS.map((preset) => (
+    <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) setShowCalendar(false) }}>
+      <PopoverTrigger asChild>
+        <button className="text-left cursor-pointer">
+          <div className="text-black dark:text-white text-sm font-medium">{activeLabel}</div>
+          {dateRange?.from && (
+            <div className="text-neutral-600 dark:text-neutral-500 text-xs">{formatRange(dateRange)}</div>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0 bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-700" align="start">
+        {!showCalendar ? (
+          <div className="flex flex-col p-2 gap-1">
+            {PRESETS.map((preset) => (
+              <Button
+                key={preset.label}
+                variant="ghost"
+                className="justify-start text-black dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                onClick={() => selectPreset(preset.label, preset.range())}
+              >
+                {preset.label}
+              </Button>
+            ))}
+            <Button
+              variant="ghost"
+              className="justify-start text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              onClick={() => selectPreset("All time", undefined)}
+            >
+              All time
+            </Button>
+            <div className="border-t border-neutral-200 dark:border-neutral-700 my-1" />
+            <Button
+              variant="ghost"
+              className="justify-start text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              onClick={() => setShowCalendar(true)}
+            >
+              Custom range...
+            </Button>
+          </div>
+        ) : (
+          <>
+            <Calendar
+              mode="range"
+              defaultMonth={dateRange?.from}
+              selected={dateRange}
+              onSelect={(range) => {
+                onDateRangeChange(range)
+                if (range?.from && range?.to) {
+                  setActiveLabel("Custom")
+                }
+              }}
+              numberOfMonths={2}
+              className="bg-white dark:bg-neutral-900 text-black dark:text-white"
+            />
+            <div className="p-2 border-t border-neutral-200 dark:border-neutral-700 flex gap-2">
+              <Button
+                variant="ghost"
+                className="flex-1 text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                onClick={() => setShowCalendar(false)}
+              >
+                Back
+              </Button>
+              {dateRange?.from && dateRange?.to && (
                 <Button
-                  key={preset.label}
                   variant="ghost"
-                  className="justify-start text-white hover:bg-neutral-800"
+                  className="flex-1 text-black dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800"
                   onClick={() => {
-                    onDateRangeChange(preset.range())
+                    setActiveLabel("Custom")
                     setOpen(false)
                   }}
                 >
-                  {preset.label}
+                  Done
                 </Button>
-              ))}
-              <Button
-                variant="ghost"
-                className="justify-start text-neutral-400 hover:text-white hover:bg-neutral-800"
-                onClick={() => {
-                  onDateRangeChange(undefined)
-                  setOpen(false)
-                }}
-              >
-                All time
-              </Button>
-              <div className="border-t border-neutral-700 my-1" />
-              <Button
-                variant="ghost"
-                className="justify-start text-neutral-400 hover:text-white hover:bg-neutral-800"
-                onClick={() => setShowCalendar(true)}
-              >
-                Custom range...
-              </Button>
-            </div>
-          ) : (
-            <>
-              <Calendar
-                mode="range"
-                defaultMonth={dateRange?.from}
-                selected={dateRange}
-                onSelect={onDateRangeChange}
-                numberOfMonths={2}
-                className="bg-neutral-900 text-white"
-              />
-              {dateRange && (
-                <div className="p-2 border-t border-neutral-700">
-                  <Button
-                    variant="ghost"
-                    className="w-full text-neutral-400 hover:text-white hover:bg-neutral-800"
-                    onClick={() => {
-                      onDateRangeChange(undefined)
-                      setOpen(false)
-                    }}
-                  >
-                    Reset to all time
-                  </Button>
-                </div>
               )}
-            </>
-          )}
-        </PopoverContent>
-      </Popover>
-      <Button
-        variant="outline"
-        size="icon"
-        className="bg-neutral-900 border-neutral-700 text-white hover:bg-neutral-800 hover:text-white"
-        onClick={jumpToNextPlay}
-      >
-        <ChevronRightIcon className="size-4" />
-      </Button>
-    </div>
+            </div>
+          </>
+        )}
+      </PopoverContent>
+    </Popover>
   )
 }
