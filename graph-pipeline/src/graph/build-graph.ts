@@ -6,6 +6,8 @@ import {
     toSongKey,
 } from "./types.js";
 
+const ONE_HOUR_IN_SESCONDS = 60 * 60;
+
 /** A single scrobble from Last.fm's user.getRecentTracks API. */
 export interface RawScrobble {
     artist: string;
@@ -134,9 +136,10 @@ function processLastfmScrobbles(
         timestamps.push(scrobble.timestamp);
     }
 
-    // Create edges from consecutive pairs
     for (let i = 0; i < keys.length - 1; i++) {
-        addEdge(nodes, keys[i]!, keys[i + 1]!);
+        if (timestamps[i + 1]! - timestamps[i]! <= ONE_HOUR_IN_SESCONDS) {
+            addEdge(nodes, keys[i]!, keys[i + 1]!);
+        }
     }
 
     return { totalPlays: keys.length, timestamps };
