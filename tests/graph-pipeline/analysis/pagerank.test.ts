@@ -1,29 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { computePageRank, getTopByPageRank } from "./pagerank.js";
-import type { ListeningGraph, SongKey, GraphNode } from "../graph/types.js";
-
-function makeNode(overrides: Partial<GraphNode> = {}): GraphNode {
-    return {
-        name: "Test",
-        artists: ["Artist"],
-        next: {} as Record<SongKey, number>,
-        previous: {} as Record<SongKey, number>,
-        totalPlays: 1,
-        sources: ["lastfm"],
-        ...overrides,
-    };
-}
-
-function makeGraph(nodes: Record<string, GraphNode>): ListeningGraph {
-    return {
-        nodes: nodes as Record<SongKey, GraphNode>,
-        metadata: {
-            totalScrobbles: 0,
-            dateRange: { from: "", to: "" },
-            exportTimestamp: "",
-        },
-    };
-}
+import { computePageRank, getTopByPageRank } from "../../../graph-pipeline/src/analysis/pagerank.js";
+import type { SongKey } from "../../../graph-pipeline/src/graph/types.js";
+import { makeNode, makeGraph } from "../test-helpers.js";
 
 describe("computePageRank", () => {
     it("handles empty graph", () => {

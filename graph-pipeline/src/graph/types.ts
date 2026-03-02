@@ -28,24 +28,14 @@ export type SongKey = `${string}::${string}`;
  */
 export type TrackId = `track-${string}`;
 
-/** Data source that contributed a scrobble or track ordering. */
 export type ListeningSource = "lastfm" | "spotify-recent" | "spotify-playlist";
 
 /** A node in the listening graph representing a single song. */
 export interface GraphNode {
-    /** Display name of the track. */
     name: string;
-
-    /** Artist name(s). */
     artists: string[];
-
-    /** Album name, if known. */
     albumName?: string;
-
-    /** Spotify track ID, if available. */
     spotifyId?: string;
-
-    /** Last.fm track URL, if available. */
     lastfmUrl?: string;
 
     /**
@@ -66,43 +56,19 @@ export interface GraphNode {
      */
     previous: Record<SongKey, number>;
 
-    /** Total number of plays across all sources. */
     totalPlays: number;
-
-    /** Which data sources contributed plays for this song. */
     sources: ListeningSource[];
-
-    /** Play counts broken down by source. */
     sourcePlays?: Partial<Record<ListeningSource, number>>;
-
-    /** PageRank score, populated by the analysis phase. */
     pageRank?: number;
-
-    /** Cluster ID, populated by community detection in the analysis phase. */
     clusterId?: number;
-
-    /** Album/track artwork URL, if available from Spotify or Last.fm. */
     imageUrl?: string;
 }
 
-/** Metadata about the graph export. */
 export interface GraphMetadata {
-    /** Total number of scrobbles / play events ingested. */
     totalScrobbles: number;
-
-    /** Date range of the listening history. */
-    dateRange: {
-        from: string;
-        to: string;
-    };
-
-    /** ISO timestamp of when the graph was exported. */
+    dateRange: { from: string; to: string };
     exportTimestamp: string;
-
-    /** Last.fm username, if Last.fm data was ingested. */
     lastfmUsername?: string;
-
-    /** Spotify display name, if Spotify data was ingested. */
     spotifyUsername?: string;
 }
 

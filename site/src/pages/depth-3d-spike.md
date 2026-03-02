@@ -9,6 +9,7 @@ The depth view feature expands from a selected node to 3 outward layers with pro
 **Approach:** Use brightness hierarchy, opacity gradients, and z-index layering within Sigma's existing 2D WebGL renderer to convey depth.
 
 **Pros:**
+
 - Already implemented and working — zero additional integration cost
 - Sigma's WebGL renderer handles 10k+ nodes at 60fps; no regression risk
 - Monochrome brightness hierarchy naturally conveys "nearness" (brighter = closer)
@@ -18,6 +19,7 @@ The depth view feature expands from a selected node to 3 outward layers with pro
 - Sigma's node/edge reducers are re-evaluated only on state change, not per frame
 
 **Cons:**
+
 - No true perspective or parallax — depth is implied, not spatial
 - Limited to brightness/opacity for layer differentiation (no z-axis rotation)
 
@@ -26,11 +28,13 @@ The depth view feature expands from a selected node to 3 outward layers with pro
 **Approach:** Render the depth neighborhood in a 3D scene with concentric shells at increasing z-distances.
 
 **Pros:**
+
 - True spatial depth via perspective projection
 - Orbit controls give users intuitive 3D exploration
 - Visually striking; differentiates the product
 
 **Cons:**
+
 - Three.js adds ~600KB to the bundle (4x current graph viz size)
 - Would require reimplementing all interactions: click, hover, tooltips, search overlay
 - Force-directed layout in 3D is significantly more expensive (O(N²) per tick vs Sigma's static layout)
@@ -48,6 +52,7 @@ The current implementation already achieves the design goal: users can visually 
 A 3D prototype would cost 2-3 days of integration work, add significant bundle weight, and require duplicating all interaction handlers. The ROI is low given that the 2D depth cues are already effective.
 
 **If 3D is revisited later**, the recommended path would be:
+
 1. Feature-flag a standalone `/graph-3d` page (not integrated into the main view)
 2. Use `three-forcegraph` with a subset of the graph (depth neighborhood only, not full graph)
 3. Keep Sigma as the primary renderer; 3D would be an optional exploration tool

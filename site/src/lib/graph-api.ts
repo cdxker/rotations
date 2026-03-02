@@ -143,8 +143,8 @@ export async function fetchPath(
 export function filterGraph(graph: ListeningGraph, filter: GraphFilter): ListeningGraph {
     const { minPlays, sources, clusterIds } = filter
 
-    const filteredNodes: Record<string, GraphNode> = {}
-
+    // First pass: collect surviving keys
+    const filteredKeys = new Set<string>()
     for (const [key, node] of Object.entries(graph.nodes)) {
         if (minPlays !== undefined && node.totalPlays < minPlays) continue
         if (sources?.length && !node.sources.some((s) => sources.includes(s))) continue
@@ -153,24 +153,21 @@ export function filterGraph(graph: ListeningGraph, filter: GraphFilter): Listeni
             (node.clusterId === undefined || !clusterIds.includes(node.clusterId))
         )
             continue
-        filteredNodes[key] = node
+        filteredKeys.add(key)
     }
 
-    // Prune edges to only reference nodes that survived filtering
-    const filteredKeys = new Set(Object.keys(filteredNodes))
+    // Second pass: copy surviving nodes with pruned edges
     const prunedNodes: Record<string, GraphNode> = {}
-
-    for (const [key, node] of Object.entries(filteredNodes)) {
+    for (const key of filteredKeys) {
+        const node = graph.nodes[key as SongKey]!
         const prunedNext: Record<string, number> = {}
         for (const [toKey, weight] of Object.entries(node.next)) {
             if (filteredKeys.has(toKey)) prunedNext[toKey] = weight
         }
-
         const prunedPrevious: Record<string, number> = {}
         for (const [fromKey, weight] of Object.entries(node.previous)) {
             if (filteredKeys.has(fromKey)) prunedPrevious[fromKey] = weight
         }
-
         prunedNodes[key] = {
             ...node,
             next: prunedNext as Record<SongKey, number>,

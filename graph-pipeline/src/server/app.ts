@@ -14,6 +14,18 @@ import { loadLastfmConfig } from "../config.js";
 
 const DATA_DIR = path.join(import.meta.dirname, "../../data");
 
+/** Decode and validate a raw songKey parameter. Throws an object with `error` and `status` if invalid. */
+function parseSongKey(rawKey: string): SongKey {
+    const decoded = decodeURIComponent(rawKey);
+    if (!decoded || !decoded.includes("::")) {
+        throw {
+            error: "Invalid songKey format. Expected: artist::track",
+            status: 400,
+        };
+    }
+    return decoded as SongKey;
+}
+
 export interface ServerConfig {
     dbPath: string;
 }
@@ -72,13 +84,12 @@ export function createApp(config: ServerConfig): Hono {
 
     // GET /graph/node/:songKey — single node with its edges
     app.get("/graph/node/:songKey", (c) => {
-        const songKey = decodeURIComponent(c.req.param("songKey")) as SongKey;
-
-        if (!songKey || !songKey.includes("::")) {
-            return c.json(
-                { error: "Invalid songKey format. Expected: artist::track" },
-                400,
-            );
+        let songKey: SongKey;
+        try {
+            songKey = parseSongKey(c.req.param("songKey"));
+        } catch (e: unknown) {
+            const err = e as { error: string };
+            return c.json({ error: err.error }, 400);
         }
 
         const node = db.getNode(songKey);
@@ -91,13 +102,12 @@ export function createApp(config: ServerConfig): Hono {
 
     // GET /graph/neighbors/:songKey — immediate neighbors (next + previous)
     app.get("/graph/neighbors/:songKey", (c) => {
-        const songKey = decodeURIComponent(c.req.param("songKey")) as SongKey;
-
-        if (!songKey || !songKey.includes("::")) {
-            return c.json(
-                { error: "Invalid songKey format. Expected: artist::track" },
-                400,
-            );
+        let songKey: SongKey;
+        try {
+            songKey = parseSongKey(c.req.param("songKey"));
+        } catch (e: unknown) {
+            const err = e as { error: string };
+            return c.json({ error: err.error }, 400);
         }
 
         const node = db.getNode(songKey);
@@ -170,11 +180,14 @@ export function createApp(config: ServerConfig): Hono {
             );
         }
 
-        if (!from.includes("::") || !to.includes("::")) {
-            return c.json(
-                { error: "Invalid songKey format. Expected: artist::track" },
-                400,
-            );
+        let fromKey: SongKey;
+        let toKey: SongKey;
+        try {
+            fromKey = parseSongKey(from);
+            toKey = parseSongKey(to);
+        } catch (e: unknown) {
+            const err = e as { error: string };
+            return c.json({ error: err.error }, 400);
         }
 
         if (algorithm !== "shortest" && algorithm !== "strongest") {
@@ -187,8 +200,8 @@ export function createApp(config: ServerConfig): Hono {
         const graph = db.loadGraph();
         const result =
             algorithm === "strongest"
-                ? strongestPath(graph, from as SongKey, to as SongKey)
-                : shortestPath(graph, from as SongKey, to as SongKey);
+                ? strongestPath(graph, fromKey, toKey)
+                : shortestPath(graph, fromKey, toKey);
 
         return c.json(result);
     });
@@ -248,7 +261,10 @@ export function createApp(config: ServerConfig): Hono {
             }
             const client = new SpotifyClient(auth);
             const dump = await client.fetchAll();
-            await client.exportToJson(path.join(DATA_DIR, "spotify-dump.json"), dump);
+            await client.exportToJson(
+                path.join(DATA_DIR, "spotify-dump.json"),
+                dump,
+            );
 
             return c.json({
                 status: "complete",

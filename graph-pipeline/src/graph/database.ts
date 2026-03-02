@@ -68,7 +68,9 @@ export class GraphDatabase {
 
     /** Clear all graph data (nodes, edges, metadata) from the database. */
     clearGraph(): void {
-        this.db.exec("DELETE FROM edges; DELETE FROM nodes; DELETE FROM metadata;");
+        this.db.exec(
+            "DELETE FROM edges; DELETE FROM nodes; DELETE FROM metadata;",
+        );
     }
 
     /**
@@ -112,8 +114,12 @@ export class GraphDatabase {
             for (const [songKey, node] of Object.entries(graph.nodes)) {
                 // Merge sources and source_plays with existing
                 const existingRow = this.db
-                    .prepare("SELECT sources, source_plays FROM nodes WHERE song_key = ?")
-                    .get(songKey) as { sources: string; source_plays: string | null } | undefined;
+                    .prepare(
+                        "SELECT sources, source_plays FROM nodes WHERE song_key = ?",
+                    )
+                    .get(songKey) as
+                    | { sources: string; source_plays: string | null }
+                    | undefined;
                 const existingSources: ListeningSource[] = existingRow
                     ? JSON.parse(existingRow.sources)
                     : [];
@@ -124,13 +130,16 @@ export class GraphDatabase {
                 // Merge source_plays additively per source key
                 let mergedSourcePlays: Record<string, number> | null = null;
                 if (node.sourcePlays || existingRow?.source_plays) {
-                    const existing: Record<string, number> = existingRow?.source_plays
-                        ? JSON.parse(existingRow.source_plays)
-                        : {};
-                    const incoming: Record<string, number> = node.sourcePlays ?? {};
+                    const existing: Record<string, number> =
+                        existingRow?.source_plays
+                            ? JSON.parse(existingRow.source_plays)
+                            : {};
+                    const incoming: Record<string, number> =
+                        node.sourcePlays ?? {};
                     mergedSourcePlays = { ...existing };
                     for (const [src, count] of Object.entries(incoming)) {
-                        mergedSourcePlays[src] = (mergedSourcePlays[src] ?? 0) + count;
+                        mergedSourcePlays[src] =
+                            (mergedSourcePlays[src] ?? 0) + count;
                     }
                 }
 
@@ -147,7 +156,9 @@ export class GraphDatabase {
                     pageRank: node.pageRank ?? null,
                     clusterId: node.clusterId ?? null,
                     imageUrl: node.imageUrl ?? null,
-                    sourcePlays: mergedSourcePlays ? JSON.stringify(mergedSourcePlays) : null,
+                    sourcePlays: mergedSourcePlays
+                        ? JSON.stringify(mergedSourcePlays)
+                        : null,
                 });
             }
 
@@ -210,24 +221,7 @@ export class GraphDatabase {
         // Build nodes
         for (const row of nodeRows) {
             const key = row.song_key as SongKey;
-            nodes[key] = {
-                name: row.name,
-                artists: JSON.parse(row.artists),
-                albumName: row.album_name ?? undefined,
-                spotifyId: row.spotify_id ?? undefined,
-                lastfmUrl: row.lastfm_url ?? undefined,
-                trackId: row.track_id
-                    ? (row.track_id as `track-${string}`)
-                    : undefined,
-                next: {} as Record<SongKey, number>,
-                previous: {} as Record<SongKey, number>,
-                totalPlays: row.total_plays,
-                sources: JSON.parse(row.sources),
-                pageRank: row.page_rank ?? undefined,
-                clusterId: row.cluster_id ?? undefined,
-                imageUrl: row.image_url ?? undefined,
-                sourcePlays: row.source_plays ? JSON.parse(row.source_plays) : undefined,
-            };
+            nodes[key] = this.rowToNode(row);
         }
 
         // Build edges
@@ -287,24 +281,10 @@ export class GraphDatabase {
             previous[e.from_key as SongKey] = e.weight;
         }
 
-        return {
-            name: row.name,
-            artists: JSON.parse(row.artists),
-            albumName: row.album_name ?? undefined,
-            spotifyId: row.spotify_id ?? undefined,
-            lastfmUrl: row.lastfm_url ?? undefined,
-            trackId: row.track_id
-                ? (row.track_id as `track-${string}`)
-                : undefined,
-            next,
-            previous,
-            totalPlays: row.total_plays,
-            sources: JSON.parse(row.sources),
-            pageRank: row.page_rank ?? undefined,
-            clusterId: row.cluster_id ?? undefined,
-            imageUrl: row.image_url ?? undefined,
-            sourcePlays: row.source_plays ? JSON.parse(row.source_plays) : undefined,
-        };
+        const node = this.rowToNode(row);
+        node.next = next;
+        node.previous = previous;
+        return node;
     }
 
     /** Get the total number of nodes in the database. */
@@ -321,6 +301,30 @@ export class GraphDatabase {
             .prepare("SELECT COUNT(*) as count FROM edges")
             .get() as { count: number };
         return row.count;
+    }
+
+    /** Convert a database NodeRow into a GraphNode (without edges). */
+    private rowToNode(row: NodeRow): GraphNode {
+        return {
+            name: row.name,
+            artists: JSON.parse(row.artists),
+            albumName: row.album_name ?? undefined,
+            spotifyId: row.spotify_id ?? undefined,
+            lastfmUrl: row.lastfm_url ?? undefined,
+            trackId: row.track_id
+                ? (row.track_id as `track-${string}`)
+                : undefined,
+            next: {} as Record<SongKey, number>,
+            previous: {} as Record<SongKey, number>,
+            totalPlays: row.total_plays,
+            sources: JSON.parse(row.sources),
+            pageRank: row.page_rank ?? undefined,
+            clusterId: row.cluster_id ?? undefined,
+            imageUrl: row.image_url ?? undefined,
+            sourcePlays: row.source_plays
+                ? JSON.parse(row.source_plays)
+                : undefined,
+        };
     }
 
     /** Close the database connection. */

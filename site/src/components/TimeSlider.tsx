@@ -1,5 +1,5 @@
 import { usePlayer } from "@/hooks/PlayerContext"
-import { FastForward, Pause, Play, Rewind, SkipBack, SkipForward } from "lucide-react"
+import { Pause, Play, SkipBack, SkipForward } from "lucide-react"
 import { formatTime } from "@/lib/utils"
 import * as Slider from "@radix-ui/react-slider"
 import { SpotifyStatus } from "./SpotifyStatus"
@@ -83,7 +83,6 @@ export const TimeSlider = ({ expanded, onViewChange }: TimeSliderProps) => {
                             className="cursor-pointer"
                             onClick={handlePrevTrack}
                         />
-                        {/* <Rewind color="#fff" />*/}
                         <div
                             className="rounded-full bg-white text-black px-2 py-2 cursor-pointer"
                             onClick={togglePlayPause}
@@ -91,7 +90,6 @@ export const TimeSlider = ({ expanded, onViewChange }: TimeSliderProps) => {
                             {!isPlaying && <Play />}
                             {isPlaying && <Pause />}
                         </div>
-                        {/*<FastForward color="#fff" />*/}
                         <SkipForward
                             color="#fff"
                             className="cursor-pointer"

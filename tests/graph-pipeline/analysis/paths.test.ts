@@ -1,60 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { shortestPath, strongestPath } from "./paths.js";
-import type { ListeningGraph, SongKey, GraphNode } from "../graph/types.js";
-
-/** Helper to create a minimal graph node. */
-function makeNode(
-    name: string,
-    artist: string,
-    next: Record<string, number> = {},
-    previous: Record<string, number> = {},
-): GraphNode {
-    return {
-        name,
-        artists: [artist],
-        next: next as Record<SongKey, number>,
-        previous: previous as Record<SongKey, number>,
-        totalPlays: 1,
-        sources: ["lastfm"],
-    };
-}
-
-/** Build a test graph from a simple edge list. */
-function buildGraph(edges: Array<[string, string, number]>): ListeningGraph {
-    const nodes: Record<string, GraphNode> = {};
-
-    // Collect all node keys
-    const keys = new Set<string>();
-    for (const [from, to] of edges) {
-        keys.add(from);
-        keys.add(to);
-    }
-
-    // Create nodes
-    for (const key of keys) {
-        const [artist, track] = key.split("::");
-        nodes[key] = makeNode(track!, artist!);
-    }
-
-    // Add edges
-    for (const [from, to, weight] of edges) {
-        nodes[from]!.next[to as SongKey] = weight;
-        nodes[to]!.previous[from as SongKey] = weight;
-    }
-
-    return {
-        nodes: nodes as Record<SongKey, GraphNode>,
-        metadata: {
-            totalScrobbles: 0,
-            dateRange: { from: "", to: "" },
-            exportTimestamp: "",
-        },
-    };
-}
+import { shortestPath, strongestPath } from "../../../graph-pipeline/src/analysis/paths.js";
+import type { SongKey } from "../../../graph-pipeline/src/graph/types.js";
+import { buildTestGraph } from "../test-helpers.js";
 
 describe("shortestPath", () => {
     it("finds direct one-hop path", () => {
-        const graph = buildGraph([["a::x", "b::y", 5]]);
+        const graph = buildTestGraph([["a::x", "b::y", 5]]);
         const result = shortestPath(
             graph,
             "a::x" as SongKey,
@@ -71,7 +22,7 @@ describe("shortestPath", () => {
     it("finds multi-hop shortest path", () => {
         // a -> b -> c -> d (short)
         // a -> e -> f -> g -> h -> d (long)
-        const graph = buildGraph([
+        const graph = buildTestGraph([
             ["a::1", "b::2", 1],
             ["b::2", "c::3", 1],
             ["c::3", "d::4", 1],
@@ -91,7 +42,7 @@ describe("shortestPath", () => {
     });
 
     it("returns not found for disconnected nodes", () => {
-        const graph = buildGraph([
+        const graph = buildTestGraph([
             ["a::1", "b::2", 1],
             ["c::3", "d::4", 1],
         ]);
@@ -105,7 +56,7 @@ describe("shortestPath", () => {
     });
 
     it("handles same start and end", () => {
-        const graph = buildGraph([["a::1", "b::2", 1]]);
+        const graph = buildTestGraph([["a::1", "b::2", 1]]);
         const result = shortestPath(
             graph,
             "a::1" as SongKey,
@@ -117,7 +68,7 @@ describe("shortestPath", () => {
     });
 
     it("returns not found for missing nodes", () => {
-        const graph = buildGraph([["a::1", "b::2", 1]]);
+        const graph = buildTestGraph([["a::1", "b::2", 1]]);
         const result = shortestPath(
             graph,
             "a::1" as SongKey,
@@ -128,7 +79,7 @@ describe("shortestPath", () => {
 
     it("respects directed edges", () => {
         // a -> b exists but b -> a does not
-        const graph = buildGraph([["a::1", "b::2", 1]]);
+        const graph = buildTestGraph([["a::1", "b::2", 1]]);
         const result = shortestPath(
             graph,
             "b::2" as SongKey,
@@ -140,7 +91,7 @@ describe("shortestPath", () => {
 
 describe("strongestPath", () => {
     it("finds direct path", () => {
-        const graph = buildGraph([["a::x", "b::y", 5]]);
+        const graph = buildTestGraph([["a::x", "b::y", 5]]);
         const result = strongestPath(
             graph,
             "a::x" as SongKey,
@@ -154,7 +105,7 @@ describe("strongestPath", () => {
     it("prefers path with higher minimum edge weight", () => {
         // Path 1: a -> b -> d, weights [1, 1] → min = 1
         // Path 2: a -> c -> d, weights [5, 3] → min = 3 (stronger)
-        const graph = buildGraph([
+        const graph = buildTestGraph([
             ["a::1", "b::2", 1],
             ["b::2", "d::4", 1],
             ["a::1", "c::3", 5],
@@ -171,7 +122,7 @@ describe("strongestPath", () => {
     });
 
     it("returns not found for disconnected nodes", () => {
-        const graph = buildGraph([
+        const graph = buildTestGraph([
             ["a::1", "b::2", 1],
             ["c::3", "d::4", 1],
         ]);
@@ -184,7 +135,7 @@ describe("strongestPath", () => {
     });
 
     it("handles same start and end", () => {
-        const graph = buildGraph([["a::1", "b::2", 1]]);
+        const graph = buildTestGraph([["a::1", "b::2", 1]]);
         const result = strongestPath(
             graph,
             "a::1" as SongKey,
@@ -195,7 +146,7 @@ describe("strongestPath", () => {
     });
 
     it("computes totalWeight correctly", () => {
-        const graph = buildGraph([
+        const graph = buildTestGraph([
             ["a::1", "b::2", 3],
             ["b::2", "c::3", 7],
         ]);

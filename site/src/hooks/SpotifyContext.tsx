@@ -1,18 +1,11 @@
-import {
-    createContext,
-    useState,
-    useEffect,
-    useContext,
-    useRef,
-    type ReactNode,
-    useCallback,
-} from "react"
+import { createContext, useState, useEffect, useContext, type ReactNode, useCallback } from "react"
 import type {
     FuckingPlaylist,
     SpotifyPlaylistTracksResponse,
     SpotifyUserProfile,
 } from "@/shared/types"
 import type { SpotifyPlayerInstance } from "@/shared/spotify-sdk"
+import { useSpotifyPlayer } from "./useSpotifyPlayer"
 import { usePlayer } from "./PlayerContext"
 
 export interface SpotifyContextValue {
@@ -32,7 +25,6 @@ interface SpotifyProviderProps {
 export function SpotifyProvider({ children }: SpotifyProviderProps) {
     const [spotifyUser, setSpotifyUser] = useState<SpotifyUserProfile | null>(null)
     const [isLoadingUser, setIsLoadingUser] = useState(true)
-    const playerRef = useRef<SpotifyPlayerInstance | null>(null)
 
     const {
         addPlaylists,
@@ -73,70 +65,31 @@ export function SpotifyProvider({ children }: SpotifyProviderProps) {
         [addPlaylists, addTracks]
     )
 
-    useEffect(() => {
-        if (!spotifyUser) return
+    const handleReady = useCallback(
+        (deviceId: string, player: SpotifyPlayerInstance) => {
+            setSpotifyDeviceId(deviceId)
+            setSpotifyPlayer(player)
+        },
+        [setSpotifyDeviceId, setSpotifyPlayer]
+    )
+    const handleNotReady = useCallback(() => setSpotifyDeviceId(null), [setSpotifyDeviceId])
+    const handleCleanup = useCallback(() => {
+        setSpotifyPlayer(null)
+        setSpotifyDeviceId(null)
+    }, [setSpotifyPlayer, setSpotifyDeviceId])
+    const handlePositionChange = useCallback(
+        (positionMs: number) => setCurrentTimeMs(positionMs),
+        [setCurrentTimeMs]
+    )
 
-        let mounted = true
-
-        const initPlayer = async () => {
-            const res = await fetch("/api/spotify/token")
-            const data = await res.json()
-            if (!data.token || !mounted) return
-
-            const token = data.token
-
-            // Load SDK script if not already loaded
-            if (!document.querySelector('script[src="https://sdk.scdn.co/spotify-player.js"]')) {
-                const script = document.createElement("script")
-                script.src = "https://sdk.scdn.co/spotify-player.js"
-                script.async = true
-                document.body.appendChild(script)
-            }
-
-            window.onSpotifyWebPlaybackSDKReady = () => {
-                if (playerRef.current || !mounted || !window.Spotify) return
-
-                const player = new window.Spotify.Player({
-                    name: "Rotations Player",
-                    getOAuthToken: (cb) => cb(token),
-                    volume: 0.5,
-                })
-
-                player.addListener("ready", (state) => {
-                    const { device_id } = state as { device_id: string }
-                    setSpotifyDeviceId(device_id)
-                })
-
-                player.addListener("not_ready", () => {
-                    setSpotifyDeviceId(null)
-                })
-
-                setInterval(() => {
-                    player.getCurrentState().then((state) => {
-                        if (state) setCurrentTimeMs(state.position)
-                    })
-                }, 250)
-
-                player.connect()
-                playerRef.current = player
-                setSpotifyPlayer(player)
-            }
-
-            // If SDK already loaded, initialize immediately
-            if (window.Spotify) {
-                window.onSpotifyWebPlaybackSDKReady()
-            }
-        }
-
-        initPlayer()
-
-        return () => {
-            mounted = false
-            playerRef.current?.disconnect()
-            playerRef.current = null
-            setSpotifyPlayer(null)
-        }
-    }, [spotifyUser, setSpotifyPlayer, setSpotifyDeviceId, setCurrentTimeMs])
+    useSpotifyPlayer({
+        name: "Rotations Player",
+        enabled: !!spotifyUser,
+        onReady: handleReady,
+        onNotReady: handleNotReady,
+        onCleanup: handleCleanup,
+        positionPolling: { intervalMs: 250, onChange: handlePositionChange },
+    })
 
     const spotifyLogin = () => {
         window.location.href = "/api/spotify/authorize"

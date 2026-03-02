@@ -119,40 +119,18 @@ export class SpotifyAuth {
 
     /** Exchange an authorization code for access + refresh tokens. */
     async exchangeCode(code: string): Promise<SpotifyTokens> {
-        const response = await fetch(SPOTIFY_TOKEN_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                Authorization:
-                    "Basic " +
-                    Buffer.from(
-                        `${this.config.clientId}:${this.config.clientSecret}`,
-                    ).toString("base64"),
-            },
-            body: new URLSearchParams({
+        const data = await this.tokenRequest(
+            {
                 grant_type: "authorization_code",
                 code,
                 redirect_uri: this.redirectUri,
-            }),
-        });
-
-        if (!response.ok) {
-            const body = await response.text();
-            throw new Error(
-                `Spotify token exchange failed (${response.status}): ${body}`,
-            );
-        }
-
-        const data = (await response.json()) as {
-            access_token: string;
-            refresh_token: string;
-            expires_in: number;
-            scope: string;
-        };
+            },
+            "exchange",
+        );
 
         return {
             access_token: data.access_token,
-            refresh_token: data.refresh_token,
+            refresh_token: data.refresh_token!,
             expires_at: Date.now() + data.expires_in * 1000,
             scope: data.scope,
         };
@@ -166,35 +144,13 @@ export class SpotifyAuth {
             );
         }
 
-        const response = await fetch(SPOTIFY_TOKEN_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                Authorization:
-                    "Basic " +
-                    Buffer.from(
-                        `${this.config.clientId}:${this.config.clientSecret}`,
-                    ).toString("base64"),
-            },
-            body: new URLSearchParams({
+        const data = await this.tokenRequest(
+            {
                 grant_type: "refresh_token",
                 refresh_token: this.tokens.refresh_token,
-            }),
-        });
-
-        if (!response.ok) {
-            const body = await response.text();
-            throw new Error(
-                `Spotify token refresh failed (${response.status}): ${body}`,
-            );
-        }
-
-        const data = (await response.json()) as {
-            access_token: string;
-            refresh_token?: string;
-            expires_in: number;
-            scope: string;
-        };
+            },
+            "refresh",
+        );
 
         this.tokens = {
             access_token: data.access_token,
@@ -205,6 +161,47 @@ export class SpotifyAuth {
         };
 
         await this.saveTokens(this.tokens);
+    }
+
+    /**
+     * Perform a token request to the Spotify token endpoint.
+     * Handles auth header, error checking, and JSON parsing.
+     */
+    private async tokenRequest(
+        params: Record<string, string>,
+        label: string,
+    ): Promise<{
+        access_token: string;
+        refresh_token?: string;
+        expires_in: number;
+        scope: string;
+    }> {
+        const response = await fetch(SPOTIFY_TOKEN_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                Authorization:
+                    "Basic " +
+                    Buffer.from(
+                        `${this.config.clientId}:${this.config.clientSecret}`,
+                    ).toString("base64"),
+            },
+            body: new URLSearchParams(params),
+        });
+
+        if (!response.ok) {
+            const body = await response.text();
+            throw new Error(
+                `Spotify token ${label} failed (${response.status}): ${body}`,
+            );
+        }
+
+        return (await response.json()) as {
+            access_token: string;
+            refresh_token?: string;
+            expires_in: number;
+            scope: string;
+        };
     }
 
     /** Load tokens from disk. Returns null if file doesn't exist. */

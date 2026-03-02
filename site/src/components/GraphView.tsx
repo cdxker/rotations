@@ -9,11 +9,6 @@ import { SearchBarInner } from "./graph/SearchBar"
 import { DEFAULT_FILTER } from "./graph/FilterPanel"
 import type { FilterState } from "./graph/FilterPanel"
 
-function graphDebug(...args: unknown[]) {
-    if (typeof window === "undefined") return
-    console.log("[graph-debug]", ...args)
-}
-
 /** Load graph data into Sigma and run ForceAtlas2 layout. */
 function GraphInner({
     onSelectNode,
@@ -25,9 +20,10 @@ function GraphInner({
     focusedCluster,
     pathNodes,
     pathEdges,
-    depthMode,
     filter,
     onStatsChange,
+    navigateTarget,
+    onNavigated,
 }: {
     onSelectNode: (node: SelectedNode | null) => void
     selectedNode: SelectedNode | null
@@ -49,13 +45,14 @@ function GraphInner({
     focusedCluster: number | null
     pathNodes?: Set<string>
     pathEdges?: Set<string>
-    depthMode: boolean
     filter: FilterState
     onStatsChange: (stats: {
         visibleNodes: number
         maxPlays: number
         maxEdgeWeight: number
     }) => void
+    navigateTarget: string | null
+    onNavigated: () => void
 }) {
     const { graph, state, error } = useGraphData()
     const loadGraph = useLoadGraph()
@@ -71,6 +68,38 @@ function GraphInner({
         container.addEventListener("mousemove", handleMouseMove)
         return () => container.removeEventListener("mousemove", handleMouseMove)
     }, [sigma, onMouseMove])
+
+    // Navigate sigma camera to a node
+    useEffect(() => {
+        if (!navigateTarget) return
+
+        const g = sigma.getGraph()
+        if (!g.hasNode(navigateTarget)) {
+            console.debug("[graph-debug]", "navigate: missing target node", {
+                targetNode: navigateTarget,
+            })
+            onNavigated()
+            return
+        }
+
+        console.debug("[graph-debug]", "navigate: begin", {
+            targetNode: navigateTarget,
+            currentSelectedFromPanel: navigateTarget,
+        })
+
+        // Center camera on the node
+        const x = g.getNodeAttribute(navigateTarget, "x")
+        const y = g.getNodeAttribute(navigateTarget, "y")
+        sigma.getCamera().animate({ x, y, ratio: 0.3 }, { duration: 300 })
+
+        // Route programmatic navigation through Sigma's native click pipeline so
+        // sidebar/search navigation and canvas clicks share the same reducer path.
+        sigma.emit("clickNode", { node: navigateTarget } as any)
+        console.debug("[graph-debug]", "navigate: emitted sigma clickNode", {
+            targetNode: navigateTarget,
+        })
+        onNavigated()
+    }, [navigateTarget, sigma, onNavigated])
 
     // Load graph into Sigma when data is ready, auto-focus a random node.
     // Bootstrap reducers are set in the same tick as loadGraph so the graph
@@ -116,7 +145,8 @@ function GraphInner({
         graph.forEachEdge(randomKey, (e) => edgeSet.add(e))
 
         sigma.setSetting("nodeReducer", (node, data) => {
-            if (node === randomKey) return { ...data, color: "#ffffff", highlighted: true, zIndex: 1 }
+            if (node === randomKey)
+                return { ...data, color: "#ffffff", highlighted: true, zIndex: 1 }
             if (neighborSet.has(node)) return { ...data, color: "#999", zIndex: 0 }
             return { ...data, color: "#333", label: "", zIndex: -1 }
         })
@@ -146,28 +176,13 @@ function GraphInner({
         )
     }
 
-    if (state === "mock" && error) {
+    if (state === "error" && error) {
         return (
-            <>
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
-                    <div className="bg-[#181818] border border-white/10 rounded-lg px-4 py-2">
-                        <p className="text-white/50 text-xs font-mono">{error}</p>
-                    </div>
+            <div className="absolute inset-0 flex items-center justify-center z-10">
+                <div className="bg-[#181818] border border-white/10 rounded-lg px-4 py-2">
+                    <p className="text-red-400/70 text-xs font-mono">{error}</p>
                 </div>
-                <GraphEvents
-                    onSelectNode={onSelectNode}
-                    externalSelectedKey={selectedNode?.key ?? null}
-                    onHoverNode={onHoverNode}
-                    onHoverEdge={onHoverEdge}
-                    hiddenClusters={hiddenClusters}
-                    focusedCluster={focusedCluster}
-                    pathNodes={pathNodes}
-                    pathEdges={pathEdges}
-                    depthMode={depthMode}
-                    filter={filter}
-                    onStatsChange={onStatsChange}
-                />
-            </>
+            </div>
         )
     }
 
@@ -181,51 +196,10 @@ function GraphInner({
             focusedCluster={focusedCluster}
             pathNodes={pathNodes}
             pathEdges={pathEdges}
-            depthMode={depthMode}
             filter={filter}
             onStatsChange={onStatsChange}
         />
     )
-}
-
-/** Navigate sigma camera to a node. Needs access to useSigma. */
-function GraphNavigator({
-    targetNode,
-    onNavigated,
-}: {
-    targetNode: string | null
-    onNavigated: () => void
-}) {
-    const sigma = useSigma()
-
-    useEffect(() => {
-        if (!targetNode) return
-
-        const graph = sigma.getGraph()
-        if (!graph.hasNode(targetNode)) {
-            graphDebug("navigate: missing target node", { targetNode })
-            onNavigated()
-            return
-        }
-
-        graphDebug("navigate: begin", {
-            targetNode,
-            currentSelectedFromPanel: targetNode,
-        })
-
-        // Center camera on the node
-        const x = graph.getNodeAttribute(targetNode, "x")
-        const y = graph.getNodeAttribute(targetNode, "y")
-        sigma.getCamera().animate({ x, y, ratio: 0.3 }, { duration: 300 })
-
-        // Route programmatic navigation through Sigma's native click pipeline so
-        // sidebar/search navigation and canvas clicks share the same reducer path.
-        sigma.emit("clickNode", { node: targetNode } as any)
-        graphDebug("navigate: emitted sigma clickNode", { targetNode })
-        onNavigated()
-    }, [targetNode, sigma, onNavigated])
-
-    return null
 }
 
 export default function GraphView() {
@@ -251,7 +225,6 @@ export default function GraphView() {
         maxPlays: 200,
         maxEdgeWeight: 50,
     })
-    const [depthMode, setDepthMode] = useState(false)
     const clearNavigateTarget = useCallback(() => setNavigateTarget(null), [])
 
     return (
@@ -281,27 +254,13 @@ export default function GraphView() {
                     onMouseMove={setMousePos}
                     hiddenClusters={hiddenClusters}
                     focusedCluster={focusedCluster}
-                    depthMode={depthMode}
                     filter={filter}
                     onStatsChange={setFilterStats}
-                />
-                <GraphNavigator
-                    targetNode={navigateTarget}
+                    navigateTarget={navigateTarget}
                     onNavigated={clearNavigateTarget}
                 />
                 <div className="absolute top-12 left-4 z-20 pointer-events-auto flex items-start gap-2">
                     <SearchBarInner onSelect={setNavigateTarget} />
-                    <button
-                        onClick={() => setDepthMode((d) => !d)}
-                        className={`px-3 py-1.5 rounded-md text-xs font-mono transition-colors ${
-                            depthMode
-                                ? "bg-white/20 text-white border border-white/30"
-                                : "bg-white/5 text-white/50 border border-white/10 hover:bg-white/10"
-                        }`}
-                        title="Toggle depth exploration (3 layers)"
-                    >
-                        Depth
-                    </button>
                 </div>
             </SigmaContainer>
 
@@ -356,12 +315,7 @@ export default function GraphView() {
                     </div>
                 </div>
             )}
-            {selectedNode && (
-                <NodeDetailPanel
-                    node={selectedNode}
-                    onNavigate={setNavigateTarget}
-                />
-            )}
+            {selectedNode && <NodeDetailPanel node={selectedNode} onNavigate={setNavigateTarget} />}
         </div>
     )
 }

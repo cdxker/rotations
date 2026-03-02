@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { loadLastfmConfig } from "./config.js";
+import { loadLastfmConfig } from "../../graph-pipeline/src/config.js";
 
 describe("loadLastfmConfig", () => {
     const originalEnv = process.env;

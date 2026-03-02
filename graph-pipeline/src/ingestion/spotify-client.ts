@@ -259,8 +259,11 @@ export class SpotifyClient {
     }
 
     /** Export a Spotify dump to a JSON file. Fetches fresh data if no dump is provided. */
-    async exportToJson(outputPath: string, existingDump?: SpotifyDump): Promise<SpotifyDump> {
-        const dump = existingDump ?? await this.fetchAll();
+    async exportToJson(
+        outputPath: string,
+        existingDump?: SpotifyDump,
+    ): Promise<SpotifyDump> {
+        const dump = existingDump ?? (await this.fetchAll());
         await writeFile(outputPath, JSON.stringify(dump, null, 2));
         console.log(`\nSpotify data exported to ${outputPath}`);
         return dump;

@@ -1,12 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import {
-    filterGraph,
-    toGraphology,
-    clearGraphCache,
-    fetchGraph,
-    nodeBrightness,
-} from "./graph-api"
-import type { ListeningGraph, SongKey, GraphNode } from "./graph-api"
+import { filterGraph, toGraphology, clearGraphCache, fetchGraph, nodeBrightness } from "@/lib/graph-api"
+import type { ListeningGraph, SongKey, GraphNode } from "@/lib/graph-api"
 
 function makeNode(overrides: Partial<GraphNode> = {}): GraphNode {
     return {

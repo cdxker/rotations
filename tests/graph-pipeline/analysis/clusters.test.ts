@@ -1,29 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { detectClusters } from "./clusters.js";
-import type { ListeningGraph, SongKey, GraphNode } from "../graph/types.js";
-
-function makeNode(overrides: Partial<GraphNode> = {}): GraphNode {
-    return {
-        name: "Test",
-        artists: ["Artist"],
-        next: {} as Record<SongKey, number>,
-        previous: {} as Record<SongKey, number>,
-        totalPlays: 1,
-        sources: ["lastfm"],
-        ...overrides,
-    };
-}
-
-function makeGraph(nodes: Record<string, GraphNode>): ListeningGraph {
-    return {
-        nodes: nodes as Record<SongKey, GraphNode>,
-        metadata: {
-            totalScrobbles: 0,
-            dateRange: { from: "", to: "" },
-            exportTimestamp: "",
-        },
-    };
-}
+import { detectClusters } from "../../../graph-pipeline/src/analysis/clusters.js";
+import type { SongKey } from "../../../graph-pipeline/src/graph/types.js";
+import { makeNode, makeGraph } from "../test-helpers.js";
 
 describe("detectClusters", () => {
     it("handles empty graph", () => {
@@ -243,7 +221,7 @@ describe("detectClusters", () => {
             }),
         });
 
-        const result = detectClusters(graph);
+        detectClusters(graph);
 
         // All three should be in the same cluster
         const clusterA = graph.nodes["a::t1" as SongKey]!.clusterId;
@@ -289,7 +267,7 @@ describe("detectClusters", () => {
             }),
         });
 
-        const result = detectClusters(graph);
+        detectClusters(graph);
 
         const ids = new Set<number>();
         for (const node of Object.values(graph.nodes)) {

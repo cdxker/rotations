@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { enrichGraph, exportEnrichedGraph } from "./enrich.js";
-import type { ListeningGraph, SongKey, GraphNode } from "../graph/types.js";
-import { toSongKey } from "../graph/types.js";
+import { enrichGraph, exportEnrichedGraph } from "../../../graph-pipeline/src/analysis/enrich.js";
+import type { ListeningGraph, SongKey, GraphNode } from "../../../graph-pipeline/src/graph/types.js";
+import { toSongKey } from "../../../graph-pipeline/src/graph/types.js";
 
 function makeTestGraph(): ListeningGraph {
     const keyA = toSongKey("Artist A", "Song 1");
