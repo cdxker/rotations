@@ -15,6 +15,35 @@ function RenderGraph({ layout, dateRange, isDark }: { layout: LayoutMode; dateRa
   const loadGraph = useLoadGraph()
   const sigma = useSigma()
   const { graph } = useGraph()
+  const [selectedNode, setSelectedNode] = useState<string | null>(null)
+
+  // Build set of neighbors for the selected node
+  const selectedNeighbors = useMemo(() => {
+    if (!selectedNode || !graph) return null
+    const neighbors = new Set<string>()
+    neighbors.add(selectedNode)
+    graph.forEachNeighbor(selectedNode, (neighbor) => {
+      neighbors.add(neighbor)
+    })
+    return neighbors
+  }, [selectedNode, graph])
+
+  // Listen for click events on sigma
+  useEffect(() => {
+    if (!sigma) return
+    const handleClickNode = ({ node }: { node: string }) => {
+      setSelectedNode((prev) => (prev === node ? null : node))
+    }
+    const handleClickStage = () => {
+      setSelectedNode(null)
+    }
+    sigma.on('clickNode', handleClickNode)
+    sigma.on('clickStage', handleClickStage)
+    return () => {
+      sigma.off('clickNode', handleClickNode)
+      sigma.off('clickStage', handleClickStage)
+    }
+  }, [sigma])
 
   useEffect(() => {
     if (graph) {
@@ -101,6 +130,9 @@ function RenderGraph({ layout, dateRange, isDark }: { layout: LayoutMode; dateRa
       if (filteredPlayCounts && !filteredPlayCounts.has(_node)) {
         return { ...data, hidden: true }
       }
+      if (selectedNeighbors && !selectedNeighbors.has(_node)) {
+        return { ...data, hidden: true }
+      }
       const metric = nodeMetrics?.get(_node) ?? 0
       const size = metric > 0 && maxMetric > 0
         ? 4 + 16 * Math.log1p(metric) / Math.log1p(maxMetric)
@@ -108,20 +140,23 @@ function RenderGraph({ layout, dateRange, isDark }: { layout: LayoutMode; dateRa
       return { ...data, size }
     })
     sigma.setSetting('edgeReducer', (edge: string, data: Record<string, unknown>) => {
-      if (!filteredPlayCounts) {
-        const w = (data as { weight?: number }).weight ?? 1
-        return { ...data, color: edgeBase(Math.min(0.6, 0.15 + w * 0.05)) }
-      }
       const source = g.source(edge)
       const target = g.target(edge)
-      if (filteredPlayCounts.has(source) && filteredPlayCounts.has(target)) {
-        const w = (data as { weight?: number }).weight ?? 1
-        return { ...data, color: edgeBase(Math.min(0.6, 0.15 + w * 0.05)) }
+      if (filteredPlayCounts) {
+        if (!filteredPlayCounts.has(source) || !filteredPlayCounts.has(target)) {
+          return { ...data, hidden: true }
+        }
       }
-      return { ...data, hidden: true }
+      if (selectedNeighbors) {
+        if (!selectedNeighbors.has(source) || !selectedNeighbors.has(target)) {
+          return { ...data, hidden: true }
+        }
+      }
+      const w = (data as { weight?: number }).weight ?? 1
+      return { ...data, color: edgeBase(Math.min(0.6, 0.15 + w * 0.05)) }
     })
     sigma.refresh()
-  }, [filteredPlayCounts, nodeMetrics, maxMetric, sigma, isDark])
+  }, [filteredPlayCounts, selectedNeighbors, nodeMetrics, maxMetric, sigma, isDark])
 
   return null
 }
