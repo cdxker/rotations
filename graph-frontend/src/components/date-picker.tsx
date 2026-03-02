@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { addDays, format } from "date-fns"
+import { addDays, addMonths, addYears, format } from "date-fns"
 import { Calendar as CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
 import { type DateRange } from "react-day-picker"
 
@@ -11,6 +11,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "#/components/ui/popover"
+
+const PRESETS = [
+  { label: "Past 2 days", range: () => ({ from: addDays(new Date(), -2), to: new Date() }) },
+  { label: "Past week", range: () => ({ from: addDays(new Date(), -7), to: new Date() }) },
+  { label: "Past month", range: () => ({ from: addMonths(new Date(), -1), to: new Date() }) },
+  { label: "Past 3 months", range: () => ({ from: addMonths(new Date(), -3), to: new Date() }) },
+  { label: "Past year", range: () => ({ from: addYears(new Date(), -1), to: new Date() }) },
+] as const
 
 interface DatePickerProps {
   dateRange: DateRange | undefined
@@ -25,10 +33,10 @@ function formatRange(range: DateRange | undefined): string {
 
 export function DatePicker({ dateRange, onDateRangeChange }: DatePickerProps) {
   const [open, setOpen] = useState(false)
+  const [showCalendar, setShowCalendar] = useState(false)
 
   function shiftRange(days: number) {
     if (!dateRange?.from) {
-      // No range set — start from today as a single day
       const d = new Date()
       onDateRangeChange({ from: d, to: d })
       return
@@ -49,7 +57,7 @@ export function DatePicker({ dateRange, onDateRangeChange }: DatePickerProps) {
       >
         <ChevronLeftIcon className="size-4" />
       </Button>
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) setShowCalendar(false) }}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
@@ -64,27 +72,65 @@ export function DatePicker({ dateRange, onDateRangeChange }: DatePickerProps) {
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0 bg-neutral-900 border-neutral-700" align="start">
-          <Calendar
-            mode="range"
-            defaultMonth={dateRange?.from}
-            selected={dateRange}
-            onSelect={onDateRangeChange}
-            numberOfMonths={2}
-            className="bg-neutral-900 text-white"
-          />
-          {dateRange && (
-            <div className="p-2 border-t border-neutral-700">
+          {!showCalendar ? (
+            <div className="flex flex-col p-2 gap-1">
+              {PRESETS.map((preset) => (
+                <Button
+                  key={preset.label}
+                  variant="ghost"
+                  className="justify-start text-white hover:bg-neutral-800"
+                  onClick={() => {
+                    onDateRangeChange(preset.range())
+                    setOpen(false)
+                  }}
+                >
+                  {preset.label}
+                </Button>
+              ))}
               <Button
                 variant="ghost"
-                className="w-full text-neutral-400 hover:text-white hover:bg-neutral-800"
+                className="justify-start text-neutral-400 hover:text-white hover:bg-neutral-800"
                 onClick={() => {
                   onDateRangeChange(undefined)
                   setOpen(false)
                 }}
               >
-                Reset to all time
+                All time
+              </Button>
+              <div className="border-t border-neutral-700 my-1" />
+              <Button
+                variant="ghost"
+                className="justify-start text-neutral-400 hover:text-white hover:bg-neutral-800"
+                onClick={() => setShowCalendar(true)}
+              >
+                Custom range...
               </Button>
             </div>
+          ) : (
+            <>
+              <Calendar
+                mode="range"
+                defaultMonth={dateRange?.from}
+                selected={dateRange}
+                onSelect={onDateRangeChange}
+                numberOfMonths={2}
+                className="bg-neutral-900 text-white"
+              />
+              {dateRange && (
+                <div className="p-2 border-t border-neutral-700">
+                  <Button
+                    variant="ghost"
+                    className="w-full text-neutral-400 hover:text-white hover:bg-neutral-800"
+                    onClick={() => {
+                      onDateRangeChange(undefined)
+                      setOpen(false)
+                    }}
+                  >
+                    Reset to all time
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </PopoverContent>
       </Popover>
