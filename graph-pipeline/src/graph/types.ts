@@ -4,7 +4,7 @@
  * Relationship between identifiers:
  *
  * - `SongKey` is the canonical identity used in the graph: `lowercase(artist)::lowercase(track)`.
- *   It enables cross-source matching — the same song from Last.fm and Spotify resolves to the
+ *   It enables cross-source matching — the same song from Last.fm resolves to the
  *   same key regardless of minor formatting differences.
  *
  * - `TrackId` (from site/src/shared/types.ts) is a branded string (`track-${string}`) used by
@@ -28,14 +28,19 @@ export type SongKey = `${string}::${string}`;
  */
 export type TrackId = `track-${string}`;
 
-export type ListeningSource = "lastfm" | "spotify-recent" | "spotify-playlist";
+/** A single transition event between two songs, with a timestamp. */
+export interface GraphEdge {
+    from: SongKey;
+    to: SongKey;
+    /** ISO 8601 timestamp of when this transition occurred. */
+    timestamp: string;
+}
 
 /** A node in the listening graph representing a single song. */
 export interface GraphNode {
     name: string;
     artists: string[];
     albumName?: string;
-    spotifyId?: string;
     lastfmUrl?: string;
 
     /**
@@ -46,23 +51,21 @@ export interface GraphNode {
 
     /**
      * Weighted outgoing edges: SongKey → count of transitions from this song to that song.
-     * If this song was followed by song B three times, `next[keyB] = 3`.
+     * Derived from the edges array.
      */
     next: Record<SongKey, number>;
 
     /**
      * Weighted incoming edges: SongKey → count of transitions from that song to this song.
-     * Mirror of the source node's `next` entry: `nodeB.previous[keyA] = nodeA.next[keyB]`.
+     * Derived from the edges array.
      */
     previous: Record<SongKey, number>;
 
     totalPlays: number;
-    sources: ListeningSource[];
-    sourcePlays?: Partial<Record<ListeningSource, number>>;
     pageRank?: number;
     clusterId?: number;
     imageUrl?: string;
-    /** ISO 8601 timestamps of every play across all sources, chronologically sorted. */
+    /** ISO 8601 timestamps of every play, chronologically sorted. */
     playDates: string[];
 }
 
@@ -71,12 +74,12 @@ export interface GraphMetadata {
     dateRange: { from: string; to: string };
     exportTimestamp: string;
     lastfmUsername?: string;
-    spotifyUsername?: string;
 }
 
-/** The full listening graph: all nodes + metadata. */
+/** The full listening graph: all nodes + metadata + individual edge events. */
 export interface ListeningGraph {
     nodes: Record<SongKey, GraphNode>;
+    edges: GraphEdge[];
     metadata: GraphMetadata;
 }
 

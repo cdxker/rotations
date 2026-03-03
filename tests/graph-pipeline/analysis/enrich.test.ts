@@ -20,7 +20,7 @@ function makeTestGraph(): ListeningGraph {
                 next: { [keyB]: 3, [keyC]: 1 } as Record<SongKey, number>,
                 previous: {} as Record<SongKey, number>,
                 totalPlays: 10,
-                sources: ["lastfm"],
+                playDates: [],
             },
             [keyB]: {
                 name: "Song 2",
@@ -28,7 +28,7 @@ function makeTestGraph(): ListeningGraph {
                 next: { [keyC]: 2 } as Record<SongKey, number>,
                 previous: { [keyA]: 3 } as Record<SongKey, number>,
                 totalPlays: 7,
-                sources: ["lastfm", "spotify-recent"],
+                playDates: [],
             },
             [keyC]: {
                 name: "Song 3",
@@ -39,9 +39,10 @@ function makeTestGraph(): ListeningGraph {
                     [keyB]: 2,
                 } as Record<SongKey, number>,
                 totalPlays: 3,
-                sources: ["spotify-playlist"],
+                playDates: [],
             },
         } as Record<SongKey, GraphNode>,
+        edges: [],
         metadata: {
             totalScrobbles: 20,
             dateRange: {
@@ -101,6 +102,7 @@ describe("enrichGraph", () => {
     it("handles empty graph", () => {
         const empty: ListeningGraph = {
             nodes: {} as Record<SongKey, GraphNode>,
+            edges: [],
             metadata: {
                 totalScrobbles: 0,
                 dateRange: { from: "", to: "" },

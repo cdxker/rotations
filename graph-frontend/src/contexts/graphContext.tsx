@@ -52,42 +52,46 @@ function toGraphology(
 
   if (entries.length === 0) return graph
 
-  let maxPageRank = 1e-10
-  for (const [, n] of entries) {
-    const pr = n.pageRank ?? 0
-    if (pr > maxPageRank) maxPageRank = pr
-  }
-
   for (const [key, node] of entries) {
     graph.addNode(key, {
       label: `${node.artists[0] ?? "Unknown"} — ${node.name}`,
       artists: node.artists,
       albumName: node.albumName,
-      spotifyId: node.spotifyId,
       lastfmUrl: node.lastfmUrl,
       imageUrl: node.imageUrl,
       totalPlays: node.totalPlays,
-      sources: node.sources,
       pageRank: node.pageRank ?? 0,
       playDates: node.playDates ?? [],
-      size: 4, // placeholder; nodeReducer in RenderGraph sets actual size per layout
-      color: "#ffffff", // placeholder, overwritten by component coloring
+      size: 4,
+      color: "#ffffff",
       x: 0,
       y: 0,
     })
   }
 
-  for (const [fromKey, node] of entries) {
-    for (const [toKey, weight] of Object.entries(node.next)) {
-      if (!graph.hasNode(toKey)) continue
-      if (graph.hasEdge(fromKey, toKey)) continue
-
-      graph.addDirectedEdge(fromKey, toKey, {
-        weight,
-        size: Math.max(0.5, Math.min(3, Math.log(weight + 1))),
-        color: `rgba(0, 0, 0, ${Math.min(0.6, 0.15 + weight * 0.05)})`,
-      })
+  // Aggregate parallel edges: group by (from, to), collect timestamps, count as weight
+  const edgeMap = new Map<string, { from: string; to: string; timestamps: string[] }>()
+  for (const edge of listeningGraph.edges) {
+    const mapKey = `${edge.from}→${edge.to}`
+    const existing = edgeMap.get(mapKey)
+    if (existing) {
+      existing.timestamps.push(edge.timestamp)
+    } else {
+      edgeMap.set(mapKey, { from: edge.from, to: edge.to, timestamps: [edge.timestamp] })
     }
+  }
+
+  for (const [, agg] of edgeMap) {
+    if (!graph.hasNode(agg.from) || !graph.hasNode(agg.to)) continue
+    if (graph.hasEdge(agg.from, agg.to)) continue
+
+    const weight = agg.timestamps.length
+    graph.addDirectedEdge(agg.from, agg.to, {
+      weight,
+      timestamps: agg.timestamps,
+      size: Math.max(0.5, Math.min(3, Math.log(weight + 1))),
+      color: `rgba(0, 0, 0, ${Math.min(0.6, 0.15 + weight * 0.05)})`,
+    })
   }
 
   // Color each disconnected component a different high-contrast color

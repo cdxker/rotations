@@ -2,7 +2,6 @@ import type {
     SongKey,
     GraphNode,
     ListeningGraph,
-    ListeningSource,
 } from "../graph/types.js";
 
 /** Per-node computed statistics. */
@@ -24,7 +23,6 @@ export interface GraphStats {
     totalEdges: number;
     totalScrobbles: number;
     dateRange: { from: string; to: string };
-    sourceBreakdown: Record<ListeningSource, number>;
     averageDegree: number;
     medianDegree: number;
 }
@@ -94,27 +92,10 @@ export function computeStats(graph: ListeningGraph, topN = 10): StatsResult {
         nodeStatsMap.set(key, computeNodeStats(key, node));
     }
 
-    // Count unique edges and source breakdown
+    // Count unique edges
     let totalEdges = 0;
-    const sourceBreakdown: Record<string, number> = {
-        lastfm: 0,
-        "spotify-recent": 0,
-        "spotify-playlist": 0,
-    };
-
     for (const [, node] of entries) {
         totalEdges += Object.keys(node.next).length;
-        if (node.sourcePlays) {
-            for (const [source, count] of Object.entries(node.sourcePlays)) {
-                sourceBreakdown[source] =
-                    (sourceBreakdown[source] ?? 0) + (count ?? 0);
-            }
-        } else {
-            // Fallback for graphs without sourcePlays (e.g. loaded from older DB)
-            for (const source of node.sources) {
-                sourceBreakdown[source] = (sourceBreakdown[source] ?? 0) + 1;
-            }
-        }
     }
 
     // Degree distribution for average/median
@@ -130,7 +111,6 @@ export function computeStats(graph: ListeningGraph, topN = 10): StatsResult {
         totalEdges,
         totalScrobbles: graph.metadata.totalScrobbles,
         dateRange: graph.metadata.dateRange,
-        sourceBreakdown: sourceBreakdown as Record<ListeningSource, number>,
         averageDegree: Math.round(avgDegree * 100) / 100,
         medianDegree: median(degrees),
     };

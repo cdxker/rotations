@@ -2,9 +2,9 @@ import Database from "better-sqlite3";
 import type {
     SongKey,
     GraphNode,
+    GraphEdge,
     ListeningGraph,
     GraphMetadata,
-    ListeningSource,
 } from "./types.js";
 
 const SCHEMA_SQL = `
@@ -13,23 +13,20 @@ CREATE TABLE IF NOT EXISTS nodes (
     name TEXT NOT NULL,
     artists TEXT NOT NULL,
     album_name TEXT,
-    spotify_id TEXT,
     lastfm_url TEXT,
     track_id TEXT,
     total_plays INTEGER NOT NULL DEFAULT 0,
-    sources TEXT NOT NULL DEFAULT '[]',
     page_rank REAL,
     cluster_id INTEGER,
     image_url TEXT,
-    source_plays TEXT,
     play_dates TEXT NOT NULL DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS edges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     from_key TEXT NOT NULL,
     to_key TEXT NOT NULL,
-    weight INTEGER NOT NULL DEFAULT 1,
-    PRIMARY KEY (from_key, to_key)
+    timestamp TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(from_key);
@@ -53,19 +50,6 @@ export class GraphDatabase {
 
     private initSchema(): void {
         this.db.exec(SCHEMA_SQL);
-        // Migrations: add columns to existing databases
-        const migrations = [
-            "ALTER TABLE nodes ADD COLUMN image_url TEXT",
-            "ALTER TABLE nodes ADD COLUMN source_plays TEXT",
-            "ALTER TABLE nodes ADD COLUMN play_dates TEXT NOT NULL DEFAULT '[]'",
-        ];
-        for (const sql of migrations) {
-            try {
-                this.db.exec(sql);
-            } catch {
-                // Column already exists — expected for new databases
-            }
-        }
     }
 
     /** Clear all graph data (nodes, edges, metadata) from the database. */
@@ -77,34 +61,28 @@ export class GraphDatabase {
 
     /**
      * Save a ListeningGraph to the database.
-     * Supports incremental updates — merges edge weights and play counts
-     * with any existing data.
+     * Clears existing data and writes fresh — edges are individual timestamped events.
      */
     saveGraph(graph: ListeningGraph): void {
-        const upsertNode = this.db.prepare(`
-            INSERT INTO nodes (song_key, name, artists, album_name, spotify_id, lastfm_url, track_id, total_plays, sources, page_rank, cluster_id, image_url, source_plays, play_dates)
-            VALUES (@songKey, @name, @artists, @albumName, @spotifyId, @lastfmUrl, @trackId, @totalPlays, @sources, @pageRank, @clusterId, @imageUrl, @sourcePlays, @playDates)
+        const insertNode = this.db.prepare(`
+            INSERT INTO nodes (song_key, name, artists, album_name, lastfm_url, track_id, total_plays, page_rank, cluster_id, image_url, play_dates)
+            VALUES (@songKey, @name, @artists, @albumName, @lastfmUrl, @trackId, @totalPlays, @pageRank, @clusterId, @imageUrl, @playDates)
             ON CONFLICT(song_key) DO UPDATE SET
                 name = COALESCE(excluded.name, nodes.name),
                 artists = excluded.artists,
                 album_name = COALESCE(excluded.album_name, nodes.album_name),
-                spotify_id = COALESCE(excluded.spotify_id, nodes.spotify_id),
                 lastfm_url = COALESCE(excluded.lastfm_url, nodes.lastfm_url),
                 track_id = COALESCE(excluded.track_id, nodes.track_id),
-                total_plays = nodes.total_plays + excluded.total_plays,
-                sources = excluded.sources,
+                total_plays = excluded.total_plays,
                 page_rank = COALESCE(excluded.page_rank, nodes.page_rank),
                 cluster_id = COALESCE(excluded.cluster_id, nodes.cluster_id),
                 image_url = COALESCE(excluded.image_url, nodes.image_url),
-                source_plays = COALESCE(excluded.source_plays, nodes.source_plays),
                 play_dates = excluded.play_dates
         `);
 
-        const upsertEdge = this.db.prepare(`
-            INSERT INTO edges (from_key, to_key, weight)
-            VALUES (@fromKey, @toKey, @weight)
-            ON CONFLICT(from_key, to_key) DO UPDATE SET
-                weight = edges.weight + excluded.weight
+        const insertEdge = this.db.prepare(`
+            INSERT INTO edges (from_key, to_key, timestamp)
+            VALUES (@fromKey, @toKey, @timestamp)
         `);
 
         const upsertMetadata = this.db.prepare(`
@@ -113,68 +91,30 @@ export class GraphDatabase {
         `);
 
         const transaction = this.db.transaction(() => {
-            // Insert/update nodes
+            // Insert nodes
             for (const [songKey, node] of Object.entries(graph.nodes)) {
-                // Merge sources and source_plays with existing
-                const existingRow = this.db
-                    .prepare(
-                        "SELECT sources, source_plays FROM nodes WHERE song_key = ?",
-                    )
-                    .get(songKey) as
-                    | { sources: string; source_plays: string | null }
-                    | undefined;
-                const existingSources: ListeningSource[] = existingRow
-                    ? JSON.parse(existingRow.sources)
-                    : [];
-                const mergedSources = [
-                    ...new Set([...existingSources, ...node.sources]),
-                ];
-
-                // Merge source_plays additively per source key
-                let mergedSourcePlays: Record<string, number> | null = null;
-                if (node.sourcePlays || existingRow?.source_plays) {
-                    const existing: Record<string, number> =
-                        existingRow?.source_plays
-                            ? JSON.parse(existingRow.source_plays)
-                            : {};
-                    const incoming: Record<string, number> =
-                        node.sourcePlays ?? {};
-                    mergedSourcePlays = { ...existing };
-                    for (const [src, count] of Object.entries(incoming)) {
-                        mergedSourcePlays[src] =
-                            (mergedSourcePlays[src] ?? 0) + count;
-                    }
-                }
-
-                upsertNode.run({
+                insertNode.run({
                     songKey,
                     name: node.name,
                     artists: JSON.stringify(node.artists),
                     albumName: node.albumName ?? null,
-                    spotifyId: node.spotifyId ?? null,
                     lastfmUrl: node.lastfmUrl ?? null,
                     trackId: node.trackId ?? null,
                     totalPlays: node.totalPlays,
-                    sources: JSON.stringify(mergedSources),
                     pageRank: node.pageRank ?? null,
                     clusterId: node.clusterId ?? null,
                     imageUrl: node.imageUrl ?? null,
-                    sourcePlays: mergedSourcePlays
-                        ? JSON.stringify(mergedSourcePlays)
-                        : null,
                     playDates: JSON.stringify(node.playDates),
                 });
             }
 
-            // Insert/update edges (next edges)
-            for (const [songKey, node] of Object.entries(graph.nodes)) {
-                for (const [toKey, weight] of Object.entries(node.next)) {
-                    upsertEdge.run({
-                        fromKey: songKey,
-                        toKey,
-                        weight,
-                    });
-                }
+            // Insert individual timestamped edges
+            for (const edge of graph.edges) {
+                insertEdge.run({
+                    fromKey: edge.from,
+                    toKey: edge.to,
+                    timestamp: edge.timestamp,
+                });
             }
 
             // Save metadata
@@ -195,12 +135,6 @@ export class GraphDatabase {
                 upsertMetadata.run({
                     key: "lastfmUsername",
                     value: meta.lastfmUsername,
-                });
-            }
-            if (meta.spotifyUsername) {
-                upsertMetadata.run({
-                    key: "spotifyUsername",
-                    value: meta.spotifyUsername,
                 });
             }
         });
@@ -228,15 +162,24 @@ export class GraphDatabase {
             nodes[key] = this.rowToNode(row);
         }
 
-        // Build edges
-        for (const edge of edgeRows) {
-            const fromKey = edge.from_key as SongKey;
-            const toKey = edge.to_key as SongKey;
+        // Build edges array
+        const edges: GraphEdge[] = edgeRows.map((row) => ({
+            from: row.from_key as SongKey,
+            to: row.to_key as SongKey,
+            timestamp: row.timestamp,
+        }));
+
+        // Derive node.next/node.previous from edges
+        for (const edge of edges) {
+            const fromKey = edge.from;
+            const toKey = edge.to;
             if (nodes[fromKey]) {
-                nodes[fromKey].next[toKey] = edge.weight;
+                nodes[fromKey].next[toKey] =
+                    (nodes[fromKey].next[toKey] ?? 0) + 1;
             }
             if (nodes[toKey]) {
-                nodes[toKey].previous[fromKey] = edge.weight;
+                nodes[toKey].previous[fromKey] =
+                    (nodes[toKey].previous[fromKey] ?? 0) + 1;
             }
         }
 
@@ -255,10 +198,9 @@ export class GraphDatabase {
             dateRange,
             exportTimestamp: metaMap.get("exportTimestamp") ?? "",
             lastfmUsername: metaMap.get("lastfmUsername"),
-            spotifyUsername: metaMap.get("spotifyUsername"),
         };
 
-        return { nodes, metadata };
+        return { nodes, edges, metadata };
     }
 
     /** Get a single node by its SongKey. */
@@ -269,18 +211,25 @@ export class GraphDatabase {
         if (!row) return null;
 
         const outEdges = this.db
-            .prepare("SELECT to_key, weight FROM edges WHERE from_key = ?")
-            .all(songKey) as Pick<EdgeRow, "to_key" | "weight">[];
+            .prepare(
+                "SELECT to_key, COUNT(*) as weight FROM edges WHERE from_key = ? GROUP BY to_key",
+            )
+            .all(songKey) as { to_key: string; weight: number }[];
         const inEdges = this.db
-            .prepare("SELECT from_key, weight FROM edges WHERE to_key = ?")
-            .all(songKey) as Pick<EdgeRow, "from_key" | "weight">[];
+            .prepare(
+                "SELECT from_key, COUNT(*) as weight FROM edges WHERE to_key = ? GROUP BY from_key",
+            )
+            .all(songKey) as { from_key: string; weight: number }[];
 
         const next: Record<SongKey, number> = {} as Record<SongKey, number>;
         for (const e of outEdges) {
             next[e.to_key as SongKey] = e.weight;
         }
 
-        const previous: Record<SongKey, number> = {} as Record<SongKey, number>;
+        const previous: Record<SongKey, number> = {} as Record<
+            SongKey,
+            number
+        >;
         for (const e of inEdges) {
             previous[e.from_key as SongKey] = e.weight;
         }
@@ -313,7 +262,6 @@ export class GraphDatabase {
             name: row.name,
             artists: JSON.parse(row.artists),
             albumName: row.album_name ?? undefined,
-            spotifyId: row.spotify_id ?? undefined,
             lastfmUrl: row.lastfm_url ?? undefined,
             trackId: row.track_id
                 ? (row.track_id as `track-${string}`)
@@ -321,13 +269,9 @@ export class GraphDatabase {
             next: {} as Record<SongKey, number>,
             previous: {} as Record<SongKey, number>,
             totalPlays: row.total_plays,
-            sources: JSON.parse(row.sources),
             pageRank: row.page_rank ?? undefined,
             clusterId: row.cluster_id ?? undefined,
             imageUrl: row.image_url ?? undefined,
-            sourcePlays: row.source_plays
-                ? JSON.parse(row.source_plays)
-                : undefined,
             playDates: row.play_dates ? JSON.parse(row.play_dates) : [],
         };
     }
@@ -344,23 +288,21 @@ interface NodeRow {
     name: string;
     artists: string;
     album_name: string | null;
-    spotify_id: string | null;
     lastfm_url: string | null;
     track_id: string | null;
     total_plays: number;
-    sources: string;
     page_rank: number | null;
     cluster_id: number | null;
     image_url: string | null;
-    source_plays: string | null;
     play_dates: string | null;
 }
 
 /** Row shape from the edges table. */
 interface EdgeRow {
+    id: number;
     from_key: string;
     to_key: string;
-    weight: number;
+    timestamp: string;
 }
 
 /** Row shape from the metadata table. */

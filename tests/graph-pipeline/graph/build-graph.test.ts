@@ -59,6 +59,24 @@ describe("buildGraph", () => {
             expect(nodeA.next["c::t3" as SongKey]).toBeUndefined();
         });
 
+        it("creates individual timestamped edge events", () => {
+            const input: GraphInput = {
+                lastfmScrobbles: [
+                    { artist: "A", track: "T1", album: "", timestamp: 1000 },
+                    { artist: "B", track: "T2", album: "", timestamp: 2000 },
+                ],
+            };
+
+            const graph = buildGraph(input);
+
+            expect(graph.edges).toHaveLength(1);
+            expect(graph.edges[0]!.from).toBe("a::t1");
+            expect(graph.edges[0]!.to).toBe("b::t2");
+            expect(graph.edges[0]!.timestamp).toBe(
+                new Date(1000 * 1000).toISOString(),
+            );
+        });
+
         it("accumulates edge weights for repeated transitions", () => {
             const input: GraphInput = {
                 lastfmScrobbles: [
@@ -74,6 +92,11 @@ describe("buildGraph", () => {
 
             // A -> B happened twice
             expect(nodeA.next["b::t2" as SongKey]).toBe(2);
+            // Two individual edge events for A -> B
+            const abEdges = graph.edges.filter(
+                (e) => e.from === "a::t1" && e.to === "b::t2",
+            );
+            expect(abEdges).toHaveLength(2);
         });
 
         it("sorts scrobbles chronologically before building edges", () => {
@@ -107,19 +130,6 @@ describe("buildGraph", () => {
             expect(graph.nodes["b::t2" as SongKey]!.totalPlays).toBe(1);
         });
 
-        it("sets source to lastfm", () => {
-            const input: GraphInput = {
-                lastfmScrobbles: [
-                    { artist: "A", track: "T1", album: "", timestamp: 1000 },
-                ],
-            };
-
-            const graph = buildGraph(input);
-            expect(graph.nodes["a::t1" as SongKey]!.sources).toEqual([
-                "lastfm",
-            ]);
-        });
-
         it("skips tracks with missing artist or name", () => {
             const input: GraphInput = {
                 lastfmScrobbles: [
@@ -132,280 +142,25 @@ describe("buildGraph", () => {
             const graph = buildGraph(input);
             expect(Object.keys(graph.nodes)).toHaveLength(1);
         });
-    });
 
-    describe("Spotify recent tracks", () => {
-        it("creates nodes and edges from recent tracks", () => {
-            const input: GraphInput = {
-                spotifyRecentTracks: [
-                    {
-                        spotifyId: "s1",
-                        artist: "A",
-                        track: "T1",
-                        album: "Al1",
-                        playedAt: "2024-01-01T00:00:00Z",
-                    },
-                    {
-                        spotifyId: "s2",
-                        artist: "B",
-                        track: "T2",
-                        album: "Al2",
-                        playedAt: "2024-01-01T00:05:00Z",
-                    },
-                ],
-            };
-
-            const graph = buildGraph(input);
-
-            expect(Object.keys(graph.nodes)).toHaveLength(2);
-            const nodeA = graph.nodes["a::t1" as SongKey]!;
-            expect(nodeA.next["b::t2" as SongKey]).toBe(1);
-            expect(nodeA.spotifyId).toBe("s1");
-            expect(nodeA.sources).toEqual(["spotify-recent"]);
-        });
-
-        it("sorts by playedAt before building edges", () => {
-            const input: GraphInput = {
-                spotifyRecentTracks: [
-                    {
-                        spotifyId: "s2",
-                        artist: "B",
-                        track: "T2",
-                        album: "",
-                        playedAt: "2024-01-01T00:10:00Z",
-                    },
-                    {
-                        spotifyId: "s1",
-                        artist: "A",
-                        track: "T1",
-                        album: "",
-                        playedAt: "2024-01-01T00:00:00Z",
-                    },
-                ],
-            };
-
-            const graph = buildGraph(input);
-            const nodeA = graph.nodes["a::t1" as SongKey]!;
-            expect(nodeA.next["b::t2" as SongKey]).toBe(1);
-        });
-    });
-
-    describe("Spotify playlist tracks", () => {
-        it("creates edges from playlist track ordering", () => {
-            const input: GraphInput = {
-                spotifyPlaylistTracks: [
-                    {
-                        spotifyId: "s1",
-                        artist: "A",
-                        track: "T1",
-                        album: "",
-                        playlistId: "pl1",
-                        playlistName: "My Playlist",
-                        position: 0,
-                    },
-                    {
-                        spotifyId: "s2",
-                        artist: "B",
-                        track: "T2",
-                        album: "",
-                        playlistId: "pl1",
-                        playlistName: "My Playlist",
-                        position: 1,
-                    },
-                    {
-                        spotifyId: "s3",
-                        artist: "C",
-                        track: "T3",
-                        album: "",
-                        playlistId: "pl1",
-                        playlistName: "My Playlist",
-                        position: 2,
-                    },
-                ],
-            };
-
-            const graph = buildGraph(input);
-            const nodeA = graph.nodes["a::t1" as SongKey]!;
-            const nodeB = graph.nodes["b::t2" as SongKey]!;
-
-            expect(nodeA.next["b::t2" as SongKey]).toBe(1);
-            expect(nodeB.next["c::t3" as SongKey]).toBe(1);
-            expect(nodeA.sources).toEqual(["spotify-playlist"]);
-        });
-
-        it("processes multiple playlists independently", () => {
-            const input: GraphInput = {
-                spotifyPlaylistTracks: [
-                    {
-                        spotifyId: "s1",
-                        artist: "A",
-                        track: "T1",
-                        album: "",
-                        playlistId: "pl1",
-                        playlistName: "Playlist 1",
-                        position: 0,
-                    },
-                    {
-                        spotifyId: "s2",
-                        artist: "B",
-                        track: "T2",
-                        album: "",
-                        playlistId: "pl1",
-                        playlistName: "Playlist 1",
-                        position: 1,
-                    },
-                    {
-                        spotifyId: "s3",
-                        artist: "C",
-                        track: "T3",
-                        album: "",
-                        playlistId: "pl2",
-                        playlistName: "Playlist 2",
-                        position: 0,
-                    },
-                    {
-                        spotifyId: "s4",
-                        artist: "D",
-                        track: "T4",
-                        album: "",
-                        playlistId: "pl2",
-                        playlistName: "Playlist 2",
-                        position: 1,
-                    },
-                ],
-            };
-
-            const graph = buildGraph(input);
-            const nodeA = graph.nodes["a::t1" as SongKey]!;
-            const nodeC = graph.nodes["c::t3" as SongKey]!;
-
-            // Playlist 1: A -> B
-            expect(nodeA.next["b::t2" as SongKey]).toBe(1);
-            // Playlist 2: C -> D
-            expect(nodeC.next["d::t4" as SongKey]).toBe(1);
-            // No cross-playlist edge A -> C
-            expect(nodeA.next["c::t3" as SongKey]).toBeUndefined();
-        });
-
-        it("keeps same-name playlists with different IDs separate", () => {
-            const input: GraphInput = {
-                spotifyPlaylistTracks: [
-                    {
-                        spotifyId: "s1",
-                        artist: "A",
-                        track: "T1",
-                        album: "",
-                        playlistId: "id-alpha",
-                        playlistName: "Favorites",
-                        position: 0,
-                    },
-                    {
-                        spotifyId: "s2",
-                        artist: "B",
-                        track: "T2",
-                        album: "",
-                        playlistId: "id-alpha",
-                        playlistName: "Favorites",
-                        position: 1,
-                    },
-                    {
-                        spotifyId: "s3",
-                        artist: "C",
-                        track: "T3",
-                        album: "",
-                        playlistId: "id-beta",
-                        playlistName: "Favorites",
-                        position: 0,
-                    },
-                    {
-                        spotifyId: "s4",
-                        artist: "D",
-                        track: "T4",
-                        album: "",
-                        playlistId: "id-beta",
-                        playlistName: "Favorites",
-                        position: 1,
-                    },
-                ],
-            };
-
-            const graph = buildGraph(input);
-            const nodeA = graph.nodes["a::t1" as SongKey]!;
-            const nodeB = graph.nodes["b::t2" as SongKey]!;
-            const nodeC = graph.nodes["c::t3" as SongKey]!;
-
-            // Playlist id-alpha: A -> B
-            expect(nodeA.next["b::t2" as SongKey]).toBe(1);
-            // Playlist id-beta: C -> D
-            expect(nodeC.next["d::t4" as SongKey]).toBe(1);
-            // No cross-playlist edges
-            expect(nodeB.next["c::t3" as SongKey]).toBeUndefined();
-            expect(nodeA.next["c::t3" as SongKey]).toBeUndefined();
-        });
-    });
-
-    describe("cross-source merging", () => {
-        it("merges the same song from multiple sources", () => {
-            const input: GraphInput = {
-                lastfmScrobbles: [
-                    {
-                        artist: "Artist A",
-                        track: "Track 1",
-                        album: "Album 1",
-                        timestamp: 1000,
-                    },
-                ],
-                spotifyRecentTracks: [
-                    {
-                        spotifyId: "s1",
-                        artist: "Artist A",
-                        track: "Track 1",
-                        album: "Album 1",
-                        playedAt: "2024-01-01T00:00:00Z",
-                    },
-                ],
-            };
-
-            const graph = buildGraph(input);
-
-            // Same SongKey — should be one node
-            expect(Object.keys(graph.nodes)).toHaveLength(1);
-            const node = graph.nodes["artist a::track 1" as SongKey]!;
-            expect(node.totalPlays).toBe(2);
-            expect(node.sources).toContain("lastfm");
-            expect(node.sources).toContain("spotify-recent");
-            expect(node.spotifyId).toBe("s1");
-        });
-
-        it("sums edge weights across sources", () => {
+        it("does not create edges when gap exceeds 1 hour", () => {
             const input: GraphInput = {
                 lastfmScrobbles: [
                     { artist: "A", track: "T1", album: "", timestamp: 1000 },
-                    { artist: "B", track: "T2", album: "", timestamp: 2000 },
-                ],
-                spotifyRecentTracks: [
                     {
-                        spotifyId: "s1",
-                        artist: "A",
-                        track: "T1",
-                        album: "",
-                        playedAt: "2024-01-02T00:00:00Z",
-                    },
-                    {
-                        spotifyId: "s2",
                         artist: "B",
                         track: "T2",
                         album: "",
-                        playedAt: "2024-01-02T00:05:00Z",
-                    },
+                        timestamp: 1000 + 3601,
+                    }, // > 1 hour gap
                 ],
             };
 
             const graph = buildGraph(input);
-            const nodeA = graph.nodes["a::t1" as SongKey]!;
-
-            // A -> B from both sources
-            expect(nodeA.next["b::t2" as SongKey]).toBe(2);
+            expect(graph.edges).toHaveLength(0);
+            expect(
+                graph.nodes["a::t1" as SongKey]!.next["b::t2" as SongKey],
+            ).toBeUndefined();
         });
     });
 
@@ -414,6 +169,7 @@ describe("buildGraph", () => {
             const graph = buildGraph({});
 
             expect(Object.keys(graph.nodes)).toHaveLength(0);
+            expect(graph.edges).toHaveLength(0);
             expect(graph.metadata.totalScrobbles).toBe(0);
         });
 
@@ -430,60 +186,21 @@ describe("buildGraph", () => {
             expect(Object.keys(node.next)).toHaveLength(0);
             expect(Object.keys(node.previous)).toHaveLength(0);
             expect(node.totalPlays).toBe(1);
-        });
-
-        it("handles single-track playlist (no edges)", () => {
-            const input: GraphInput = {
-                spotifyPlaylistTracks: [
-                    {
-                        spotifyId: "s1",
-                        artist: "A",
-                        track: "T1",
-                        album: "",
-                        playlistId: "pl-solo",
-                        playlistName: "Solo",
-                        position: 0,
-                    },
-                ],
-            };
-
-            const graph = buildGraph(input);
-            const node = graph.nodes["a::t1" as SongKey]!;
-            expect(Object.keys(node.next)).toHaveLength(0);
+            expect(graph.edges).toHaveLength(0);
         });
     });
 
     describe("metadata", () => {
-        it("computes totalScrobbles across all sources", () => {
+        it("computes totalScrobbles", () => {
             const input: GraphInput = {
                 lastfmScrobbles: [
                     { artist: "A", track: "T1", album: "", timestamp: 1000 },
                     { artist: "B", track: "T2", album: "", timestamp: 2000 },
                 ],
-                spotifyRecentTracks: [
-                    {
-                        spotifyId: "s1",
-                        artist: "C",
-                        track: "T3",
-                        album: "",
-                        playedAt: "2024-01-01T00:00:00Z",
-                    },
-                ],
-                spotifyPlaylistTracks: [
-                    {
-                        spotifyId: "s2",
-                        artist: "D",
-                        track: "T4",
-                        album: "",
-                        playlistId: "pl-p",
-                        playlistName: "P",
-                        position: 0,
-                    },
-                ],
             };
 
             const graph = buildGraph(input);
-            expect(graph.metadata.totalScrobbles).toBe(4);
+            expect(graph.metadata.totalScrobbles).toBe(2);
         });
 
         it("computes date range from timestamps", () => {
@@ -521,14 +238,12 @@ describe("buildGraph", () => {
             vi.useRealTimers();
         });
 
-        it("includes usernames when provided", () => {
+        it("includes lastfmUsername when provided", () => {
             const graph = buildGraph({
                 lastfmUsername: "myuser",
-                spotifyUsername: "myspotify",
             });
 
             expect(graph.metadata.lastfmUsername).toBe("myuser");
-            expect(graph.metadata.spotifyUsername).toBe("myspotify");
         });
     });
 
@@ -581,6 +296,7 @@ describe("buildGraph", () => {
             expect(graph.metadata.dateRange.from).toBeTruthy();
             expect(graph.metadata.dateRange.to).toBeTruthy();
             expect(graph.metadata.totalScrobbles).toBe(count);
+            expect(graph.edges.length).toBeGreaterThan(0);
         });
     });
 });

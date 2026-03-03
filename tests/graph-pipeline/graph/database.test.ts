@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { GraphDatabase } from "../../../graph-pipeline/src/graph/database.js";
-import type { ListeningGraph, SongKey } from "../../../graph-pipeline/src/graph/types.js";
+import type { ListeningGraph, SongKey, GraphEdge } from "../../../graph-pipeline/src/graph/types.js";
 import { toSongKey } from "../../../graph-pipeline/src/graph/types.js";
 
 function makeTmpDir(): string {
@@ -15,17 +15,23 @@ function makeTestGraph(): ListeningGraph {
     const keyB = toSongKey("Artist B", "Track 2");
     const keyC = toSongKey("Artist A", "Track 3");
 
+    const edges: GraphEdge[] = [
+        { from: keyA, to: keyB, timestamp: "2024-01-01T00:00:00.000Z" },
+        { from: keyA, to: keyB, timestamp: "2024-01-02T00:00:00.000Z" },
+        { from: keyA, to: keyB, timestamp: "2024-01-03T00:00:00.000Z" },
+        { from: keyB, to: keyC, timestamp: "2024-01-04T00:00:00.000Z" },
+    ];
+
     return {
         nodes: {
             [keyA]: {
                 name: "Track 1",
                 artists: ["Artist A"],
                 albumName: "Album 1",
-                spotifyId: "sp-123",
                 next: { [keyB]: 3 } as Record<SongKey, number>,
                 previous: {} as Record<SongKey, number>,
                 totalPlays: 5,
-                sources: ["lastfm", "spotify-recent"],
+                playDates: ["2024-01-01T00:00:00.000Z", "2024-01-02T00:00:00.000Z"],
             },
             [keyB]: {
                 name: "Track 2",
@@ -35,7 +41,7 @@ function makeTestGraph(): ListeningGraph {
                 next: { [keyC]: 1 } as Record<SongKey, number>,
                 previous: { [keyA]: 3 } as Record<SongKey, number>,
                 totalPlays: 3,
-                sources: ["lastfm"],
+                playDates: ["2024-01-03T00:00:00.000Z"],
             },
             [keyC]: {
                 name: "Track 3",
@@ -43,9 +49,10 @@ function makeTestGraph(): ListeningGraph {
                 next: {} as Record<SongKey, number>,
                 previous: { [keyB]: 1 } as Record<SongKey, number>,
                 totalPlays: 1,
-                sources: ["spotify-playlist"],
+                playDates: [],
             },
         } as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
+        edges,
         metadata: {
             totalScrobbles: 9,
             dateRange: {
@@ -54,7 +61,6 @@ function makeTestGraph(): ListeningGraph {
             },
             exportTimestamp: "2025-01-15T12:00:00Z",
             lastfmUsername: "testuser",
-            spotifyUsername: "spotifyuser",
         },
     };
 }
@@ -91,14 +97,19 @@ describe("GraphDatabase", () => {
             expect(loadedNode.name).toBe(origNode.name);
             expect(loadedNode.artists).toEqual(origNode.artists);
             expect(loadedNode.albumName).toBe(origNode.albumName);
-            expect(loadedNode.spotifyId).toBe(origNode.spotifyId);
             expect(loadedNode.lastfmUrl).toBe(origNode.lastfmUrl);
             expect(loadedNode.totalPlays).toBe(origNode.totalPlays);
-            expect(loadedNode.sources.sort()).toEqual(
-                [...origNode.sources].sort(),
-            );
             expect(loadedNode.next).toEqual(origNode.next);
             expect(loadedNode.previous).toEqual(origNode.previous);
+            expect(loadedNode.playDates).toEqual(origNode.playDates);
+        }
+
+        // Compare edges
+        expect(loaded.edges).toHaveLength(original.edges.length);
+        for (let i = 0; i < original.edges.length; i++) {
+            expect(loaded.edges[i]!.from).toBe(original.edges[i]!.from);
+            expect(loaded.edges[i]!.to).toBe(original.edges[i]!.to);
+            expect(loaded.edges[i]!.timestamp).toBe(original.edges[i]!.timestamp);
         }
 
         // Compare metadata
@@ -112,157 +123,6 @@ describe("GraphDatabase", () => {
         expect(loaded.metadata.lastfmUsername).toBe(
             original.metadata.lastfmUsername,
         );
-        expect(loaded.metadata.spotifyUsername).toBe(
-            original.metadata.spotifyUsername,
-        );
-    });
-
-    it("supports incremental updates — merges edge weights and play counts", () => {
-        const keyA = toSongKey("Artist A", "Track 1");
-        const keyB = toSongKey("Artist B", "Track 2");
-
-        // First insert
-        const graph1: ListeningGraph = {
-            nodes: {
-                [keyA]: {
-                    name: "Track 1",
-                    artists: ["Artist A"],
-                    next: { [keyB]: 2 } as Record<SongKey, number>,
-                    previous: {} as Record<SongKey, number>,
-                    totalPlays: 3,
-                    sources: ["lastfm"],
-                },
-                [keyB]: {
-                    name: "Track 2",
-                    artists: ["Artist B"],
-                    next: {} as Record<SongKey, number>,
-                    previous: { [keyA]: 2 } as Record<SongKey, number>,
-                    totalPlays: 2,
-                    sources: ["lastfm"],
-                },
-            } as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
-            metadata: {
-                totalScrobbles: 5,
-                dateRange: {
-                    from: "2024-01-01T00:00:00Z",
-                    to: "2024-06-01T00:00:00Z",
-                },
-                exportTimestamp: "2025-01-01T00:00:00Z",
-            },
-        };
-
-        db.saveGraph(graph1);
-
-        // Second insert — adds more plays and a new source
-        const graph2: ListeningGraph = {
-            nodes: {
-                [keyA]: {
-                    name: "Track 1",
-                    artists: ["Artist A"],
-                    next: { [keyB]: 1 } as Record<SongKey, number>,
-                    previous: {} as Record<SongKey, number>,
-                    totalPlays: 2,
-                    sources: ["spotify-recent"],
-                },
-                [keyB]: {
-                    name: "Track 2",
-                    artists: ["Artist B"],
-                    next: {} as Record<SongKey, number>,
-                    previous: { [keyA]: 1 } as Record<SongKey, number>,
-                    totalPlays: 1,
-                    sources: ["spotify-recent"],
-                },
-            } as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
-            metadata: {
-                totalScrobbles: 3,
-                dateRange: {
-                    from: "2024-06-01T00:00:00Z",
-                    to: "2024-12-01T00:00:00Z",
-                },
-                exportTimestamp: "2025-02-01T00:00:00Z",
-            },
-        };
-
-        db.saveGraph(graph2);
-
-        const loaded = db.loadGraph();
-
-        // Play counts should be summed
-        expect(loaded.nodes[keyA]!.totalPlays).toBe(5); // 3 + 2
-        expect(loaded.nodes[keyB]!.totalPlays).toBe(3); // 2 + 1
-
-        // Edge weights should be summed
-        expect(loaded.nodes[keyA]!.next[keyB]).toBe(3); // 2 + 1
-
-        // Sources should be merged
-        expect(loaded.nodes[keyA]!.sources.sort()).toEqual(
-            ["lastfm", "spotify-recent"].sort(),
-        );
-
-        // Metadata should reflect latest export
-        expect(loaded.metadata.exportTimestamp).toBe("2025-02-01T00:00:00Z");
-    });
-
-    it("supports incremental updates — merges source_plays per-source counts", () => {
-        const keyA = toSongKey("Artist A", "Track 1");
-
-        // First save with lastfm plays
-        const graph1: ListeningGraph = {
-            nodes: {
-                [keyA]: {
-                    name: "Track 1",
-                    artists: ["Artist A"],
-                    next: {} as Record<SongKey, number>,
-                    previous: {} as Record<SongKey, number>,
-                    totalPlays: 3,
-                    sources: ["lastfm"],
-                    sourcePlays: { lastfm: 3 },
-                },
-            } as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
-            metadata: {
-                totalScrobbles: 3,
-                dateRange: {
-                    from: "2024-01-01T00:00:00Z",
-                    to: "2024-06-01T00:00:00Z",
-                },
-                exportTimestamp: "2025-01-01T00:00:00Z",
-            },
-        };
-
-        db.saveGraph(graph1);
-
-        // Second save with spotify plays
-        const graph2: ListeningGraph = {
-            nodes: {
-                [keyA]: {
-                    name: "Track 1",
-                    artists: ["Artist A"],
-                    next: {} as Record<SongKey, number>,
-                    previous: {} as Record<SongKey, number>,
-                    totalPlays: 2,
-                    sources: ["spotify-recent"],
-                    sourcePlays: { "spotify-recent": 2 },
-                },
-            } as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
-            metadata: {
-                totalScrobbles: 2,
-                dateRange: {
-                    from: "2024-06-01T00:00:00Z",
-                    to: "2024-12-01T00:00:00Z",
-                },
-                exportTimestamp: "2025-02-01T00:00:00Z",
-            },
-        };
-
-        db.saveGraph(graph2);
-
-        const loaded = db.loadGraph();
-
-        // source_plays should be merged additively
-        expect(loaded.nodes[keyA]!.sourcePlays).toEqual({
-            lastfm: 3,
-            "spotify-recent": 2,
-        });
     });
 
     it("getNode returns a single node with edges", () => {
@@ -288,7 +148,8 @@ describe("GraphDatabase", () => {
         db.saveGraph(graph);
 
         expect(db.getNodeCount()).toBe(3);
-        expect(db.getEdgeCount()).toBe(2); // A→B, B→C
+        // 4 individual edge events (3 A→B + 1 B→C)
+        expect(db.getEdgeCount()).toBe(4);
     });
 
     it("clearGraph + saveGraph is idempotent — repeated saves produce identical data", () => {
@@ -307,7 +168,7 @@ describe("GraphDatabase", () => {
         const second = db.loadGraph();
 
         expect(db.getNodeCount()).toBe(Object.keys(graph.nodes).length);
-        expect(db.getEdgeCount()).toBe(2);
+        expect(db.getEdgeCount()).toBe(4);
         expect(second.nodes[keyA]!.totalPlays).toBe(
             first.nodes[keyA]!.totalPlays,
         );
@@ -322,6 +183,7 @@ describe("GraphDatabase", () => {
     it("handles empty graph", () => {
         const empty: ListeningGraph = {
             nodes: {} as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
+            edges: [],
             metadata: {
                 totalScrobbles: 0,
                 dateRange: { from: "", to: "" },
@@ -333,6 +195,7 @@ describe("GraphDatabase", () => {
         const loaded = db.loadGraph();
 
         expect(Object.keys(loaded.nodes)).toHaveLength(0);
+        expect(loaded.edges).toHaveLength(0);
         expect(loaded.metadata.totalScrobbles).toBe(0);
     });
 });
