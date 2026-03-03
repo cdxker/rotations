@@ -14,7 +14,7 @@ export const Route = createFileRoute('/')({ component: App })
 function RenderGraph({ layout, dateRange, isDark }: { layout: LayoutMode; dateRange: DateRange | undefined; isDark: boolean }) {
   const loadGraph = useLoadGraph()
   const sigma = useSigma()
-  const { graph } = useGraph()
+  const { graph, raw } = useGraph()
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
 
   // Build set of neighbors for the selected node
@@ -53,22 +53,41 @@ function RenderGraph({ layout, dateRange, isDark }: { layout: LayoutMode; dateRa
     }
   }, [graph, layout, loadGraph])
 
-  // Build a map of node keys → play count within the selected date range
-  const filteredPlayCounts = useMemo(() => {
-    if (!dateRange?.from || !graph) return null
+  // Date filtering: compute filtered edge weights and visible nodes from raw edge timestamps
+  const dateFilter = useMemo(() => {
+    if (!dateRange?.from || !raw) return null
     const fromStr = dateRange.from.toISOString().slice(0, 10)
     const toStr = (dateRange.to ?? dateRange.from).toISOString().slice(0, 10)
-    const counts = new Map<string, number>()
-    graph.forEachNode((key, attrs) => {
-      let count = 0
-      for (const d of (attrs.playDates ?? [])) {
-        const day = d.slice(0, 10)
-        if (day >= fromStr && day <= toStr) count++
+
+    // Count edges within date range, grouped by (from, to)
+    const edgeWeights = new Map<string, number>()
+    const visibleNodes = new Set<string>()
+
+    for (const edge of raw.edges) {
+      const day = edge.timestamp.slice(0, 10)
+      if (day >= fromStr && day <= toStr) {
+        const mapKey = `${edge.from}→${edge.to}`
+        edgeWeights.set(mapKey, (edgeWeights.get(mapKey) ?? 0) + 1)
+        visibleNodes.add(edge.from)
+        visibleNodes.add(edge.to)
       }
-      if (count > 0) counts.set(key, count)
-    })
-    return counts
-  }, [dateRange, graph])
+    }
+
+    // Also include nodes that have playDates within range (even if they have no edges)
+    if (graph) {
+      graph.forEachNode((key, attrs) => {
+        for (const d of (attrs.playDates ?? [])) {
+          const day = d.slice(0, 10)
+          if (day >= fromStr && day <= toStr) {
+            visibleNodes.add(key)
+            break
+          }
+        }
+      })
+    }
+
+    return { edgeWeights, visibleNodes }
+  }, [dateRange, raw, graph])
 
   // Compute per-node sizing metric based on the active layout algorithm
   const nodeMetrics = useMemo(() => {
@@ -102,8 +121,8 @@ function RenderGraph({ layout, dateRange, isDark }: { layout: LayoutMode; dateRa
     if (!nodeMetrics) return 1
     let max = 1e-10
 
-    if (filteredPlayCounts) {
-      for (const key of filteredPlayCounts.keys()) {
+    if (dateFilter) {
+      for (const key of dateFilter.visibleNodes) {
         const val = nodeMetrics.get(key)
         if (val !== undefined && val > max) max = val
       }
@@ -114,7 +133,7 @@ function RenderGraph({ layout, dateRange, isDark }: { layout: LayoutMode; dateRa
     }
 
     return max
-  }, [nodeMetrics, filteredPlayCounts])
+  }, [nodeMetrics, dateFilter])
 
   // Update sigma reducers to hide nodes/edges not matching the filter and rescale sizes
   useEffect(() => {
@@ -127,7 +146,7 @@ function RenderGraph({ layout, dateRange, isDark }: { layout: LayoutMode; dateRa
     sigma.setSetting('labelColor', { color: isDark ? '#ffffff' : '#000000' })
 
     sigma.setSetting('nodeReducer', (_node: string, data: Record<string, unknown>) => {
-      if (filteredPlayCounts && !filteredPlayCounts.has(_node)) {
+      if (dateFilter && !dateFilter.visibleNodes.has(_node)) {
         return { ...data, hidden: true }
       }
       if (selectedNeighbors && !selectedNeighbors.has(_node)) {
@@ -142,11 +161,17 @@ function RenderGraph({ layout, dateRange, isDark }: { layout: LayoutMode; dateRa
     sigma.setSetting('edgeReducer', (edge: string, data: Record<string, unknown>) => {
       const source = g.source(edge)
       const target = g.target(edge)
-      if (filteredPlayCounts) {
-        if (!filteredPlayCounts.has(source) || !filteredPlayCounts.has(target)) {
+
+      if (dateFilter) {
+        const mapKey = `${source}→${target}`
+        const filteredWeight = dateFilter.edgeWeights.get(mapKey)
+        if (!filteredWeight) {
           return { ...data, hidden: true }
         }
+        // Use filtered weight for visual sizing
+        return { ...data, color: edgeBase(Math.min(0.6, 0.15 + filteredWeight * 0.05)) }
       }
+
       if (selectedNeighbors) {
         if (!selectedNeighbors.has(source) || !selectedNeighbors.has(target)) {
           return { ...data, hidden: true }
@@ -156,7 +181,7 @@ function RenderGraph({ layout, dateRange, isDark }: { layout: LayoutMode; dateRa
       return { ...data, color: edgeBase(Math.min(0.6, 0.15 + w * 0.05)) }
     })
     sigma.refresh()
-  }, [filteredPlayCounts, selectedNeighbors, nodeMetrics, maxMetric, sigma, isDark])
+  }, [dateFilter, selectedNeighbors, nodeMetrics, maxMetric, sigma, isDark])
 
   return null
 }

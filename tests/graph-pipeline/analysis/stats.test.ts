@@ -17,8 +17,7 @@ function makeGraph(): ListeningGraph {
                 next: { [keyB]: 3, [keyC]: 1 } as Record<SongKey, number>,
                 previous: {} as Record<SongKey, number>,
                 totalPlays: 10,
-                sources: ["lastfm", "spotify-recent"],
-                sourcePlays: { lastfm: 7, "spotify-recent": 3 },
+                playDates: [],
             },
             [keyB]: {
                 name: "Song 2",
@@ -26,8 +25,7 @@ function makeGraph(): ListeningGraph {
                 next: { [keyC]: 2 } as Record<SongKey, number>,
                 previous: { [keyA]: 3 } as Record<SongKey, number>,
                 totalPlays: 7,
-                sources: ["lastfm"],
-                sourcePlays: { lastfm: 7 },
+                playDates: [],
             },
             [keyC]: {
                 name: "Song 3",
@@ -38,8 +36,7 @@ function makeGraph(): ListeningGraph {
                     [keyB]: 2,
                 } as Record<SongKey, number>,
                 totalPlays: 4,
-                sources: ["lastfm", "spotify-playlist"],
-                sourcePlays: { lastfm: 2, "spotify-playlist": 2 },
+                playDates: [],
             },
             [keyD]: {
                 name: "Song 4",
@@ -47,10 +44,10 @@ function makeGraph(): ListeningGraph {
                 next: {} as Record<SongKey, number>,
                 previous: { [keyC]: 1 } as Record<SongKey, number>,
                 totalPlays: 1,
-                sources: ["spotify-playlist"],
-                sourcePlays: { "spotify-playlist": 1 },
+                playDates: [],
             },
         } as Record<SongKey, GraphNode>,
+        edges: [],
         metadata: {
             totalScrobbles: 22,
             dateRange: {
@@ -74,19 +71,6 @@ describe("computeStats", () => {
         expect(result.graphStats.totalScrobbles).toBe(22);
         expect(result.graphStats.dateRange.from).toBe("2024-01-01T00:00:00Z");
         expect(result.graphStats.dateRange.to).toBe("2024-12-31T00:00:00Z");
-    });
-
-    it("computes source breakdown correctly", () => {
-        const graph = makeGraph();
-        const result = computeStats(graph);
-        const sb = result.graphStats.sourceBreakdown;
-
-        // lastfm: A(7) + B(7) + C(2) = 16 scrobbles
-        expect(sb["lastfm"]).toBe(16);
-        // spotify-recent: A(3) = 3 scrobbles
-        expect(sb["spotify-recent"]).toBe(3);
-        // spotify-playlist: C(2) + D(1) = 3 scrobbles
-        expect(sb["spotify-playlist"]).toBe(3);
     });
 
     it("computes per-node stats correctly", () => {
@@ -144,6 +128,7 @@ describe("computeStats", () => {
     it("handles empty graph", () => {
         const empty: ListeningGraph = {
             nodes: {} as Record<SongKey, GraphNode>,
+            edges: [],
             metadata: {
                 totalScrobbles: 0,
                 dateRange: { from: "", to: "" },

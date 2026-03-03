@@ -8,7 +8,7 @@ export function makeNode(overrides: Partial<GraphNode> = {}): GraphNode {
         next: {} as Record<SongKey, number>,
         previous: {} as Record<SongKey, number>,
         totalPlays: 1,
-        sources: ["lastfm"],
+        playDates: [],
         ...overrides,
     };
 }
@@ -17,6 +17,7 @@ export function makeNode(overrides: Partial<GraphNode> = {}): GraphNode {
 export function makeGraph(nodes: Record<string, GraphNode>): ListeningGraph {
     return {
         nodes: nodes as Record<SongKey, GraphNode>,
+        edges: [],
         metadata: {
             totalScrobbles: 0,
             dateRange: { from: "", to: "" },
