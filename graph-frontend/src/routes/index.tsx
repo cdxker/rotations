@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { SigmaContainer, useLoadGraph, useSigma } from '@react-sigma/core'
 import { EdgeArrowProgram, NodePointProgram } from 'sigma/rendering'
@@ -11,7 +11,21 @@ import { SunIcon, MoonIcon } from 'lucide-react'
 
 export const Route = createFileRoute('/')({ component: App })
 
-function RenderGraph({ layout, dateRange, isDark }: { layout: LayoutMode; dateRange: DateRange | undefined; isDark: boolean }) {
+interface EdgeTooltip {
+  x: number
+  y: number
+  sourceLabel: string
+  targetLabel: string
+  timestamps: string[]
+}
+
+function formatTimestamp(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+}
+
+function RenderGraph({ layout, dateRange, isDark, onEdgeHover }: { layout: LayoutMode; dateRange: DateRange | undefined; isDark: boolean; onEdgeHover: (tooltip: EdgeTooltip | null) => void }) {
   const loadGraph = useLoadGraph()
   const sigma = useSigma()
   const { graph, raw } = useGraph()
@@ -44,6 +58,35 @@ function RenderGraph({ layout, dateRange, isDark }: { layout: LayoutMode; dateRa
       sigma.off('clickStage', handleClickStage)
     }
   }, [sigma])
+
+  // Edge hover tooltip
+  useEffect(() => {
+    if (!sigma || !graph) return
+    const handleEnterEdge = ({ edge, event }: { edge: string; event: { original: MouseEvent } }) => {
+      const g = sigma.getGraph()
+      const source = g.source(edge)
+      const target = g.target(edge)
+      const attrs = g.getEdgeAttributes(edge)
+      const sourceLabel = g.getNodeAttribute(source, 'label') ?? source
+      const targetLabel = g.getNodeAttribute(target, 'label') ?? target
+      onEdgeHover({
+        x: event.original.clientX,
+        y: event.original.clientY,
+        sourceLabel,
+        targetLabel,
+        timestamps: (attrs.timestamps as string[]) ?? [],
+      })
+    }
+    const handleLeaveEdge = () => {
+      onEdgeHover(null)
+    }
+    sigma.on('enterEdge', handleEnterEdge)
+    sigma.on('leaveEdge', handleLeaveEdge)
+    return () => {
+      sigma.off('enterEdge', handleEnterEdge)
+      sigma.off('leaveEdge', handleLeaveEdge)
+    }
+  }, [sigma, graph, onEdgeHover])
 
   useEffect(() => {
     if (graph) {
@@ -191,6 +234,8 @@ function App() {
   const [layout, setLayout] = useState<LayoutMode>('pagerank')
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [isDark, setIsDark] = useState(true)
+  const [edgeTooltip, setEdgeTooltip] = useState<EdgeTooltip | null>(null)
+  const handleEdgeHover = useCallback((t: EdgeTooltip | null) => setEdgeTooltip(t), [])
 
   // Toggle .dark class on <html> so dark: variants work everywhere
   useEffect(() => {
@@ -243,10 +288,25 @@ function App() {
           edgeProgramClasses: { arrow: EdgeArrowProgram },
           defaultDrawNodeHover: () => {},
           labelColor: { color: isDark ? '#ffffff' : '#000000' },
+          enableEdgeEvents: true,
         }}
       >
-        <RenderGraph layout={layout} dateRange={dateRange} isDark={isDark} />
+        <RenderGraph layout={layout} dateRange={dateRange} isDark={isDark} onEdgeHover={handleEdgeHover} />
       </SigmaContainer>
+      {edgeTooltip && (
+        <div
+          className="fixed z-50 pointer-events-none px-3 py-2 text-xs max-w-xs bg-neutral-900 text-neutral-100 dark:bg-neutral-100 dark:text-neutral-900 shadow-lg"
+          style={{ left: edgeTooltip.x + 12, top: edgeTooltip.y + 12 }}
+        >
+          <div className="font-medium mb-1">{edgeTooltip.sourceLabel} &rarr; {edgeTooltip.targetLabel}</div>
+          <div className="text-[10px] opacity-70 mb-1">{edgeTooltip.timestamps.length} transition{edgeTooltip.timestamps.length !== 1 ? 's' : ''}</div>
+          <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto">
+            {edgeTooltip.timestamps.slice().sort().map((ts, i) => (
+              <span key={i} className="tabular-nums">{formatTimestamp(ts)}</span>
+            ))}
+          </div>
+        </div>
+      )}
     </main>
   )
 }
