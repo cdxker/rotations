@@ -14,6 +14,7 @@ tickets/
 ├── phase6-triage/        — Review-comment triage tickets and disposition decisions
 ├── phase7-bugfixes/      — Bug fixes from triage
 ├── phase8-unclanking/    — Aggressive code cleanup targeting ~2,000 line reduction
+├── phase9-graph-server-rewrite/ — Copy graph-pipeline to graph-server, rewrite Spotify auth/client from scratch
 ```
 
 ## Numbering = Dependency Chain

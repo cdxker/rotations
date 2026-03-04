@@ -98,3 +98,10 @@
 - [X] `02-GraphEventsReducerCleanup.md` — Extract filter hook, consolidate reducers, remove debug logging (~100 lines)
 - [X] `02-MicroOptimizationsHygiene.md` — Trim JSDoc, fix Vercel best practices, sweep unused code (~200 lines)
 - [X] `03-LintAndFormat.md` — Run lint + format across both projects, fix any issues, final verification
+
+## Phase 9 — Graph Server Rewrite
+
+- [ ] `00-CopyGraphPipeline.md` — Copy `graph-pipeline/` to `graph-server/`, verify tests pass
+- [ ] `01-RewriteSpotifyAuth.md` — Rewrite `spotify-auth.ts` from scratch, inline all helpers
+- [ ] `02-RewriteSpotifyClient.md` — Rewrite `spotify-client.ts` from scratch, inline all interfaces/helpers
+- [ ] `03-VerifyAndReindex.md` — Update imports, test paths, `reindex.sh`, run full end-to-end reindex
