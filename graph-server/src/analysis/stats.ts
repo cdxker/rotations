@@ -98,8 +98,6 @@ export function computeStats(graph: ListeningGraph, topN = 10): StatsResult {
     let totalEdges = 0;
     const sourceBreakdown: Record<string, number> = {
         lastfm: 0,
-        "spotify-recent": 0,
-        "spotify-playlist": 0,
     };
 
     for (const [, node] of entries) {

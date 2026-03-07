@@ -72,6 +72,7 @@ describe("fetchLastfmScrobbles", () => {
         );
 
         const result = await fetchLastfmScrobbles(client, {
+            username: "test-user",
             dataDir: tmpDir,
             onProgress: (msg) => logs.push(msg),
         });
@@ -92,7 +93,7 @@ describe("fetchLastfmScrobbles", () => {
 
         // Verify file was written
         const saved: RawScrobble[] = JSON.parse(
-            await readFile(path.join(tmpDir, "lastfm-scrobbles.json"), "utf-8"),
+            await readFile(path.join(tmpDir, "lastfm-scrobbles-test-user.json"), "utf-8"),
         );
         expect(saved).toHaveLength(2);
     });
@@ -119,6 +120,7 @@ describe("fetchLastfmScrobbles", () => {
         });
 
         const result = await fetchLastfmScrobbles(client, {
+            username: "test-user",
             dataDir: tmpDir,
             onProgress: (msg) => logs.push(msg),
         });
@@ -154,6 +156,7 @@ describe("fetchLastfmScrobbles", () => {
         );
 
         const result = await fetchLastfmScrobbles(client, {
+            username: "test-user",
             dataDir: tmpDir,
             onProgress: (msg) => logs.push(msg),
         });
@@ -174,6 +177,7 @@ describe("fetchLastfmScrobbles", () => {
         );
 
         const result = await fetchLastfmScrobbles(client, {
+            username: "test-user",
             dataDir: tmpDir,
             onProgress: (msg) => logs.push(msg),
         });
@@ -193,6 +197,7 @@ describe("fetchLastfmScrobbles", () => {
         );
 
         const result = await fetchLastfmScrobbles(client, {
+            username: "test-user",
             dataDir: tmpDir,
             onProgress: (msg) => logs.push(msg),
         });
@@ -207,6 +212,7 @@ describe("fetchLastfmScrobbles", () => {
         );
 
         const result = await fetchLastfmScrobbles(client, {
+            username: "test-user",
             dataDir: tmpDir,
             onProgress: (msg) => logs.push(msg),
         });
@@ -227,6 +233,7 @@ describe("fetchLastfmScrobbles", () => {
         );
 
         const result = await fetchLastfmScrobbles(client, {
+            username: "test-user",
             dataDir: tmpDir,
             onProgress: (msg) => logs.push(msg),
         });
@@ -247,12 +254,13 @@ describe("fetchLastfmScrobbles", () => {
         );
 
         await fetchLastfmScrobbles(client, {
+            username: "test-user",
             dataDir: tmpDir,
             onProgress: (msg) => logs.push(msg),
         });
 
         // Verify checkpoint was saved
-        expect(existsSync(path.join(tmpDir, "lastfm-checkpoint.json"))).toBe(
+        expect(existsSync(path.join(tmpDir, "lastfm-checkpoint-test-user.json"))).toBe(
             true,
         );
 
@@ -272,6 +280,7 @@ describe("fetchLastfmScrobbles", () => {
         });
 
         const result = await fetchLastfmScrobbles(client, {
+            username: "test-user",
             dataDir: tmpDir,
             onProgress: (msg) => logs.push(msg),
         });
@@ -302,6 +311,7 @@ describe("fetchLastfmScrobbles", () => {
 
         // Should not throw RangeError: Maximum call stack size exceeded
         const result = await fetchLastfmScrobbles(client, {
+            username: "test-user",
             dataDir: tmpDir,
             onProgress: () => {},
         });
@@ -313,7 +323,7 @@ describe("fetchLastfmScrobbles", () => {
         // Create a fake checkpoint
         const { writeFile } = await import("node:fs/promises");
         await writeFile(
-            path.join(tmpDir, "lastfm-checkpoint.json"),
+            path.join(tmpDir, "lastfm-checkpoint-test-user.json"),
             JSON.stringify({
                 lastTimestamp: 1000,
                 scrobbleCount: 1,
@@ -333,6 +343,7 @@ describe("fetchLastfmScrobbles", () => {
         });
 
         const result = await fetchLastfmScrobbles(client, {
+            username: "test-user",
             dataDir: tmpDir,
             onProgress: (msg) => logs.push(msg),
             fullRefresh: true,

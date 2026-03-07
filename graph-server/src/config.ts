@@ -31,26 +31,3 @@ export function loadLastfmConfig(): LastfmConfig {
 
     return { apiKey, username };
 }
-
-export interface SpotifyConfig {
-    clientId: string;
-    clientSecret: string;
-    redirectPort: number;
-}
-
-export function loadSpotifyConfig(): SpotifyConfig {
-    const clientId = requireEnv(
-        "SPOTIFY_CLIENT_ID",
-        "Create a Spotify app at https://developer.spotify.com/dashboard",
-    );
-    const clientSecret = requireEnv(
-        "SPOTIFY_CLIENT_SECRET",
-        "Find it in your Spotify app settings at https://developer.spotify.com/dashboard",
-    );
-    const redirectPort = parseInt(
-        process.env.SPOTIFY_REDIRECT_PORT ?? "3001",
-        10,
-    );
-
-    return { clientId, clientSecret, redirectPort };
-}

@@ -19,41 +19,10 @@ export interface RawScrobble {
     imageUrl?: string;
 }
 
-/** A single track from Spotify's /v1/me/player/recently-played endpoint. */
-export interface RawSpotifyRecentTrack {
-    spotifyId: string;
-    artist: string;
-    track: string;
-    album: string;
-    /** ISO 8601 timestamp of when the track was played. */
-    playedAt: string;
-    /** Album artwork URL from Spotify, if available. */
-    imageUrl?: string;
-}
-
-/** A single track from a Spotify playlist, with its position in that playlist. */
-export interface RawSpotifyPlaylistTrack {
-    spotifyId: string;
-    artist: string;
-    track: string;
-    album: string;
-    /** Spotify playlist ID (URI-safe). Used as grouping key to avoid name collisions. */
-    playlistId: string;
-    /** Name of the playlist this track belongs to. */
-    playlistName: string;
-    /** Zero-based position of this track within the playlist. */
-    position: number;
-    /** Album artwork URL from Spotify, if available. */
-    imageUrl?: string;
-}
-
-/** Input data for the graph builder. All fields are optional — build with whatever sources are available. */
+/** Input data for the graph builder. */
 export interface GraphInput {
     lastfmScrobbles?: RawScrobble[];
-    spotifyRecentTracks?: RawSpotifyRecentTrack[];
-    spotifyPlaylistTracks?: RawSpotifyPlaylistTrack[];
     lastfmUsername?: string;
-    spotifyUsername?: string;
 }
 
 function getOrCreateNode(
@@ -147,123 +116,19 @@ function processLastfmScrobbles(
     return { totalPlays: keys.length, timestamps };
 }
 
-function processSpotifyRecentTracks(
-    nodes: Record<SongKey, GraphNode>,
-    tracks: RawSpotifyRecentTrack[],
-): { totalPlays: number; timestamps: number[] } {
-    // Sort chronologically by playedAt
-    const sorted = [...tracks].sort(
-        (a, b) =>
-            new Date(a.playedAt).getTime() - new Date(b.playedAt).getTime(),
-    );
-    const timestamps: number[] = [];
-    const keys: SongKey[] = [];
-
-    for (const track of sorted) {
-        if (!isValidTrack(track.artist, track.track)) continue;
-
-        const key = toSongKey(track.artist, track.track);
-        const node = getOrCreateNode(
-            nodes,
-            key,
-            track.track,
-            track.artist,
-            track.album,
-            track.imageUrl,
-        );
-        node.totalPlays++;
-        node.playDates.push(new Date(track.playedAt).toISOString());
-        node.spotifyId = node.spotifyId ?? track.spotifyId;
-        addSource(node, "spotify-recent");
-        keys.push(key);
-        timestamps.push(new Date(track.playedAt).getTime() / 1000);
-    }
-
-    // Create edges from consecutive pairs
-    for (let i = 0; i < keys.length - 1; i++) {
-        addEdge(nodes, keys[i]!, keys[i + 1]!);
-    }
-
-    return { totalPlays: keys.length, timestamps };
-}
-
-function processSpotifyPlaylists(
-    nodes: Record<SongKey, GraphNode>,
-    tracks: RawSpotifyPlaylistTrack[],
-): number {
-    // Group by playlist ID to avoid merging same-name playlists
-    const playlists = new Map<string, RawSpotifyPlaylistTrack[]>();
-    for (const track of tracks) {
-        const list = playlists.get(track.playlistId) ?? [];
-        list.push(track);
-        playlists.set(track.playlistId, list);
-    }
-
-    let totalPlays = 0;
-
-    for (const [, playlistTracks] of playlists) {
-        const sorted = playlistTracks.sort((a, b) => a.position - b.position);
-        const keys: SongKey[] = [];
-
-        for (const track of sorted) {
-            if (!isValidTrack(track.artist, track.track)) continue;
-
-            const key = toSongKey(track.artist, track.track);
-            const node = getOrCreateNode(
-                nodes,
-                key,
-                track.track,
-                track.artist,
-                track.album,
-                track.imageUrl,
-            );
-            node.totalPlays++;
-            node.spotifyId = node.spotifyId ?? track.spotifyId;
-            addSource(node, "spotify-playlist");
-            keys.push(key);
-            totalPlays++;
-        }
-
-        // Create edges from consecutive tracks in playlist
-        for (let i = 0; i < keys.length - 1; i++) {
-            addEdge(nodes, keys[i]!, keys[i + 1]!);
-        }
-    }
-
-    return totalPlays;
-}
-
 /**
  * Build a unified ListeningGraph from raw data sources.
- * Accepts any combination of Last.fm scrobbles, Spotify recent tracks,
- * and Spotify playlist tracks.
+ * Accepts Last.fm scrobbles.
  */
 export function buildGraph(input: GraphInput): ListeningGraph {
     const nodes: Record<SongKey, GraphNode> = {} as Record<SongKey, GraphNode>;
     const allTimestamps: number[] = [];
     let totalScrobbles = 0;
 
-    // Process each source
     if (input.lastfmScrobbles?.length) {
         const result = processLastfmScrobbles(nodes, input.lastfmScrobbles);
         totalScrobbles += result.totalPlays;
         for (const t of result.timestamps) allTimestamps.push(t);
-    }
-
-    if (input.spotifyRecentTracks?.length) {
-        const result = processSpotifyRecentTracks(
-            nodes,
-            input.spotifyRecentTracks,
-        );
-        totalScrobbles += result.totalPlays;
-        for (const t of result.timestamps) allTimestamps.push(t);
-    }
-
-    if (input.spotifyPlaylistTracks?.length) {
-        totalScrobbles += processSpotifyPlaylists(
-            nodes,
-            input.spotifyPlaylistTracks,
-        );
     }
 
     // Compute date range from timestamps (loop to avoid stack overflow on large arrays)
@@ -290,7 +155,6 @@ export function buildGraph(input: GraphInput): ListeningGraph {
             dateRange: { from, to },
             exportTimestamp: new Date().toISOString(),
             lastfmUsername: input.lastfmUsername,
-            spotifyUsername: input.spotifyUsername,
         },
     };
 }

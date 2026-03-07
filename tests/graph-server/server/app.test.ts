@@ -8,8 +8,9 @@ import { mkdtempSync } from "node:fs";
 import { unlinkSync } from "node:fs";
 import type { Hono } from "hono";
 
-function seedDatabase(dbPath: string): GraphDatabase {
+function seedDatabase(dbPath: string): { db: GraphDatabase; userId: number } {
     const db = new GraphDatabase(dbPath);
+    const userId = db.getOrCreateUser("testuser");
     const graph = buildGraph({
         lastfmScrobbles: [
             {
@@ -39,8 +40,8 @@ function seedDatabase(dbPath: string): GraphDatabase {
         ],
         lastfmUsername: "testuser",
     });
-    db.saveGraph(graph);
-    return db;
+    db.saveGraph(graph, userId);
+    return { db, userId };
 }
 
 describe("Graph API Server", () => {
@@ -52,7 +53,8 @@ describe("Graph API Server", () => {
     beforeEach(() => {
         tmpDir = mkdtempSync(join(tmpdir(), "graph-server-test-"));
         dbPath = join(tmpDir, "test.db");
-        db = seedDatabase(dbPath);
+        const seed = seedDatabase(dbPath);
+        db = seed.db;
         app = createApp({ dbPath });
     });
 
@@ -66,8 +68,18 @@ describe("Graph API Server", () => {
     });
 
     describe("GET /graph", () => {
-        it("returns the full graph", async () => {
+        it("returns 400 without user param", async () => {
             const res = await app.request("/graph");
+            expect(res.status).toBe(400);
+        });
+
+        it("returns 404 for unknown user", async () => {
+            const res = await app.request("/graph?user=nobody");
+            expect(res.status).toBe(404);
+        });
+
+        it("returns the full graph", async () => {
+            const res = await app.request("/graph?user=testuser");
             expect(res.status).toBe(200);
 
             const data = await res.json();
@@ -81,7 +93,7 @@ describe("Graph API Server", () => {
         });
 
         it("supports pagination with limit and offset", async () => {
-            const res = await app.request("/graph?limit=2&offset=0");
+            const res = await app.request("/graph?user=testuser&limit=2&offset=0");
             expect(res.status).toBe(200);
 
             const data = await res.json();
@@ -94,7 +106,7 @@ describe("Graph API Server", () => {
         });
 
         it("pagination second page", async () => {
-            const res = await app.request("/graph?limit=2&offset=2");
+            const res = await app.request("/graph?user=testuser&limit=2&offset=2");
             expect(res.status).toBe(200);
 
             const data = await res.json();
@@ -106,7 +118,7 @@ describe("Graph API Server", () => {
     describe("GET /graph/node/:songKey", () => {
         it("returns a single node", async () => {
             const key = encodeURIComponent("radiohead::creep");
-            const res = await app.request(`/graph/node/${key}`);
+            const res = await app.request(`/graph/node/${key}?user=testuser`);
             expect(res.status).toBe(200);
 
             const data = await res.json();
@@ -119,23 +131,29 @@ describe("Graph API Server", () => {
 
         it("returns 404 for unknown songKey", async () => {
             const key = encodeURIComponent("unknown::song");
-            const res = await app.request(`/graph/node/${key}`);
+            const res = await app.request(`/graph/node/${key}?user=testuser`);
             expect(res.status).toBe(404);
         });
 
         it("returns 400 for invalid songKey format", async () => {
-            const res = await app.request("/graph/node/invalidsongkey");
+            const res = await app.request("/graph/node/invalidsongkey?user=testuser");
             expect(res.status).toBe(400);
 
             const data = await res.json();
             expect(data.error).toContain("Invalid songKey");
+        });
+
+        it("returns 400 without user param", async () => {
+            const key = encodeURIComponent("radiohead::creep");
+            const res = await app.request(`/graph/node/${key}`);
+            expect(res.status).toBe(400);
         });
     });
 
     describe("GET /graph/neighbors/:songKey", () => {
         it("returns neighbors with full node data", async () => {
             const key = encodeURIComponent("radiohead::karma police");
-            const res = await app.request(`/graph/neighbors/${key}`);
+            const res = await app.request(`/graph/neighbors/${key}?user=testuser`);
             expect(res.status).toBe(200);
 
             const data = await res.json();
@@ -151,19 +169,19 @@ describe("Graph API Server", () => {
 
         it("returns 404 for unknown songKey", async () => {
             const key = encodeURIComponent("unknown::song");
-            const res = await app.request(`/graph/neighbors/${key}`);
+            const res = await app.request(`/graph/neighbors/${key}?user=testuser`);
             expect(res.status).toBe(404);
         });
 
         it("returns 400 for invalid songKey format", async () => {
-            const res = await app.request("/graph/neighbors/bad");
+            const res = await app.request("/graph/neighbors/bad?user=testuser");
             expect(res.status).toBe(400);
         });
     });
 
     describe("GET /graph/stats", () => {
         it("returns summary statistics", async () => {
-            const res = await app.request("/graph/stats");
+            const res = await app.request("/graph/stats?user=testuser");
             expect(res.status).toBe(200);
 
             const data = await res.json();
@@ -172,11 +190,16 @@ describe("Graph API Server", () => {
             expect(data.metadata).toBeDefined();
             expect(data.metadata.totalScrobbles).toBe(4);
         });
+
+        it("returns 400 without user param", async () => {
+            const res = await app.request("/graph/stats");
+            expect(res.status).toBe(400);
+        });
     });
 
     describe("CORS", () => {
         it("includes CORS headers", async () => {
-            const res = await app.request("/graph/stats", {
+            const res = await app.request("/graph/stats?user=testuser", {
                 headers: { Origin: "http://localhost:3000" },
             });
             expect(res.headers.get("access-control-allow-origin")).toBe("*");

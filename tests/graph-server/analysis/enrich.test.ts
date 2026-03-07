@@ -28,7 +28,7 @@ function makeTestGraph(): ListeningGraph {
                 next: { [keyC]: 2 } as Record<SongKey, number>,
                 previous: { [keyA]: 3 } as Record<SongKey, number>,
                 totalPlays: 7,
-                sources: ["lastfm", "spotify-recent"],
+                sources: ["lastfm"],
             },
             [keyC]: {
                 name: "Song 3",
@@ -39,7 +39,7 @@ function makeTestGraph(): ListeningGraph {
                     [keyB]: 2,
                 } as Record<SongKey, number>,
                 totalPlays: 3,
-                sources: ["spotify-playlist"],
+                sources: ["lastfm"],
             },
         } as Record<SongKey, GraphNode>,
         metadata: {

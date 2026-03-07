@@ -21,11 +21,10 @@ function makeTestGraph(): ListeningGraph {
                 name: "Track 1",
                 artists: ["Artist A"],
                 albumName: "Album 1",
-                spotifyId: "sp-123",
                 next: { [keyB]: 3 } as Record<SongKey, number>,
                 previous: {} as Record<SongKey, number>,
                 totalPlays: 5,
-                sources: ["lastfm", "spotify-recent"],
+                sources: ["lastfm"],
                 playDates: [],
             },
             [keyB]: {
@@ -45,7 +44,7 @@ function makeTestGraph(): ListeningGraph {
                 next: {} as Record<SongKey, number>,
                 previous: { [keyB]: 1 } as Record<SongKey, number>,
                 totalPlays: 1,
-                sources: ["spotify-playlist"],
+                sources: ["lastfm"],
                 playDates: [],
             },
         } as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
@@ -57,7 +56,6 @@ function makeTestGraph(): ListeningGraph {
             },
             exportTimestamp: "2025-01-15T12:00:00Z",
             lastfmUsername: "testuser",
-            spotifyUsername: "spotifyuser",
         },
     };
 }
@@ -65,10 +63,12 @@ function makeTestGraph(): ListeningGraph {
 describe("GraphDatabase", () => {
     let tmpDir: string;
     let db: GraphDatabase;
+    let userId: number;
 
     beforeEach(() => {
         tmpDir = makeTmpDir();
         db = new GraphDatabase(join(tmpDir, "test.db"));
+        userId = db.getOrCreateUser("testuser");
     });
 
     afterEach(() => {
@@ -76,10 +76,31 @@ describe("GraphDatabase", () => {
         rmSync(tmpDir, { recursive: true, force: true });
     });
 
+    it("getOrCreateUser returns same id for same username", () => {
+        const id1 = db.getOrCreateUser("alice");
+        const id2 = db.getOrCreateUser("alice");
+        expect(id1).toBe(id2);
+    });
+
+    it("getOrCreateUser returns different ids for different usernames", () => {
+        const id1 = db.getOrCreateUser("alice");
+        const id2 = db.getOrCreateUser("bob");
+        expect(id1).not.toBe(id2);
+    });
+
+    it("getUserId returns null for unknown username", () => {
+        expect(db.getUserId("unknown")).toBeNull();
+    });
+
+    it("getUserId returns id for known username", () => {
+        const id = db.getOrCreateUser("alice");
+        expect(db.getUserId("alice")).toBe(id);
+    });
+
     it("round-trips a graph: save → load → matches original", () => {
         const original = makeTestGraph();
-        db.saveGraph(original);
-        const loaded = db.loadGraph();
+        db.saveGraph(original, userId);
+        const loaded = db.loadGraph(userId);
 
         // Compare nodes
         const origKeys = Object.keys(original.nodes).sort();
@@ -94,7 +115,6 @@ describe("GraphDatabase", () => {
             expect(loadedNode.name).toBe(origNode.name);
             expect(loadedNode.artists).toEqual(origNode.artists);
             expect(loadedNode.albumName).toBe(origNode.albumName);
-            expect(loadedNode.spotifyId).toBe(origNode.spotifyId);
             expect(loadedNode.lastfmUrl).toBe(origNode.lastfmUrl);
             expect(loadedNode.totalPlays).toBe(origNode.totalPlays);
             expect(loadedNode.sources.sort()).toEqual(
@@ -114,9 +134,6 @@ describe("GraphDatabase", () => {
         );
         expect(loaded.metadata.lastfmUsername).toBe(
             original.metadata.lastfmUsername,
-        );
-        expect(loaded.metadata.spotifyUsername).toBe(
-            original.metadata.spotifyUsername,
         );
     });
 
@@ -156,9 +173,9 @@ describe("GraphDatabase", () => {
             },
         };
 
-        db.saveGraph(graph1);
+        db.saveGraph(graph1, userId);
 
-        // Second insert — adds more plays and a new source
+        // Second insert — adds more plays
         const graph2: ListeningGraph = {
             nodes: {
                 [keyA]: {
@@ -167,7 +184,7 @@ describe("GraphDatabase", () => {
                     next: { [keyB]: 1 } as Record<SongKey, number>,
                     previous: {} as Record<SongKey, number>,
                     totalPlays: 2,
-                    sources: ["spotify-recent"],
+                    sources: ["lastfm"],
                     playDates: [],
                 },
                 [keyB]: {
@@ -176,7 +193,7 @@ describe("GraphDatabase", () => {
                     next: {} as Record<SongKey, number>,
                     previous: { [keyA]: 1 } as Record<SongKey, number>,
                     totalPlays: 1,
-                    sources: ["spotify-recent"],
+                    sources: ["lastfm"],
                     playDates: [],
                 },
             } as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
@@ -190,9 +207,9 @@ describe("GraphDatabase", () => {
             },
         };
 
-        db.saveGraph(graph2);
+        db.saveGraph(graph2, userId);
 
-        const loaded = db.loadGraph();
+        const loaded = db.loadGraph(userId);
 
         // Play counts should be summed
         expect(loaded.nodes[keyA]!.totalPlays).toBe(5); // 3 + 2
@@ -200,11 +217,6 @@ describe("GraphDatabase", () => {
 
         // Edge weights should be summed
         expect(loaded.nodes[keyA]!.next[keyB]).toBe(3); // 2 + 1
-
-        // Sources should be merged
-        expect(loaded.nodes[keyA]!.sources.sort()).toEqual(
-            ["lastfm", "spotify-recent"].sort(),
-        );
 
         // Metadata should reflect latest export
         expect(loaded.metadata.exportTimestamp).toBe("2025-02-01T00:00:00Z");
@@ -237,9 +249,9 @@ describe("GraphDatabase", () => {
             },
         };
 
-        db.saveGraph(graph1);
+        db.saveGraph(graph1, userId);
 
-        // Second save with spotify plays
+        // Second save with more lastfm plays
         const graph2: ListeningGraph = {
             nodes: {
                 [keyA]: {
@@ -248,8 +260,8 @@ describe("GraphDatabase", () => {
                     next: {} as Record<SongKey, number>,
                     previous: {} as Record<SongKey, number>,
                     totalPlays: 2,
-                    sources: ["spotify-recent"],
-                    sourcePlays: { "spotify-recent": 2 },
+                    sources: ["lastfm"],
+                    sourcePlays: { lastfm: 2 },
                     playDates: [],
                 },
             } as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
@@ -263,41 +275,72 @@ describe("GraphDatabase", () => {
             },
         };
 
-        db.saveGraph(graph2);
+        db.saveGraph(graph2, userId);
 
-        const loaded = db.loadGraph();
+        const loaded = db.loadGraph(userId);
 
         // source_plays should be merged additively
         expect(loaded.nodes[keyA]!.sourcePlays).toEqual({
-            lastfm: 3,
-            "spotify-recent": 2,
+            lastfm: 5,
         });
+    });
+
+    it("isolates data between users", () => {
+        const aliceId = db.getOrCreateUser("alice");
+        const bobId = db.getOrCreateUser("bob");
+
+        const keyA = toSongKey("Artist A", "Track 1");
+
+        const aliceGraph: ListeningGraph = {
+            nodes: {
+                [keyA]: {
+                    name: "Track 1",
+                    artists: ["Artist A"],
+                    next: {} as Record<SongKey, number>,
+                    previous: {} as Record<SongKey, number>,
+                    totalPlays: 5,
+                    sources: ["lastfm"],
+                    playDates: [],
+                },
+            } as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
+            metadata: {
+                totalScrobbles: 5,
+                dateRange: { from: "", to: "" },
+                exportTimestamp: "2025-01-01T00:00:00Z",
+            },
+        };
+
+        db.saveGraph(aliceGraph, aliceId);
+
+        // Bob should have no data
+        expect(db.getNodeCount(bobId)).toBe(0);
+        expect(db.getNodeCount(aliceId)).toBe(1);
     });
 
     it("getNode returns a single node with edges", () => {
         const graph = makeTestGraph();
-        db.saveGraph(graph);
+        db.saveGraph(graph, userId);
 
         const keyA = toSongKey("Artist A", "Track 1");
         const keyB = toSongKey("Artist B", "Track 2");
 
-        const node = db.getNode(keyA);
+        const node = db.getNode(keyA, userId);
         expect(node).not.toBeNull();
         expect(node!.name).toBe("Track 1");
         expect(node!.next[keyB]).toBe(3);
     });
 
     it("getNode returns null for nonexistent key", () => {
-        const node = db.getNode("nonexistent::key" as SongKey);
+        const node = db.getNode("nonexistent::key" as SongKey, userId);
         expect(node).toBeNull();
     });
 
     it("getNodeCount and getEdgeCount", () => {
         const graph = makeTestGraph();
-        db.saveGraph(graph);
+        db.saveGraph(graph, userId);
 
-        expect(db.getNodeCount()).toBe(3);
-        expect(db.getEdgeCount()).toBe(2); // A→B, B→C
+        expect(db.getNodeCount(userId)).toBe(3);
+        expect(db.getEdgeCount(userId)).toBe(2); // A→B, B→C
     });
 
     it("clearGraph + saveGraph is idempotent — repeated saves produce identical data", () => {
@@ -306,17 +349,17 @@ describe("GraphDatabase", () => {
         const keyB = toSongKey("Artist B", "Track 2");
 
         // Save once
-        db.clearGraph();
-        db.saveGraph(graph);
-        const first = db.loadGraph();
+        db.clearGraph(userId);
+        db.saveGraph(graph, userId);
+        const first = db.loadGraph(userId);
 
         // Save again with clear — should be identical
-        db.clearGraph();
-        db.saveGraph(graph);
-        const second = db.loadGraph();
+        db.clearGraph(userId);
+        db.saveGraph(graph, userId);
+        const second = db.loadGraph(userId);
 
-        expect(db.getNodeCount()).toBe(Object.keys(graph.nodes).length);
-        expect(db.getEdgeCount()).toBe(2);
+        expect(db.getNodeCount(userId)).toBe(Object.keys(graph.nodes).length);
+        expect(db.getEdgeCount(userId)).toBe(2);
         expect(second.nodes[keyA]!.totalPlays).toBe(
             first.nodes[keyA]!.totalPlays,
         );
@@ -338,8 +381,8 @@ describe("GraphDatabase", () => {
             },
         };
 
-        db.saveGraph(empty);
-        const loaded = db.loadGraph();
+        db.saveGraph(empty, userId);
+        const loaded = db.loadGraph(userId);
 
         expect(Object.keys(loaded.nodes)).toHaveLength(0);
         expect(loaded.metadata.totalScrobbles).toBe(0);

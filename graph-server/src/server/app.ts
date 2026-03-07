@@ -7,10 +7,8 @@ import { enrichGraph } from "../analysis/enrich.js";
 import { shortestPath, strongestPath } from "../analysis/paths.js";
 import { LastfmClient } from "../ingestion/lastfm-client.js";
 import { fetchLastfmScrobbles } from "../ingestion/lastfm-fetcher.js";
-import { SpotifyAuth } from "../ingestion/spotify-auth.js";
-import { SpotifyClient } from "../ingestion/spotify-client.js";
 import { buildGraph } from "../graph/build-graph.js";
-import { loadLastfmConfig } from "../config.js";
+import { requireEnv } from "../config.js";
 
 const DATA_DIR = path.join(import.meta.dirname, "../../data");
 
@@ -26,6 +24,27 @@ function parseSongKey(rawKey: string): SongKey {
     return decoded as SongKey;
 }
 
+/** Parse `{ username }` from JSON body, returning 400 if missing. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function requireUsername(c: any): Promise<string> {
+    const body = await c.req.json();
+    const username = body?.username;
+    if (!username || typeof username !== "string") {
+        throw { error: "Missing required field: username", status: 400 };
+    }
+    return username;
+}
+
+/** Get required `?user=` query param, returning 400 if missing. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function requireUserQuery(c: any): string {
+    const user = c.req.query("user");
+    if (!user) {
+        throw { error: "Missing required query parameter: user", status: 400 };
+    }
+    return user;
+}
+
 export interface ServerConfig {
     dbPath: string;
 }
@@ -36,6 +55,11 @@ async function pipelineHandler(c: any, label: string, fn: () => Promise<any>) {
     try {
         return await fn();
     } catch (err) {
+        // Re-throw structured errors with status codes
+        if (err && typeof err === "object" && "status" in err && "error" in err) {
+            const e = err as { error: string; status: number };
+            return c.json({ error: e.error }, e.status);
+        }
         return c.json(
             {
                 error: `${label}: ${err instanceof Error ? err.message : err}`,
@@ -55,10 +79,23 @@ export function createApp(config: ServerConfig): Hono {
 
     // GET /graph — full graph (with optional pagination)
     app.get("/graph", (c) => {
+        let user: string;
+        try {
+            user = requireUserQuery(c);
+        } catch (e: unknown) {
+            const err = e as { error: string };
+            return c.json({ error: err.error }, 400);
+        }
+
+        const userId = db.getUserId(user);
+        if (userId === null) {
+            return c.json({ error: "User not found" }, 404);
+        }
+
         const limit = parseInt(c.req.query("limit") ?? "0", 10);
         const offset = parseInt(c.req.query("offset") ?? "0", 10);
 
-        const graph = db.loadGraph();
+        const graph = db.loadGraph(userId);
         const allKeys = Object.keys(graph.nodes) as SongKey[];
 
         if (limit > 0) {
@@ -84,6 +121,19 @@ export function createApp(config: ServerConfig): Hono {
 
     // GET /graph/node/:songKey — single node with its edges
     app.get("/graph/node/:songKey", (c) => {
+        let user: string;
+        try {
+            user = requireUserQuery(c);
+        } catch (e: unknown) {
+            const err = e as { error: string };
+            return c.json({ error: err.error }, 400);
+        }
+
+        const userId = db.getUserId(user);
+        if (userId === null) {
+            return c.json({ error: "User not found" }, 404);
+        }
+
         let songKey: SongKey;
         try {
             songKey = parseSongKey(c.req.param("songKey"));
@@ -92,7 +142,7 @@ export function createApp(config: ServerConfig): Hono {
             return c.json({ error: err.error }, 400);
         }
 
-        const node = db.getNode(songKey);
+        const node = db.getNode(songKey, userId);
         if (!node) {
             return c.json({ error: "Node not found" }, 404);
         }
@@ -102,6 +152,19 @@ export function createApp(config: ServerConfig): Hono {
 
     // GET /graph/neighbors/:songKey — immediate neighbors (next + previous)
     app.get("/graph/neighbors/:songKey", (c) => {
+        let user: string;
+        try {
+            user = requireUserQuery(c);
+        } catch (e: unknown) {
+            const err = e as { error: string };
+            return c.json({ error: err.error }, 400);
+        }
+
+        const userId = db.getUserId(user);
+        if (userId === null) {
+            return c.json({ error: "User not found" }, 404);
+        }
+
         let songKey: SongKey;
         try {
             songKey = parseSongKey(c.req.param("songKey"));
@@ -110,7 +173,7 @@ export function createApp(config: ServerConfig): Hono {
             return c.json({ error: err.error }, 400);
         }
 
-        const node = db.getNode(songKey);
+        const node = db.getNode(songKey, userId);
         if (!node) {
             return c.json({ error: "Node not found" }, 404);
         }
@@ -121,7 +184,7 @@ export function createApp(config: ServerConfig): Hono {
             { node: GraphNode; weight: number }
         > = {};
         for (const [key, weight] of Object.entries(node.next)) {
-            const neighborNode = db.getNode(key as SongKey);
+            const neighborNode = db.getNode(key as SongKey, userId);
             if (neighborNode) {
                 nextNeighbors[key] = { node: neighborNode, weight };
             }
@@ -132,7 +195,7 @@ export function createApp(config: ServerConfig): Hono {
             { node: GraphNode; weight: number }
         > = {};
         for (const [key, weight] of Object.entries(node.previous)) {
-            const neighborNode = db.getNode(key as SongKey);
+            const neighborNode = db.getNode(key as SongKey, userId);
             if (neighborNode) {
                 previousNeighbors[key] = { node: neighborNode, weight };
             }
@@ -148,9 +211,22 @@ export function createApp(config: ServerConfig): Hono {
 
     // GET /graph/stats — summary statistics
     app.get("/graph/stats", (c) => {
-        const nodeCount = db.getNodeCount();
-        const edgeCount = db.getEdgeCount();
-        const graph = db.loadGraph();
+        let user: string;
+        try {
+            user = requireUserQuery(c);
+        } catch (e: unknown) {
+            const err = e as { error: string };
+            return c.json({ error: err.error }, 400);
+        }
+
+        const userId = db.getUserId(user);
+        if (userId === null) {
+            return c.json({ error: "User not found" }, 404);
+        }
+
+        const nodeCount = db.getNodeCount(userId);
+        const edgeCount = db.getEdgeCount(userId);
+        const graph = db.loadGraph(userId);
 
         return c.json({
             totalNodes: nodeCount,
@@ -161,14 +237,40 @@ export function createApp(config: ServerConfig): Hono {
 
     // GET /graph/analysis — full analysis: stats, rankings, PageRank top songs, cluster summaries
     app.get("/graph/analysis", (c) => {
+        let user: string;
+        try {
+            user = requireUserQuery(c);
+        } catch (e: unknown) {
+            const err = e as { error: string };
+            return c.json({ error: err.error }, 400);
+        }
+
+        const userId = db.getUserId(user);
+        if (userId === null) {
+            return c.json({ error: "User not found" }, 404);
+        }
+
         const topN = parseInt(c.req.query("topN") ?? "20", 10);
-        const graph = db.loadGraph();
+        const graph = db.loadGraph(userId);
         const { summary } = enrichGraph(graph, { topN });
         return c.json(summary);
     });
 
     // GET /graph/path — find a path between two songs
     app.get("/graph/path", (c) => {
+        let user: string;
+        try {
+            user = requireUserQuery(c);
+        } catch (e: unknown) {
+            const err = e as { error: string };
+            return c.json({ error: err.error }, 400);
+        }
+
+        const userId = db.getUserId(user);
+        if (userId === null) {
+            return c.json({ error: "User not found" }, 404);
+        }
+
         const from = c.req.query("from");
         const to = c.req.query("to");
         const algorithm = c.req.query("algorithm") ?? "shortest";
@@ -197,7 +299,7 @@ export function createApp(config: ServerConfig): Hono {
             );
         }
 
-        const graph = db.loadGraph();
+        const graph = db.loadGraph(userId);
         const result =
             algorithm === "strongest"
                 ? strongestPath(graph, fromKey, toKey)
@@ -208,78 +310,19 @@ export function createApp(config: ServerConfig): Hono {
 
     // ===== Pipeline Routes =====
 
-    // GET /pipeline/spotify/login — Open in browser to start Spotify OAuth
-    let pendingAuthState: string | null = null;
-    app.get("/pipeline/spotify/login", async (c) => {
-        const auth = new SpotifyAuth();
-        if (await auth.hasTokens()) {
-            return c.html("<html><body><h1>Already authorized</h1><p>Spotify tokens exist on disk.</p></body></html>");
-        }
-        const { randomBytes } = await import("node:crypto");
-        pendingAuthState = randomBytes(16).toString("hex");
-        const authUrl = auth.buildAuthUrl(pendingAuthState);
-        return c.redirect(authUrl);
-    });
-
-    // GET /pipeline/spotify/callback — OAuth callback handler
-    app.get("/pipeline/spotify/callback", async (c) => {
-        const code = c.req.query("code");
-        const state = c.req.query("state");
-        const error = c.req.query("error");
-
-        if (error) {
-            return c.html(`<html><body><h1>Authorization failed</h1><p>${error}</p></body></html>`, 400);
-        }
-        if (!pendingAuthState || state !== pendingAuthState) {
-            return c.html("<html><body><h1>State mismatch</h1><p>Possible CSRF. Please try again.</p></body></html>", 400);
-        }
-        if (!code) {
-            return c.html("<html><body><h1>Missing code</h1><p>No authorization code received.</p></body></html>", 400);
-        }
-
-        pendingAuthState = null;
-        const auth = new SpotifyAuth();
-        try {
-            const tokens = await auth.exchangeCode(code);
-            await auth.saveTokens(tokens);
-            return c.html(
-                "<html><body><h1>Authorization successful!</h1>" +
-                    "<p>Spotify tokens saved. You can close this tab.</p></body></html>",
-            );
-        } catch (err) {
-            return c.html(
-                `<html><body><h1>Token exchange failed</h1><p>${err instanceof Error ? err.message : err}</p></body></html>`,
-                500,
-            );
-        }
-    });
-
-    // POST /pipeline/spotify/auth — kept for backward compatibility, redirects to GET login
-    app.post("/pipeline/spotify/auth", (c) =>
-        pipelineHandler(c, "Spotify auth failed", async () => {
-            const auth = new SpotifyAuth();
-            if (await auth.hasTokens()) {
-                return c.json({
-                    status: "already_authorized",
-                    message: "Spotify tokens already exist.",
-                });
-            }
-            return c.json({
-                status: "redirect",
-                message: "Open GET /pipeline/spotify/login in your browser to authorize.",
-            });
-        }),
-    );
-
     // POST /pipeline/fetch/lastfm — Fetch scrobble history from Last.fm
     app.post("/pipeline/fetch/lastfm", (c) =>
         pipelineHandler(c, "Last.fm fetch failed", async () => {
-            const config = loadLastfmConfig();
-            const client = new LastfmClient(config);
+            const username = await requireUsername(c);
+            const apiKey = requireEnv("LASTFM_API_KEY");
+            const client = new LastfmClient({ apiKey, username });
             await client.verifyAuth();
+
+            db.getOrCreateUser(username);
 
             const logs: string[] = [];
             const scrobbles = await fetchLastfmScrobbles(client, {
+                username,
                 onProgress: (msg) => logs.push(msg),
             });
 
@@ -291,81 +334,44 @@ export function createApp(config: ServerConfig): Hono {
         }),
     );
 
-    // POST /pipeline/fetch/spotify — Fetch recently played + playlists from Spotify
-    app.post("/pipeline/fetch/spotify", (c) =>
-        pipelineHandler(c, "Spotify fetch failed", async () => {
-            const auth = new SpotifyAuth();
-            if (!(await auth.hasTokens())) {
-                return c.json(
-                    {
-                        error: "Not authorized. Call POST /pipeline/spotify/auth first.",
-                    },
-                    400,
-                );
-            }
-            const client = new SpotifyClient(auth);
-            const dump = await client.fetchAll();
-            await client.exportToJson(
-                path.join(DATA_DIR, "spotify-dump.json"),
-                dump,
-            );
-
-            return c.json({
-                status: "complete",
-                recentlyPlayed: dump.recentlyPlayed.length,
-                playlistTracks: dump.playlistTracks.length,
-            });
-        }),
-    );
-
     // POST /pipeline/build — Build graph from fetched data, enrich, and store in DB
     app.post("/pipeline/build", (c) =>
         pipelineHandler(c, "Build failed", async () => {
+            const username = await requireUsername(c);
+            const userId = db.getUserId(username);
+            if (userId === null) {
+                return c.json(
+                    { error: "User not found. Fetch data first via /pipeline/fetch/lastfm" },
+                    404,
+                );
+            }
+
             const { readFile } = await import("node:fs/promises");
             const { existsSync } = await import("node:fs");
 
-            const lastfmPath = path.join(DATA_DIR, "lastfm-scrobbles.json");
-            const spotifyPath = path.join(DATA_DIR, "spotify-dump.json");
+            const lastfmPath = path.join(DATA_DIR, `lastfm-scrobbles-${username}.json`);
 
-            if (!existsSync(lastfmPath) && !existsSync(spotifyPath)) {
+            if (!existsSync(lastfmPath)) {
                 return c.json(
                     {
-                        error: "No data found. Fetch data first via /pipeline/fetch/lastfm or /pipeline/fetch/spotify",
+                        error: "No data found. Fetch data first via /pipeline/fetch/lastfm",
                     },
                     400,
                 );
             }
 
-            let lastfmScrobbles;
-            if (existsSync(lastfmPath)) {
-                lastfmScrobbles = JSON.parse(
-                    await readFile(lastfmPath, "utf-8"),
-                );
-            }
-
-            let spotifyDump;
-            if (existsSync(spotifyPath)) {
-                spotifyDump = JSON.parse(await readFile(spotifyPath, "utf-8"));
-            }
-
-            const lastfmConfig = (() => {
-                try {
-                    return loadLastfmConfig();
-                } catch {
-                    return null;
-                }
-            })();
+            const lastfmScrobbles = JSON.parse(
+                await readFile(lastfmPath, "utf-8"),
+            );
 
             const graph = buildGraph({
                 lastfmScrobbles,
-                spotifyRecentTracks: spotifyDump?.recentlyPlayed,
-                spotifyPlaylistTracks: spotifyDump?.playlistTracks,
-                lastfmUsername: lastfmConfig?.username,
+                lastfmUsername: username,
             });
 
             const { summary } = enrichGraph(graph);
-            db.clearGraph();
-            db.saveGraph(graph);
+            db.clearGraph(userId);
+            db.saveGraph(graph, userId);
 
             const nodeCount = Object.keys(graph.nodes).length;
             const edgeCount = Object.values(graph.nodes).reduce(
@@ -383,38 +389,25 @@ export function createApp(config: ServerConfig): Hono {
         }),
     );
 
-    // POST /pipeline/run — Run the full pipeline (Last.fm only, Spotify requires separate auth)
+    // POST /pipeline/run — Run the full pipeline: fetch → build → enrich → save
     app.post("/pipeline/run", (c) =>
         pipelineHandler(c, "Pipeline failed", async () => {
+            const username = await requireUsername(c);
             const steps: string[] = [];
 
-            const config = loadLastfmConfig();
-            const client = new LastfmClient(config);
+            const apiKey = requireEnv("LASTFM_API_KEY");
+            const client = new LastfmClient({ apiKey, username });
             await client.verifyAuth();
             steps.push("Last.fm auth verified");
 
-            const scrobbles = await fetchLastfmScrobbles(client);
-            steps.push(`Fetched ${scrobbles.length} scrobbles from Last.fm`);
+            const userId = db.getOrCreateUser(username);
 
-            let spotifyDump = null;
-            const auth = new SpotifyAuth();
-            if (await auth.hasTokens()) {
-                const spotifyClient = new SpotifyClient(auth);
-                spotifyDump = await spotifyClient.fetchAll();
-                steps.push(
-                    `Fetched ${spotifyDump.recentlyPlayed.length} recent + ${spotifyDump.playlistTracks.length} playlist tracks from Spotify`,
-                );
-            } else {
-                steps.push(
-                    "Spotify not authorized — skipping. Call POST /pipeline/spotify/auth to set up.",
-                );
-            }
+            const scrobbles = await fetchLastfmScrobbles(client, { username });
+            steps.push(`Fetched ${scrobbles.length} scrobbles from Last.fm`);
 
             const graph = buildGraph({
                 lastfmScrobbles: scrobbles,
-                spotifyRecentTracks: spotifyDump?.recentlyPlayed,
-                spotifyPlaylistTracks: spotifyDump?.playlistTracks,
-                lastfmUsername: config.username,
+                lastfmUsername: username,
             });
             steps.push(`Built graph: ${Object.keys(graph.nodes).length} nodes`);
 
@@ -423,8 +416,8 @@ export function createApp(config: ServerConfig): Hono {
                 `Enriched: ${summary.clusters.clusterCount} clusters, PageRank converged=${summary.pageRank.converged}`,
             );
 
-            db.clearGraph();
-            db.saveGraph(graph);
+            db.clearGraph(userId);
+            db.saveGraph(graph, userId);
             steps.push("Saved to database");
 
             return c.json({ status: "complete", steps });

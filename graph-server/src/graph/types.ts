@@ -4,7 +4,7 @@
  * Relationship between identifiers:
  *
  * - `SongKey` is the canonical identity used in the graph: `lowercase(artist)::lowercase(track)`.
- *   It enables cross-source matching — the same song from Last.fm and Spotify resolves to the
+ *   It enables cross-source matching — the same song resolves to the
  *   same key regardless of minor formatting differences.
  *
  * - `TrackId` (from site/src/shared/types.ts) is a branded string (`track-${string}`) used by
@@ -28,14 +28,13 @@ export type SongKey = `${string}::${string}`;
  */
 export type TrackId = `track-${string}`;
 
-export type ListeningSource = "lastfm" | "spotify-recent" | "spotify-playlist";
+export type ListeningSource = "lastfm";
 
 /** A node in the listening graph representing a single song. */
 export interface GraphNode {
     name: string;
     artists: string[];
     albumName?: string;
-    spotifyId?: string;
     lastfmUrl?: string;
 
     /**
@@ -71,7 +70,6 @@ export interface GraphMetadata {
     dateRange: { from: string; to: string };
     exportTimestamp: string;
     lastfmUsername?: string;
-    spotifyUsername?: string;
 }
 
 /** The full listening graph: all nodes + metadata. */

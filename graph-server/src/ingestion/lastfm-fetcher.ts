@@ -88,6 +88,8 @@ function deduplicateScrobbles(scrobbles: RawScrobble[]): RawScrobble[] {
 }
 
 export interface FetchOptions {
+    /** Last.fm username — used to scope output filenames. */
+    username: string;
     /** Override data output directory (for testing). */
     dataDir?: string;
     /** Callback for progress updates. Defaults to console.log. */
@@ -102,12 +104,12 @@ export interface FetchOptions {
  */
 export async function fetchLastfmScrobbles(
     client: LastfmClient,
-    options: FetchOptions = {},
+    options: FetchOptions,
 ): Promise<RawScrobble[]> {
     const dataDir = options.dataDir ?? DATA_DIR;
     const log = options.onProgress ?? console.log;
-    const outputPath = path.join(dataDir, "lastfm-scrobbles.json");
-    const checkpointPath = path.join(dataDir, "lastfm-checkpoint.json");
+    const outputPath = path.join(dataDir, `lastfm-scrobbles-${options.username}.json`);
+    const checkpointPath = path.join(dataDir, `lastfm-checkpoint-${options.username}.json`);
 
     await mkdir(dataDir, { recursive: true });
 
