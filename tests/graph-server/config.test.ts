@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { loadLastfmConfig } from "../../graph-server/src/config.js";
+import { requireEnv } from "../../graph-server/src/config.js";
 
-describe("loadLastfmConfig", () => {
+describe("requireEnv", () => {
     const originalEnv = process.env;
 
     beforeEach(() => {
@@ -12,28 +12,18 @@ describe("loadLastfmConfig", () => {
         process.env = originalEnv;
     });
 
-    it("returns config when both env vars are set", () => {
-        process.env.LASTFM_API_KEY = "test-key";
-        process.env.LASTFM_USERNAME = "test-user";
-
-        const config = loadLastfmConfig();
-        expect(config).toEqual({
-            apiKey: "test-key",
-            username: "test-user",
-        });
+    it("returns the value when the env var is set", () => {
+        process.env.TEST_VAR = "hello";
+        expect(requireEnv("TEST_VAR")).toBe("hello");
     });
 
-    it("throws when LASTFM_API_KEY is missing", () => {
-        delete process.env.LASTFM_API_KEY;
-        process.env.LASTFM_USERNAME = "test-user";
-
-        expect(() => loadLastfmConfig()).toThrow("LASTFM_API_KEY is not set");
+    it("throws when the env var is missing", () => {
+        delete process.env.TEST_VAR;
+        expect(() => requireEnv("TEST_VAR")).toThrow("TEST_VAR is not set");
     });
 
-    it("throws when LASTFM_USERNAME is missing", () => {
-        process.env.LASTFM_API_KEY = "test-key";
-        delete process.env.LASTFM_USERNAME;
-
-        expect(() => loadLastfmConfig()).toThrow("LASTFM_USERNAME is not set");
+    it("includes hint in error message when provided", () => {
+        delete process.env.TEST_VAR;
+        expect(() => requireEnv("TEST_VAR", "Set it up")).toThrow("Set it up");
     });
 });

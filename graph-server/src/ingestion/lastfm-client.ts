@@ -1,6 +1,9 @@
-import { loadLastfmConfig, type LastfmConfig } from "../config.js";
-
 const LASTFM_API_BASE = "https://ws.audioscrobbler.com/2.0/";
+
+export interface LastfmClientConfig {
+    apiKey: string;
+    username: string;
+}
 
 export interface LastfmUserInfo {
     name: string;
@@ -11,10 +14,10 @@ export interface LastfmUserInfo {
 }
 
 export class LastfmClient {
-    private readonly config: LastfmConfig;
+    private readonly config: LastfmClientConfig;
 
-    constructor(config?: LastfmConfig) {
-        this.config = config ?? loadLastfmConfig();
+    constructor(config: LastfmClientConfig) {
+        this.config = config;
     }
 
     /**
@@ -52,7 +55,7 @@ export class LastfmClient {
         return data;
     }
 
-    /** Get the authenticated user's username (from config). */
+    /** Get the username (from config). */
     get username(): string {
         return this.config.username;
     }

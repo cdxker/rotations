@@ -13,21 +13,3 @@ export function requireEnv(name: string, hint?: string): string {
     }
     return value;
 }
-
-export interface LastfmConfig {
-    apiKey: string;
-    username: string;
-}
-
-export function loadLastfmConfig(): LastfmConfig {
-    const apiKey = requireEnv(
-        "LASTFM_API_KEY",
-        "Get an API key at https://www.last.fm/api/account/create",
-    );
-    const username = requireEnv(
-        "LASTFM_USERNAME",
-        "This should be the Last.fm username whose history you want to export.",
-    );
-
-    return { apiKey, username };
-}

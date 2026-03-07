@@ -5,11 +5,10 @@ REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 PIPELINE_DIR="$REPO_DIR/graph-server"
 PORT="${GRAPH_SERVER_PORT:-3001}"
 BASE_URL="http://localhost:$PORT"
-USERNAME="${1:-${LASTFM_USERNAME:-}}"
+USERNAME="${1:-}"
 
 if [ -z "$USERNAME" ]; then
     echo "Usage: $0 <username>"
-    echo "Or set LASTFM_USERNAME env var"
     exit 1
 fi
 
