@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import Database from "better-sqlite3";
 import type {
     SongKey,
@@ -5,6 +6,8 @@ import type {
     ListeningGraph,
     GraphMetadata,
     ListeningSource,
+    CompactGraphNode,
+    CompactGraph,
 } from "./types.js";
 
 const SCHEMA_SQL = `
@@ -15,8 +18,10 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS nodes (
+    id TEXT NOT NULL,
     user_id INTEGER NOT NULL,
     song_key TEXT NOT NULL,
+    mbid TEXT,
     name TEXT NOT NULL,
     artists TEXT NOT NULL,
     album_name TEXT,
@@ -30,21 +35,23 @@ CREATE TABLE IF NOT EXISTS nodes (
     source_plays TEXT,
     play_dates TEXT NOT NULL DEFAULT '[]',
     positions TEXT,
-    PRIMARY KEY (user_id, song_key),
+    PRIMARY KEY (id),
+    UNIQUE(user_id, song_key),
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS edges (
     user_id INTEGER NOT NULL,
-    from_key TEXT NOT NULL,
-    to_key TEXT NOT NULL,
+    from_id TEXT NOT NULL,
+    to_id TEXT NOT NULL,
     weight INTEGER NOT NULL DEFAULT 1,
-    PRIMARY KEY (user_id, from_key, to_key),
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    PRIMARY KEY (user_id, from_id, to_id),
+    FOREIGN KEY (from_id) REFERENCES nodes(id),
+    FOREIGN KEY (to_id) REFERENCES nodes(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(user_id, from_key);
-CREATE INDEX IF NOT EXISTS idx_edges_to ON edges(user_id, to_key);
+CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(user_id, from_id);
+CREATE INDEX IF NOT EXISTS idx_edges_to ON edges(user_id, to_id);
 
 CREATE TABLE IF NOT EXISTS metadata (
     user_id INTEGER NOT NULL,
@@ -104,13 +111,14 @@ export class GraphDatabase {
      */
     saveGraph(graph: ListeningGraph, userId: number): void {
         const upsertNode = this.db.prepare(`
-            INSERT INTO nodes (user_id, song_key, name, artists, album_name, lastfm_url, track_id, total_plays, sources, page_rank, cluster_id, image_url, source_plays, play_dates, positions)
-            VALUES (@userId, @songKey, @name, @artists, @albumName, @lastfmUrl, @trackId, @totalPlays, @sources, @pageRank, @clusterId, @imageUrl, @sourcePlays, @playDates, @positions)
+            INSERT INTO nodes (id, user_id, song_key, mbid, name, artists, album_name, lastfm_url, track_id, total_plays, sources, page_rank, cluster_id, image_url, source_plays, play_dates, positions)
+            VALUES (@id, @userId, @songKey, @mbid, @name, @artists, @albumName, @lastfmUrl, @trackId, @totalPlays, @sources, @pageRank, @clusterId, @imageUrl, @sourcePlays, @playDates, @positions)
             ON CONFLICT(user_id, song_key) DO UPDATE SET
                 name = COALESCE(excluded.name, nodes.name),
                 artists = excluded.artists,
                 album_name = COALESCE(excluded.album_name, nodes.album_name),
                 lastfm_url = COALESCE(excluded.lastfm_url, nodes.lastfm_url),
+                mbid = COALESCE(excluded.mbid, nodes.mbid),
                 track_id = COALESCE(excluded.track_id, nodes.track_id),
                 total_plays = nodes.total_plays + excluded.total_plays,
                 sources = excluded.sources,
@@ -123,9 +131,9 @@ export class GraphDatabase {
         `);
 
         const upsertEdge = this.db.prepare(`
-            INSERT INTO edges (user_id, from_key, to_key, weight)
-            VALUES (@userId, @fromKey, @toKey, @weight)
-            ON CONFLICT(user_id, from_key, to_key) DO UPDATE SET
+            INSERT INTO edges (user_id, from_id, to_id, weight)
+            VALUES (@userId, @fromId, @toId, @weight)
+            ON CONFLICT(user_id, from_id, to_id) DO UPDATE SET
                 weight = edges.weight + excluded.weight
         `);
 
@@ -135,16 +143,23 @@ export class GraphDatabase {
         `);
 
         const transaction = this.db.transaction(() => {
+            // Build songKey → UUID map (reuse existing UUIDs for existing nodes)
+            const songKeyToUuid = new Map<string, string>();
+
             // Insert/update nodes
             for (const [songKey, node] of Object.entries(graph.nodes)) {
-                // Merge sources and source_plays with existing
+                // Check for existing node to reuse its UUID
                 const existingRow = this.db
                     .prepare(
-                        "SELECT sources, source_plays FROM nodes WHERE user_id = ? AND song_key = ?",
+                        "SELECT id, sources, source_plays FROM nodes WHERE user_id = ? AND song_key = ?",
                     )
                     .get(userId, songKey) as
-                    | { sources: string; source_plays: string | null }
+                    | { id: string; sources: string; source_plays: string | null }
                     | undefined;
+
+                const uuid = existingRow?.id ?? randomUUID();
+                songKeyToUuid.set(songKey, uuid);
+
                 const existingSources: ListeningSource[] = existingRow
                     ? JSON.parse(existingRow.sources)
                     : [];
@@ -169,8 +184,10 @@ export class GraphDatabase {
                 }
 
                 upsertNode.run({
+                    id: uuid,
                     userId,
                     songKey,
+                    mbid: node.mbid ?? null,
                     name: node.name,
                     artists: JSON.stringify(node.artists),
                     albumName: node.albumName ?? null,
@@ -191,13 +208,17 @@ export class GraphDatabase {
                 });
             }
 
-            // Insert/update edges (next edges)
+            // Insert/update edges using UUIDs
             for (const [songKey, node] of Object.entries(graph.nodes)) {
+                const fromId = songKeyToUuid.get(songKey);
+                if (!fromId) continue;
                 for (const [toKey, weight] of Object.entries(node.next)) {
+                    const toId = songKeyToUuid.get(toKey);
+                    if (!toId) continue;
                     upsertEdge.run({
                         userId,
-                        fromKey: songKey,
-                        toKey,
+                        fromId,
+                        toId,
                         weight,
                     });
                 }
@@ -232,7 +253,7 @@ export class GraphDatabase {
         transaction();
     }
 
-    /** Load the full ListeningGraph from the database for a specific user. */
+    /** Load the full ListeningGraph from the database for a specific user (SongKey-based, for internal analysis). */
     loadGraph(userId: number): ListeningGraph {
         const nodeRows = this.db
             .prepare("SELECT * FROM nodes WHERE user_id = ?")
@@ -241,21 +262,24 @@ export class GraphDatabase {
             .prepare("SELECT * FROM edges WHERE user_id = ?")
             .all(userId) as EdgeRow[];
 
+        // Build uuid → songKey map
+        const uuidToSongKey = new Map<string, SongKey>();
         const nodes: Record<SongKey, GraphNode> = {} as Record<
             SongKey,
             GraphNode
         >;
 
-        // Build nodes
         for (const row of nodeRows) {
             const key = row.song_key as SongKey;
+            uuidToSongKey.set(row.id, key);
             nodes[key] = this.rowToNode(row);
         }
 
-        // Build edges
+        // Build edges (translate UUIDs to SongKeys)
         for (const edge of edgeRows) {
-            const fromKey = edge.from_key as SongKey;
-            const toKey = edge.to_key as SongKey;
+            const fromKey = uuidToSongKey.get(edge.from_id);
+            const toKey = uuidToSongKey.get(edge.to_id);
+            if (!fromKey || !toKey) continue;
             if (nodes[fromKey]) {
                 nodes[fromKey].next[toKey] = edge.weight;
             }
@@ -264,23 +288,36 @@ export class GraphDatabase {
             }
         }
 
-        // Load metadata
-        const metaRows = this.db
-            .prepare("SELECT * FROM metadata WHERE user_id = ?")
-            .all(userId) as MetadataRow[];
-        const metaMap = new Map(metaRows.map((r) => [r.key, r.value]));
+        const metadata = this.loadMetadata(userId);
+        return { nodes, metadata };
+    }
 
-        const dateRange = metaMap.get("dateRange")
-            ? JSON.parse(metaMap.get("dateRange")!)
-            : { from: "", to: "" };
+    /** Load a compact graph for API responses (UUID-keyed nodes and edges). */
+    loadGraphCompact(userId: number): CompactGraph {
+        const nodeRows = this.db
+            .prepare("SELECT * FROM nodes WHERE user_id = ?")
+            .all(userId) as NodeRow[];
+        const edgeRows = this.db
+            .prepare("SELECT * FROM edges WHERE user_id = ?")
+            .all(userId) as EdgeRow[];
 
-        const metadata: GraphMetadata = {
-            totalScrobbles: Number(metaMap.get("totalScrobbles") ?? "0"),
-            dateRange,
-            exportTimestamp: metaMap.get("exportTimestamp") ?? "",
-            lastfmUsername: metaMap.get("lastfmUsername"),
-        };
+        const nodes: Record<string, CompactGraphNode> = {};
 
+        for (const row of nodeRows) {
+            nodes[row.id] = this.rowToCompactNode(row);
+        }
+
+        // Build edges using UUIDs directly
+        for (const edge of edgeRows) {
+            if (nodes[edge.from_id]) {
+                nodes[edge.from_id].next[edge.to_id] = edge.weight;
+            }
+            if (nodes[edge.to_id]) {
+                nodes[edge.to_id].previous[edge.from_id] = edge.weight;
+            }
+        }
+
+        const metadata = this.loadMetadata(userId);
         return { nodes, metadata };
     }
 
@@ -292,26 +329,59 @@ export class GraphDatabase {
         if (!row) return null;
 
         const outEdges = this.db
-            .prepare("SELECT to_key, weight FROM edges WHERE user_id = ? AND from_key = ?")
-            .all(userId, songKey) as Pick<EdgeRow, "to_key" | "weight">[];
+            .prepare("SELECT to_id, weight FROM edges WHERE user_id = ? AND from_id = ?")
+            .all(userId, row.id) as Pick<EdgeRow, "to_id" | "weight">[];
         const inEdges = this.db
-            .prepare("SELECT from_key, weight FROM edges WHERE user_id = ? AND to_key = ?")
-            .all(userId, songKey) as Pick<EdgeRow, "from_key" | "weight">[];
+            .prepare("SELECT from_id, weight FROM edges WHERE user_id = ? AND to_id = ?")
+            .all(userId, row.id) as Pick<EdgeRow, "from_id" | "weight">[];
 
+        // Translate UUIDs to SongKeys
         const next: Record<SongKey, number> = {} as Record<SongKey, number>;
         for (const e of outEdges) {
-            next[e.to_key as SongKey] = e.weight;
+            const sk = this.uuidToSongKey(e.to_id, userId);
+            if (sk) next[sk] = e.weight;
         }
 
         const previous: Record<SongKey, number> = {} as Record<SongKey, number>;
         for (const e of inEdges) {
-            previous[e.from_key as SongKey] = e.weight;
+            const sk = this.uuidToSongKey(e.from_id, userId);
+            if (sk) previous[sk] = e.weight;
         }
 
         const node = this.rowToNode(row);
         node.next = next;
         node.previous = previous;
         return node;
+    }
+
+    /** Get a single node by its UUID, returning compact format for API. */
+    getNodeById(id: string, userId: number): (CompactGraphNode & { id: string }) | null {
+        const row = this.db
+            .prepare("SELECT * FROM nodes WHERE id = ? AND user_id = ?")
+            .get(id, userId) as NodeRow | undefined;
+        if (!row) return null;
+
+        const outEdges = this.db
+            .prepare("SELECT to_id, weight FROM edges WHERE user_id = ? AND from_id = ?")
+            .all(userId, row.id) as Pick<EdgeRow, "to_id" | "weight">[];
+        const inEdges = this.db
+            .prepare("SELECT from_id, weight FROM edges WHERE user_id = ? AND to_id = ?")
+            .all(userId, row.id) as Pick<EdgeRow, "from_id" | "weight">[];
+
+        const next: Record<string, number> = {};
+        for (const e of outEdges) {
+            next[e.to_id] = e.weight;
+        }
+
+        const previous: Record<string, number> = {};
+        for (const e of inEdges) {
+            previous[e.from_id] = e.weight;
+        }
+
+        const node = this.rowToCompactNode(row);
+        node.next = next;
+        node.previous = previous;
+        return { id: row.id, ...node };
     }
 
     /** Get the total number of nodes in the database for a specific user. */
@@ -330,6 +400,33 @@ export class GraphDatabase {
         return row.count;
     }
 
+    /** Translate a UUID to a SongKey. */
+    private uuidToSongKey(uuid: string, userId: number): SongKey | null {
+        const row = this.db
+            .prepare("SELECT song_key FROM nodes WHERE id = ? AND user_id = ?")
+            .get(uuid, userId) as { song_key: string } | undefined;
+        return row ? (row.song_key as SongKey) : null;
+    }
+
+    /** Load metadata for a user. */
+    private loadMetadata(userId: number): GraphMetadata {
+        const metaRows = this.db
+            .prepare("SELECT * FROM metadata WHERE user_id = ?")
+            .all(userId) as MetadataRow[];
+        const metaMap = new Map(metaRows.map((r) => [r.key, r.value]));
+
+        const dateRange = metaMap.get("dateRange")
+            ? JSON.parse(metaMap.get("dateRange")!)
+            : { from: "", to: "" };
+
+        return {
+            totalScrobbles: Number(metaMap.get("totalScrobbles") ?? "0"),
+            dateRange,
+            exportTimestamp: metaMap.get("exportTimestamp") ?? "",
+            lastfmUsername: metaMap.get("lastfmUsername"),
+        };
+    }
+
     /** Convert a database NodeRow into a GraphNode (without edges). */
     private rowToNode(row: NodeRow): GraphNode {
         return {
@@ -337,6 +434,7 @@ export class GraphDatabase {
             artists: JSON.parse(row.artists),
             albumName: row.album_name ?? undefined,
             lastfmUrl: row.lastfm_url ?? undefined,
+            mbid: row.mbid ?? undefined,
             trackId: row.track_id
                 ? (row.track_id as `track-${string}`)
                 : undefined,
@@ -357,6 +455,32 @@ export class GraphDatabase {
         };
     }
 
+    /** Convert a database NodeRow into a CompactGraphNode (without edges). */
+    private rowToCompactNode(row: NodeRow): CompactGraphNode {
+        return {
+            songKey: row.song_key as SongKey,
+            mbid: row.mbid ?? undefined,
+            name: row.name,
+            artists: JSON.parse(row.artists),
+            albumName: row.album_name ?? undefined,
+            lastfmUrl: row.lastfm_url ?? undefined,
+            imageUrl: row.image_url ?? undefined,
+            next: {},
+            previous: {},
+            totalPlays: row.total_plays,
+            sources: JSON.parse(row.sources),
+            sourcePlays: row.source_plays
+                ? JSON.parse(row.source_plays)
+                : undefined,
+            pageRank: row.page_rank ?? undefined,
+            clusterId: row.cluster_id ?? undefined,
+            playDates: row.play_dates ? JSON.parse(row.play_dates) : [],
+            positions: row.positions
+                ? JSON.parse(row.positions)
+                : undefined,
+        };
+    }
+
     /** Close the database connection. */
     close(): void {
         this.db.close();
@@ -365,8 +489,10 @@ export class GraphDatabase {
 
 /** Row shape from the nodes table. */
 interface NodeRow {
+    id: string;
     user_id: number;
     song_key: string;
+    mbid: string | null;
     name: string;
     artists: string;
     album_name: string | null;
@@ -385,8 +511,8 @@ interface NodeRow {
 /** Row shape from the edges table. */
 interface EdgeRow {
     user_id: number;
-    from_key: string;
-    to_key: string;
+    from_id: string;
+    to_id: string;
     weight: number;
 }
 

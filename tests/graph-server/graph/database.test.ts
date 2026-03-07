@@ -21,6 +21,7 @@ function makeTestGraph(): ListeningGraph {
                 name: "Track 1",
                 artists: ["Artist A"],
                 albumName: "Album 1",
+                mbid: "mbid-aaa",
                 next: { [keyB]: 3 } as Record<SongKey, number>,
                 previous: {} as Record<SongKey, number>,
                 totalPlays: 5,
@@ -97,7 +98,7 @@ describe("GraphDatabase", () => {
         expect(db.getUserId("alice")).toBe(id);
     });
 
-    it("round-trips a graph: save → load → matches original", () => {
+    it("round-trips a graph: save → loadGraph → matches original (SongKey-based)", () => {
         const original = makeTestGraph();
         db.saveGraph(original, userId);
         const loaded = db.loadGraph(userId);
@@ -116,6 +117,7 @@ describe("GraphDatabase", () => {
             expect(loadedNode.artists).toEqual(origNode.artists);
             expect(loadedNode.albumName).toBe(origNode.albumName);
             expect(loadedNode.lastfmUrl).toBe(origNode.lastfmUrl);
+            expect(loadedNode.mbid).toBe(origNode.mbid);
             expect(loadedNode.totalPlays).toBe(origNode.totalPlays);
             expect(loadedNode.sources.sort()).toEqual(
                 [...origNode.sources].sort(),
@@ -135,6 +137,74 @@ describe("GraphDatabase", () => {
         expect(loaded.metadata.lastfmUsername).toBe(
             original.metadata.lastfmUsername,
         );
+    });
+
+    it("loadGraphCompact returns UUID-keyed nodes with compact edges", () => {
+        const original = makeTestGraph();
+        db.saveGraph(original, userId);
+        const compact = db.loadGraphCompact(userId);
+
+        // UUID keys should not contain "::"
+        const uuids = Object.keys(compact.nodes);
+        expect(uuids).toHaveLength(3);
+        for (const uuid of uuids) {
+            expect(uuid).not.toContain("::");
+        }
+
+        // Each compact node should have songKey
+        for (const node of Object.values(compact.nodes)) {
+            expect(node.songKey).toContain("::");
+        }
+
+        // Find the node for Track 1 (has mbid)
+        const track1 = Object.values(compact.nodes).find(n => n.name === "Track 1");
+        expect(track1).toBeDefined();
+        expect(track1!.mbid).toBe("mbid-aaa");
+
+        // Verify edges use UUID keys
+        const track1Entry = Object.entries(compact.nodes).find(([, n]) => n.name === "Track 1");
+        expect(track1Entry).toBeDefined();
+        const [track1Uuid, track1Node] = track1Entry!;
+        const nextUuids = Object.keys(track1Node.next);
+        expect(nextUuids).toHaveLength(1);
+        // The next UUID should be a valid key in the nodes map
+        expect(compact.nodes[nextUuids[0]!]).toBeDefined();
+        expect(compact.nodes[nextUuids[0]!]!.name).toBe("Track 2");
+
+        // Verify previous edges on Track 2
+        const track2 = Object.values(compact.nodes).find(n => n.name === "Track 2");
+        expect(track2).toBeDefined();
+        const prevUuids = Object.keys(track2!.previous);
+        expect(prevUuids).toHaveLength(1);
+        expect(prevUuids[0]).toBe(track1Uuid);
+
+        // Metadata should match
+        expect(compact.metadata.totalScrobbles).toBe(original.metadata.totalScrobbles);
+    });
+
+    it("getNodeById returns compact node by UUID", () => {
+        db.saveGraph(makeTestGraph(), userId);
+        const compact = db.loadGraphCompact(userId);
+
+        const [uuid, expectedNode] = Object.entries(compact.nodes).find(
+            ([, n]) => n.name === "Track 1",
+        )!;
+
+        const fetched = db.getNodeById(uuid, userId);
+        expect(fetched).not.toBeNull();
+        expect(fetched!.id).toBe(uuid);
+        expect(fetched!.name).toBe("Track 1");
+        expect(fetched!.songKey).toBe(expectedNode.songKey);
+        expect(fetched!.mbid).toBe("mbid-aaa");
+        // Edges should use UUIDs
+        const nextUuids = Object.keys(fetched!.next);
+        expect(nextUuids).toHaveLength(1);
+        expect(nextUuids[0]).not.toContain("::");
+    });
+
+    it("getNodeById returns null for unknown UUID", () => {
+        const result = db.getNodeById("nonexistent-uuid", userId);
+        expect(result).toBeNull();
     });
 
     it("supports incremental updates — merges edge weights and play counts", () => {
@@ -317,7 +387,7 @@ describe("GraphDatabase", () => {
         expect(db.getNodeCount(aliceId)).toBe(1);
     });
 
-    it("getNode returns a single node with edges", () => {
+    it("getNode returns a single node with edges (SongKey-based)", () => {
         const graph = makeTestGraph();
         db.saveGraph(graph, userId);
 
@@ -386,5 +456,39 @@ describe("GraphDatabase", () => {
 
         expect(Object.keys(loaded.nodes)).toHaveLength(0);
         expect(loaded.metadata.totalScrobbles).toBe(0);
+    });
+
+    it("preserves UUIDs across incremental saves", () => {
+        const keyA = toSongKey("Artist A", "Track 1");
+
+        const graph1: ListeningGraph = {
+            nodes: {
+                [keyA]: {
+                    name: "Track 1",
+                    artists: ["Artist A"],
+                    next: {} as Record<SongKey, number>,
+                    previous: {} as Record<SongKey, number>,
+                    totalPlays: 1,
+                    sources: ["lastfm"],
+                    playDates: [],
+                },
+            } as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
+            metadata: {
+                totalScrobbles: 1,
+                dateRange: { from: "", to: "" },
+                exportTimestamp: "2025-01-01T00:00:00Z",
+            },
+        };
+
+        db.saveGraph(graph1, userId);
+        const compact1 = db.loadGraphCompact(userId);
+        const uuid1 = Object.keys(compact1.nodes)[0]!;
+
+        // Second save — same node should keep same UUID
+        db.saveGraph(graph1, userId);
+        const compact2 = db.loadGraphCompact(userId);
+        const uuid2 = Object.keys(compact2.nodes)[0]!;
+
+        expect(uuid2).toBe(uuid1);
     });
 });

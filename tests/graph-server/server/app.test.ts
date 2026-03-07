@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { mkdtempSync } from "node:fs";
 import { unlinkSync } from "node:fs";
 import type { Hono } from "hono";
+import type { CompactGraphNode } from "../../../graph-server/src/graph/types.js";
 
 function seedDatabase(dbPath: string): { db: GraphDatabase; userId: number } {
     const db = new GraphDatabase(dbPath);
@@ -18,6 +19,7 @@ function seedDatabase(dbPath: string): { db: GraphDatabase; userId: number } {
                 track: "Creep",
                 album: "Pablo Honey",
                 timestamp: 1000,
+                mbid: "creep-mbid-123",
             },
             {
                 artist: "Radiohead",
@@ -42,6 +44,14 @@ function seedDatabase(dbPath: string): { db: GraphDatabase; userId: number } {
     });
     db.saveGraph(graph, userId);
     return { db, userId };
+}
+
+/** Helper to find a UUID by song name in compact graph response. */
+function findUuidByName(
+    nodes: Record<string, CompactGraphNode>,
+    name: string,
+): string | undefined {
+    return Object.entries(nodes).find(([, n]) => n.name === name)?.[0];
 }
 
 describe("Graph API Server", () => {
@@ -78,7 +88,7 @@ describe("Graph API Server", () => {
             expect(res.status).toBe(404);
         });
 
-        it("returns the full graph", async () => {
+        it("returns compact graph with UUID-keyed nodes", async () => {
             const res = await app.request("/graph?user=testuser");
             expect(res.status).toBe(200);
 
@@ -87,9 +97,32 @@ describe("Graph API Server", () => {
             expect(data.metadata).toBeDefined();
             expect(data.metadata.lastfmUsername).toBe("testuser");
 
-            // Should have 3 nodes: Creep, Karma Police, Smells Like Teen Spirit
+            // Should have 3 nodes
             const nodeKeys = Object.keys(data.nodes);
             expect(nodeKeys).toHaveLength(3);
+
+            // Keys should be UUIDs (not SongKeys)
+            for (const key of nodeKeys) {
+                expect(key).not.toContain("::");
+            }
+
+            // Each node should have songKey
+            for (const node of Object.values(data.nodes) as CompactGraphNode[]) {
+                expect(node.songKey).toContain("::");
+                expect(node.name).toBeTruthy();
+            }
+
+            // Verify mbid present on Creep
+            const creepNode = Object.values(data.nodes as Record<string, CompactGraphNode>).find(
+                (n) => n.name === "Creep",
+            );
+            expect(creepNode).toBeDefined();
+            expect(creepNode!.mbid).toBe("creep-mbid-123");
+
+            // Verify next/previous use UUID keys
+            const creepUuid = findUuidByName(data.nodes, "Creep")!;
+            const karmaUuid = findUuidByName(data.nodes, "Karma Police")!;
+            expect(data.nodes[creepUuid].next[karmaUuid]).toBeDefined();
         });
 
         it("supports pagination with limit and offset", async () => {
@@ -115,67 +148,62 @@ describe("Graph API Server", () => {
         });
     });
 
-    describe("GET /graph/node/:songKey", () => {
-        it("returns a single node", async () => {
-            const key = encodeURIComponent("radiohead::creep");
-            const res = await app.request(`/graph/node/${key}?user=testuser`);
+    describe("GET /graph/node/:id", () => {
+        it("returns a single node by UUID", async () => {
+            // First get the graph to find a UUID
+            const graphRes = await app.request("/graph?user=testuser");
+            const graphData = await graphRes.json();
+            const creepUuid = findUuidByName(graphData.nodes, "Creep")!;
+
+            const res = await app.request(`/graph/node/${creepUuid}?user=testuser`);
             expect(res.status).toBe(200);
 
             const data = await res.json();
+            expect(data.id).toBe(creepUuid);
             expect(data.songKey).toBe("radiohead::creep");
             expect(data.name).toBe("Creep");
             expect(data.totalPlays).toBe(2);
+            expect(data.mbid).toBe("creep-mbid-123");
             expect(data.next).toBeDefined();
             expect(data.previous).toBeDefined();
         });
 
-        it("returns 404 for unknown songKey", async () => {
-            const key = encodeURIComponent("unknown::song");
-            const res = await app.request(`/graph/node/${key}?user=testuser`);
+        it("returns 404 for unknown UUID", async () => {
+            const res = await app.request("/graph/node/nonexistent-uuid?user=testuser");
             expect(res.status).toBe(404);
         });
 
-        it("returns 400 for invalid songKey format", async () => {
-            const res = await app.request("/graph/node/invalidsongkey?user=testuser");
-            expect(res.status).toBe(400);
-
-            const data = await res.json();
-            expect(data.error).toContain("Invalid songKey");
-        });
-
         it("returns 400 without user param", async () => {
-            const key = encodeURIComponent("radiohead::creep");
-            const res = await app.request(`/graph/node/${key}`);
+            const res = await app.request("/graph/node/some-uuid");
             expect(res.status).toBe(400);
         });
     });
 
-    describe("GET /graph/neighbors/:songKey", () => {
-        it("returns neighbors with full node data", async () => {
-            const key = encodeURIComponent("radiohead::karma police");
-            const res = await app.request(`/graph/neighbors/${key}?user=testuser`);
+    describe("GET /graph/neighbors/:id", () => {
+        it("returns neighbors with UUID keys", async () => {
+            // First get the graph to find UUIDs
+            const graphRes = await app.request("/graph?user=testuser");
+            const graphData = await graphRes.json();
+            const karmaUuid = findUuidByName(graphData.nodes, "Karma Police")!;
+            const creepUuid = findUuidByName(graphData.nodes, "Creep")!;
+
+            const res = await app.request(`/graph/neighbors/${karmaUuid}?user=testuser`);
             expect(res.status).toBe(200);
 
             const data = await res.json();
-            expect(data.songKey).toBe("radiohead::karma police");
+            expect(data.id).toBe(karmaUuid);
             expect(data.node).toBeDefined();
             expect(data.next).toBeDefined();
             expect(data.previous).toBeDefined();
 
-            // Karma Police is preceded by Creep and followed by Creep
-            const prevKeys = Object.keys(data.previous);
-            expect(prevKeys).toContain("radiohead::creep");
+            // Karma Police is preceded by Creep
+            expect(data.previous[creepUuid]).toBeDefined();
+            expect(data.previous[creepUuid].node.name).toBe("Creep");
         });
 
-        it("returns 404 for unknown songKey", async () => {
-            const key = encodeURIComponent("unknown::song");
-            const res = await app.request(`/graph/neighbors/${key}?user=testuser`);
+        it("returns 404 for unknown UUID", async () => {
+            const res = await app.request("/graph/neighbors/nonexistent-uuid?user=testuser");
             expect(res.status).toBe(404);
-        });
-
-        it("returns 400 for invalid songKey format", async () => {
-            const res = await app.request("/graph/neighbors/bad?user=testuser");
-            expect(res.status).toBe(400);
         });
     });
 
