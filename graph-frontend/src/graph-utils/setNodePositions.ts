@@ -21,7 +21,7 @@ export default function setNodePositions(
   let positions = cache[mode];
   if (!positions) {
     // Try to read pre-computed positions from node attributes
-    positions = readServerPositions(graph, mode)
+    positions = readServerPositions(graph, mode) ?? undefined
 
     // Fall back to client-side calculation if not available
     if (!positions) {

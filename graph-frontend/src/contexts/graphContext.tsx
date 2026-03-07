@@ -36,9 +36,10 @@ function toGraphology(
     if (pr > maxPageRank) maxPageRank = pr
   }
 
-  for (const [key, node] of entries) {
-    graph.addNode(key, {
+  for (const [uuid, node] of entries) {
+    graph.addNode(uuid, {
       label: `${node.artists[0] ?? "Unknown"} — ${node.name}`,
+      songKey: node.songKey,
       artists: node.artists,
       albumName: node.albumName,
       lastfmUrl: node.lastfmUrl,
@@ -55,12 +56,12 @@ function toGraphology(
     })
   }
 
-  for (const [fromKey, node] of entries) {
-    for (const [toKey, weight] of Object.entries(node.next)) {
-      if (!graph.hasNode(toKey)) continue
-      if (graph.hasEdge(fromKey, toKey)) continue
+  for (const [fromUuid, node] of entries) {
+    for (const [toUuid, weight] of Object.entries(node.next)) {
+      if (!graph.hasNode(toUuid)) continue
+      if (graph.hasEdge(fromUuid, toUuid)) continue
 
-      graph.addDirectedEdge(fromKey, toKey, {
+      graph.addDirectedEdge(fromUuid, toUuid, {
         weight,
         size: Math.max(0.5, Math.min(3, Math.log(weight + 1))),
         color: `rgba(0, 0, 0, ${Math.min(0.6, 0.15 + weight * 0.05)})`,

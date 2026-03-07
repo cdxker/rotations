@@ -4,18 +4,21 @@ export type SongKey = `${string}::${string}`
 /** Data source that contributed a scrobble or track ordering. */
 export type ListeningSource = "lastfm"
 
-/** A node in the listening graph representing a single song. */
+/** A node in the listening graph representing a single song (compact API format with UUID keys). */
 export interface GraphNode {
+  songKey: SongKey
+  mbid?: string
   name: string
   artists: string[]
   albumName?: string
   lastfmUrl?: string
   imageUrl?: string
-  next: Record<SongKey, number>
-  previous: Record<SongKey, number>
+  next: Record<string, number>
+  previous: Record<string, number>
   totalPlays: number
   sources: ListeningSource[]
-  pageRank: number
+  pageRank?: number
+  clusterId?: number
   playDates: string[]
   positions?: {
     pagerank?: { x: number; y: number }
@@ -32,9 +35,9 @@ export interface GraphMetadata {
   lastfmUsername?: string
 }
 
-/** The full listening graph as returned by GET /graph. */
+/** The full listening graph as returned by GET /graph (UUID-keyed nodes). */
 export interface ListeningGraph {
-  nodes: Record<SongKey, GraphNode>
+  nodes: Record<string, GraphNode>
   metadata: GraphMetadata
 }
 
@@ -45,6 +48,7 @@ export interface ListeningGraph {
 /** Attributes stored on each graphology node. */
 export interface NodeAttributes {
   label: string
+  songKey: SongKey
   artists: string[]
   albumName?: string
   lastfmUrl?: string
