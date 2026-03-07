@@ -1,5 +1,6 @@
 import path from "node:path";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { cors } from "hono/cors";
 import { GraphDatabase } from "../graph/database.js";
 import type { SongKey, GraphNode } from "../graph/types.js";
@@ -25,8 +26,7 @@ function parseSongKey(rawKey: string): SongKey {
 }
 
 /** Parse `{ username }` from JSON body, returning 400 if missing. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function requireUsername(c: any): Promise<string> {
+async function requireUsername(c: Context): Promise<string> {
     const body = await c.req.json();
     const username = body?.username;
     if (!username || typeof username !== "string") {
@@ -36,8 +36,7 @@ async function requireUsername(c: any): Promise<string> {
 }
 
 /** Get required `?user=` query param, returning 400 if missing. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function requireUserQuery(c: any): string {
+function requireUserQuery(c: Context): string {
     const user = c.req.query("user");
     if (!user) {
         throw { error: "Missing required query parameter: user", status: 400 };
@@ -49,15 +48,14 @@ export interface ServerConfig {
     dbPath: string;
 }
 
-/** Run an async handler, catching errors and returning a 500 JSON response. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function pipelineHandler(c: any, label: string, fn: () => Promise<any>) {
+/** Run an async handler, catching errors and returning a JSON error response. */
+async function pipelineHandler(c: Context, label: string, fn: () => Promise<Response>) {
     try {
         return await fn();
     } catch (err) {
         // Re-throw structured errors with status codes
         if (err && typeof err === "object" && "status" in err && "error" in err) {
-            const e = err as { error: string; status: number };
+            const e = err as { error: string; status: ContentfulStatusCode };
             return c.json({ error: e.error }, e.status);
         }
         return c.json(
