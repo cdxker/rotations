@@ -37,6 +37,9 @@ export interface GraphNode {
     albumName?: string;
     lastfmUrl?: string;
 
+    /** MusicBrainz ID from Last.fm, if available. */
+    mbid?: string;
+
     /**
      * Link back to the local library's TrackId, if this song exists there.
      * See module-level docs for the relationship between SongKey and TrackId.
@@ -81,6 +84,36 @@ export interface GraphMetadata {
 /** The full listening graph: all nodes + metadata. */
 export interface ListeningGraph {
     nodes: Record<SongKey, GraphNode>;
+    metadata: GraphMetadata;
+}
+
+/** A compact node for API responses — uses UUIDs for next/prev references. */
+export interface CompactGraphNode {
+    songKey: SongKey;
+    mbid?: string;
+    name: string;
+    artists: string[];
+    albumName?: string;
+    lastfmUrl?: string;
+    imageUrl?: string;
+    next: Record<string, number>;
+    previous: Record<string, number>;
+    totalPlays: number;
+    sources: ListeningSource[];
+    sourcePlays?: Partial<Record<ListeningSource, number>>;
+    pageRank?: number;
+    clusterId?: number;
+    playDates: string[];
+    positions?: {
+        pagerank?: { x: number; y: number };
+        mds?: { x: number; y: number };
+        "weighted-mds"?: { x: number; y: number };
+    };
+}
+
+/** Compact graph for API responses — UUID-keyed nodes. */
+export interface CompactGraph {
+    nodes: Record<string, CompactGraphNode>;
     metadata: GraphMetadata;
 }
 

@@ -107,6 +107,22 @@ describe("buildGraph", () => {
             expect(graph.nodes["b::t2" as SongKey]!.totalPlays).toBe(1);
         });
 
+        it("captures mbid from scrobbles (first non-empty wins)", () => {
+            const input: GraphInput = {
+                lastfmScrobbles: [
+                    { artist: "A", track: "T1", album: "", timestamp: 1000, mbid: "mbid-1" },
+                    { artist: "A", track: "T1", album: "", timestamp: 2000, mbid: "mbid-2" },
+                    { artist: "B", track: "T2", album: "", timestamp: 3000 },
+                ],
+            };
+
+            const graph = buildGraph(input);
+            // First non-empty mbid wins
+            expect(graph.nodes["a::t1" as SongKey]!.mbid).toBe("mbid-1");
+            // No mbid on Track 2
+            expect(graph.nodes["b::t2" as SongKey]!.mbid).toBeUndefined();
+        });
+
         it("sets source to lastfm", () => {
             const input: GraphInput = {
                 lastfmScrobbles: [

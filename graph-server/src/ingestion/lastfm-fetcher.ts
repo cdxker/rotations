@@ -13,6 +13,7 @@ interface LastfmApiTrack {
     artist: { "#text": string };
     name: string;
     album: { "#text": string };
+    mbid?: string;
     image?: Array<{ "#text": string; size: string }>;
     date?: { uts: string };
     "@attr"?: { nowplaying: string };
@@ -68,12 +69,15 @@ function parseTrack(track: LastfmApiTrack): RawScrobble | null {
         if (url) imageUrl = url;
     }
 
+    const mbid = track.mbid && track.mbid.length > 0 ? track.mbid : undefined;
+
     return {
         artist: track.artist["#text"],
         track: track.name,
         album: track.album["#text"] ?? "",
         timestamp,
         imageUrl,
+        mbid,
     };
 }
 

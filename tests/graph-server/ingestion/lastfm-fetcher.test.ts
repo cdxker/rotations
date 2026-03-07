@@ -14,12 +14,14 @@ function makeApiTrack(
     track: string,
     album: string,
     uts: string,
+    mbid?: string,
 ) {
     return {
         artist: { "#text": artist },
         name: track,
         album: { "#text": album },
         date: { uts },
+        ...(mbid ? { mbid } : {}),
     };
 }
 
@@ -96,6 +98,29 @@ describe("fetchLastfmScrobbles", () => {
             await readFile(path.join(tmpDir, "lastfm-scrobbles-test-user.json"), "utf-8"),
         );
         expect(saved).toHaveLength(2);
+    });
+
+    it("captures mbid when present", async () => {
+        const tracks = [
+            makeApiTrack("Artist A", "Track 1", "Album 1", "1000", "abc-123-def"),
+            makeApiTrack("Artist B", "Track 2", "Album 2", "2000"),
+            makeApiTrack("Artist C", "Track 3", "Album 3", "3000", ""),
+        ];
+
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(
+            new Response(JSON.stringify(makeApiResponse(tracks, 1, 1, 3))),
+        );
+
+        const result = await fetchLastfmScrobbles(client, {
+            username: "test-user",
+            dataDir: tmpDir,
+            onProgress: (msg) => logs.push(msg),
+        });
+
+        expect(result).toHaveLength(3);
+        expect(result[0]!.mbid).toBe("abc-123-def");
+        expect(result[1]!.mbid).toBeUndefined();
+        expect(result[2]!.mbid).toBeUndefined(); // empty string → undefined
     });
 
     it("paginates through multiple pages", async () => {

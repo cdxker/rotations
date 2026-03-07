@@ -17,6 +17,8 @@ export interface RawScrobble {
     timestamp: number;
     /** Album artwork URL from Last.fm, if available. */
     imageUrl?: string;
+    /** MusicBrainz ID from Last.fm, if available. */
+    mbid?: string;
 }
 
 /** Input data for the graph builder. */
@@ -32,6 +34,7 @@ function getOrCreateNode(
     artist: string,
     album: string,
     imageUrl?: string,
+    mbid?: string,
 ): GraphNode {
     let node = nodes[key];
     if (!node) {
@@ -50,6 +53,10 @@ function getOrCreateNode(
     // Keep first non-empty image URL encountered
     if (imageUrl && !node.imageUrl) {
         node.imageUrl = imageUrl;
+    }
+    // Keep first non-empty mbid encountered
+    if (mbid && !node.mbid) {
+        node.mbid = mbid;
     }
     return node;
 }
@@ -99,6 +106,7 @@ function processLastfmScrobbles(
             scrobble.artist,
             scrobble.album,
             scrobble.imageUrl,
+            scrobble.mbid,
         );
         node.totalPlays++;
         node.playDates.push(new Date(scrobble.timestamp * 1000).toISOString());
