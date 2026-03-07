@@ -101,7 +101,10 @@
 
 ## Phase 9 — Graph Server Rewrite
 
-- [ ] `00-CopyGraphPipeline.md` — Copy `graph-pipeline/` to `graph-server/`, verify tests pass
-- [ ] `01-RewriteSpotifyAuth.md` — Rewrite `spotify-auth.ts` from scratch, inline all helpers
-- [ ] `02-RewriteSpotifyClient.md` — Rewrite `spotify-client.ts` from scratch, inline all interfaces/helpers
-- [ ] `03-VerifyAndReindex.md` — Update imports, test paths, `reindex.sh`, run full end-to-end reindex
+- [X] `00-CopyGraphPipeline.md` — Copy `graph-pipeline/` to `graph-server/`, verify tests pass
+- [X] `01-RewriteSpotifyAuth.md` — Rewrite `spotify-auth.ts` from scratch, inline all helpers
+- [X] `02-RewriteSpotifyClient.md` — Rewrite `spotify-client.ts` from scratch, inline all interfaces/helpers
+- [X] `03-VerifyAndReindex.md` — Update imports, test paths, `reindex.sh`, run full end-to-end reindex
+- [ ] `04-PerUserFetchBuild.md` — Add `users` table, per-user fetch+build pipeline with `{ username }` body
+- [ ] `05-UserGraphEndpoint.md` — `GET /graph?user=username` required on all graph read endpoints
+- [ ] `06-ServerSideLayoutComputation.md` — Move MDS/weighted-MDS/PageRank layout from frontend to build pipeline

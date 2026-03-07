@@ -95,8 +95,29 @@ Delete contents of `graph-server/src/ingestion/spotify-client.ts` and rewrite fr
 - Update `reindex.sh` to point `PIPELINE_DIR` at `graph-server` instead of `graph-pipeline`
 - Start the server (`cd graph-server && pnpm dev`) and run `./reindex.sh` to do a full reindex and verify the pipeline works end-to-end
 
+### 04 — Multi-user Last.fm fetch endpoint
+
+Update `POST /pipeline/fetch/lastfm` to accept `{ usernames: string[] }` in request body. Each user's scrobbles go to `data/lastfm-scrobbles-{username}.json` with separate checkpoints. Falls back to `LASTFM_USERNAME` env var if no body.
+
+### 04 — Track Last.fm user on graph nodes
+
+Add `lastfmUsers?: string[]` to `GraphNode`. During build, each node tracks which user(s) contributed it. Stored in DB as `lastfm_users TEXT` (JSON array). `GraphMetadata.lastfmUsername` becomes `lastfmUsernames?: string[]`.
+
+### 05 — Multi-user build pipeline
+
+Update `POST /pipeline/build` and `POST /pipeline/run` to glob for all `data/lastfm-scrobbles-*.json` files, extract usernames from filenames, and pass per-user scrobble sets to `buildGraph`. Update `reindex.sh` to pass usernames in request body.
+
+### 05 — Filter /graph endpoint by Last.fm user
+
+Add `?user=username` query param to `GET /graph`. Filters nodes to only those where `lastfmUsers` includes the username. Edges between excluded nodes are removed. No param returns full graph.
+
+### 06 — Compute graph layout positions on the server
+
+Port the three layout algorithms from `graph-frontend/src/graph-utils/` (MDS, weighted-MDS, PageRank-radial) to the backend. Run them during the build pipeline after `enrichGraph`. Store positions on each node in the DB as `positions TEXT` (JSON). Frontend reads pre-computed positions from the API, falls back to client-side calculation if missing.
+
 ## Verification
 
 1. `cd graph-server && pnpm test` — all tests pass
 2. `cd graph-server && pnpm run build` (or `tsc --noEmit`) — no type errors
 3. Start server, run `./reindex.sh` — pipeline completes successfully (fetch + build)
+4. `GET /graph?user=someuser` returns only that user's nodes
