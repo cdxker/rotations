@@ -10,6 +10,7 @@ import { LastfmClient } from "../ingestion/lastfm-client.js";
 import { fetchLastfmScrobbles } from "../ingestion/lastfm-fetcher.js";
 import { buildGraph } from "../graph/build-graph.js";
 import { requireEnv } from "../config.js";
+import { computeAllLayouts } from "../analysis/layout.js";
 
 const DATA_DIR = path.join(import.meta.dirname, "../../data");
 
@@ -368,6 +369,18 @@ export function createApp(config: ServerConfig): Hono {
             });
 
             const { summary } = enrichGraph(graph);
+
+            // Compute layout positions for all three modes
+            const allPositions = computeAllLayouts(graph);
+            for (const [key, node] of Object.entries(graph.nodes)) {
+                const sk = key as import("../graph/types.js").SongKey;
+                node.positions = {
+                    pagerank: allPositions.pagerank[sk],
+                    mds: allPositions.mds[sk],
+                    "weighted-mds": allPositions["weighted-mds"][sk],
+                };
+            }
+
             db.clearGraph(userId);
             db.saveGraph(graph, userId);
 
@@ -413,6 +426,18 @@ export function createApp(config: ServerConfig): Hono {
             steps.push(
                 `Enriched: ${summary.clusters.clusterCount} clusters, PageRank converged=${summary.pageRank.converged}`,
             );
+
+            // Compute layout positions for all three modes
+            const allPositions = computeAllLayouts(graph);
+            for (const [key, node] of Object.entries(graph.nodes)) {
+                const sk = key as import("../graph/types.js").SongKey;
+                node.positions = {
+                    pagerank: allPositions.pagerank[sk],
+                    mds: allPositions.mds[sk],
+                    "weighted-mds": allPositions["weighted-mds"][sk],
+                };
+            }
+            steps.push("Computed layout positions");
 
             db.clearGraph(userId);
             db.saveGraph(graph, userId);

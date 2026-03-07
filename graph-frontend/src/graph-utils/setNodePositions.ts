@@ -20,12 +20,18 @@ export default function setNodePositions(
 ): void {
   let positions = cache[mode];
   if (!positions) {
-    positions =
-      mode === 'mds'
-        ? calculateMdsPositions(graph)
-        : mode === 'weighted-mds'
-          ? calculateWeightedMdsPositions(graph)
-          : calculatePageRankPositions(graph)
+    // Try to read pre-computed positions from node attributes
+    positions = readServerPositions(graph, mode)
+
+    // Fall back to client-side calculation if not available
+    if (!positions) {
+      positions =
+        mode === 'mds'
+          ? calculateMdsPositions(graph)
+          : mode === 'weighted-mds'
+            ? calculateWeightedMdsPositions(graph)
+            : calculatePageRankPositions(graph)
+    }
     cache[mode] = positions
   }
 
@@ -33,4 +39,23 @@ export default function setNodePositions(
     graph.setNodeAttribute(key, 'x', pos.x)
     graph.setNodeAttribute(key, 'y', pos.y)
   }
+}
+
+/** Read pre-computed positions from server-provided node data. Returns null if not available. */
+function readServerPositions(
+  graph: Graph<NodeAttributes, EdgeAttributes>,
+  mode: LayoutMode,
+): PositionMap | null {
+  const positions = new Map<string, { x: number; y: number }>()
+  let hasAny = false
+
+  graph.forEachNode((key, attrs) => {
+    const pos = (attrs as NodeAttributes & { positions?: Record<string, { x: number; y: number }> }).positions?.[mode]
+    if (pos) {
+      positions.set(key, { x: pos.x, y: pos.y })
+      hasAny = true
+    }
+  })
+
+  return hasAny ? positions : null
 }

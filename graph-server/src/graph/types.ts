@@ -63,6 +63,12 @@ export interface GraphNode {
     imageUrl?: string;
     /** ISO 8601 timestamps of every play across all sources, chronologically sorted. */
     playDates: string[];
+    /** Pre-computed layout positions for each layout mode. */
+    positions?: {
+        pagerank?: { x: number; y: number };
+        mds?: { x: number; y: number };
+        "weighted-mds"?: { x: number; y: number };
+    };
 }
 
 export interface GraphMetadata {

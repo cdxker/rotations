@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     image_url TEXT,
     source_plays TEXT,
     play_dates TEXT NOT NULL DEFAULT '[]',
+    positions TEXT,
     PRIMARY KEY (user_id, song_key),
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -103,8 +104,8 @@ export class GraphDatabase {
      */
     saveGraph(graph: ListeningGraph, userId: number): void {
         const upsertNode = this.db.prepare(`
-            INSERT INTO nodes (user_id, song_key, name, artists, album_name, lastfm_url, track_id, total_plays, sources, page_rank, cluster_id, image_url, source_plays, play_dates)
-            VALUES (@userId, @songKey, @name, @artists, @albumName, @lastfmUrl, @trackId, @totalPlays, @sources, @pageRank, @clusterId, @imageUrl, @sourcePlays, @playDates)
+            INSERT INTO nodes (user_id, song_key, name, artists, album_name, lastfm_url, track_id, total_plays, sources, page_rank, cluster_id, image_url, source_plays, play_dates, positions)
+            VALUES (@userId, @songKey, @name, @artists, @albumName, @lastfmUrl, @trackId, @totalPlays, @sources, @pageRank, @clusterId, @imageUrl, @sourcePlays, @playDates, @positions)
             ON CONFLICT(user_id, song_key) DO UPDATE SET
                 name = COALESCE(excluded.name, nodes.name),
                 artists = excluded.artists,
@@ -117,7 +118,8 @@ export class GraphDatabase {
                 cluster_id = COALESCE(excluded.cluster_id, nodes.cluster_id),
                 image_url = COALESCE(excluded.image_url, nodes.image_url),
                 source_plays = COALESCE(excluded.source_plays, nodes.source_plays),
-                play_dates = excluded.play_dates
+                play_dates = excluded.play_dates,
+                positions = COALESCE(excluded.positions, nodes.positions)
         `);
 
         const upsertEdge = this.db.prepare(`
@@ -183,6 +185,9 @@ export class GraphDatabase {
                         ? JSON.stringify(mergedSourcePlays)
                         : null,
                     playDates: JSON.stringify(node.playDates),
+                    positions: node.positions
+                        ? JSON.stringify(node.positions)
+                        : null,
                 });
             }
 
@@ -346,6 +351,9 @@ export class GraphDatabase {
                 ? JSON.parse(row.source_plays)
                 : undefined,
             playDates: row.play_dates ? JSON.parse(row.play_dates) : [],
+            positions: row.positions
+                ? JSON.parse(row.positions)
+                : undefined,
         };
     }
 
@@ -371,6 +379,7 @@ interface NodeRow {
     image_url: string | null;
     source_plays: string | null;
     play_dates: string | null;
+    positions: string | null;
 }
 
 /** Row shape from the edges table. */
