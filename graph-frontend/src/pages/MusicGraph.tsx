@@ -5,6 +5,7 @@ import { useGraph } from '../contexts/graphContext'
 import type { LayoutMode } from '../graph-utils/setNodePositions'
 import { DatePicker } from '#/components/date-picker'
 import { SunIcon, MoonIcon } from 'lucide-react'
+import { SearchBar } from '../components/SearchBar'
 
 type SigmaRuntime = {
   SigmaContainer: ComponentType<{
@@ -63,8 +64,9 @@ export function MusicGraph() {
 
   return (
     <main className="bg-white dark:bg-black text-black dark:text-white min-h-screen">
-      <div className="absolute top-4 left-4 z-10">
+      <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
         <DatePicker />
+        <SearchBar />
       </div>
       <div className="absolute top-4 right-4 z-10 flex gap-2">
         <button
