@@ -18,8 +18,7 @@ type SigmaRuntime = {
 }
 
 export function MusicGraph() {
-  const { state, error } = useGraph()
-  const [layout, setLayout] = useState<LayoutMode>('pagerank')
+  const { state, error, layout, setLayout } = useGraph()
   const [isDark, setIsDark] = useState(true)
   const [sigmaRuntime, setSigmaRuntime] = useState<SigmaRuntime | null>(null)
 

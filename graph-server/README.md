@@ -1,96 +1,111 @@
 # Graph Server
 
-A data pipeline and API server that constructs a directed, weighted graph from your Last.fm listening history. Nodes are songs, edges are sequential transitions (song A played before song B), and edge weights represent how many times a transition occurred. Supports multiple users — each gets their own isolated graph.
+A data pipeline and API server that builds a directed, weighted listening graph from Last.fm history.
+Nodes are songs, edges are sequential transitions, and every user has isolated graph data.
+
+## Changes In Active PR (#68)
+
+- Ticket 04: per-user pipeline and storage isolation (`users` table + user-scoped graph data)
+- Ticket 05: all `GET` graph endpoints require `?user=<username>` (`400` if missing, `404` if unknown)
+- Ticket 06: layout computation moved server-side (PageRank radial, MDS, weighted MDS), stored in DB as `positions`
+- `/pipeline/run` is now async queue-based and returns `202` + `jobId`
+- `/pipeline/run/:jobId` and `/pipeline/run?username=...` provide status/timestamp polling
+- Persistence migrated to Postgres (`pg`), SQLite removed
+- Spotify support removed from graph-server pipeline flow
 
 ## How It Works
 
-1. **Fetch** scrobble history from Last.fm (per user)
-2. **Normalize** tracks into canonical `SongKey` identifiers (`lowercase(artist)::lowercase(track)`)
-3. **Build** the graph: consecutive plays create weighted edges
-4. **Enrich** with PageRank scores, cluster assignments, and statistics
-5. **Store** the graph in a per-user SQLite database
+1. Fetch scrobbles from Last.fm for a username
+2. Normalize tracks into canonical `SongKey` (`lowercase(artist)::lowercase(track)`)
+3. Build weighted transition graph
+4. Enrich graph (PageRank, clusters, summary stats)
+5. Compute and attach node layout positions
+6. Persist per-user graph data in Postgres (`users`, `nodes`, `edges`, `metadata`, `pipeline_jobs`)
 
 ## Prerequisites
 
-- **Node.js** >= 20
-- **pnpm**
-- **Last.fm API key** — [create one here](https://www.last.fm/api/account/create)
+- Node.js >= 20
+- pnpm
+- Docker (for local Postgres via `docker compose`)
+- Last.fm API key: https://www.last.fm/api/account/create
 
 ## Setup
 
+From repo root:
+
 ```bash
-cd graph-server
 pnpm install
+docker compose up -d
 ```
 
-Copy the example environment file and fill in your API key:
+In `graph-server`:
 
 ```bash
+cd graph-server
 cp .env.example .env
 ```
 
-Edit `.env`:
+Set env values:
 
 ```env
 LASTFM_API_KEY=your_api_key
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/graph
+GRAPH_SERVER_PORT=3001
 ```
 
 ## Usage
 
-### Start the server
+### Start server
 
 ```bash
+cd graph-server
 pnpm dev
 ```
 
-The server reads `GRAPH_SERVER_PORT` (default: `3001`) and `DATABASE_URL` from `.env`.
-
-### Run the pipeline
+### Run full pipeline
 
 ```bash
-# Fetch + build for a user
 ./reindex.sh <username>
-
-# Or via API:
-curl -X POST http://localhost:3001/pipeline/run \
-  -H "Content-Type: application/json" \
-  -d '{"username": "your_lastfm_username"}'
 ```
 
-### API Endpoints
+Or queue directly:
 
-All GET endpoints require `?user=<username>`.
+```bash
+curl -X POST http://localhost:3001/pipeline/run \
+  -H "Content-Type: application/json" \
+  -d '{"username":"your_lastfm_username"}'
+```
 
-| Method | Path                        | Description                                                                       |
-| ------ | --------------------------- | --------------------------------------------------------------------------------- |
-| `GET`  | `/graph`                    | Full graph. Optional `?limit=N&offset=M` for pagination.                          |
-| `GET`  | `/graph/node/:songKey`      | Single node with edges. `songKey` is URL-encoded (e.g., `artist%20a::track%201`). |
-| `GET`  | `/graph/neighbors/:songKey` | Node with full neighbor data (resolved nodes for each edge).                      |
-| `GET`  | `/graph/stats`              | Summary: total nodes, edges, and graph metadata.                                  |
-| `GET`  | `/graph/analysis`           | Full analysis: PageRank, clusters, rankings. Optional `?topN=N`.                  |
-| `GET`  | `/graph/path`               | Find path between two songs. `?from=&to=&algorithm=shortest\|strongest`.          |
-| `POST` | `/pipeline/fetch/lastfm`    | Fetch scrobbles. Body: `{"username": "..."}`.                                     |
-| `POST` | `/pipeline/build`           | Build graph from fetched data. Body: `{"username": "..."}`.                       |
-| `POST` | `/pipeline/run`             | Queue full pipeline job. Body: `{"username": "..."}`. Returns `202` + `jobId`.     |
-| `GET`  | `/pipeline/run/:jobId`      | Get job status (`queued`, `running`, `succeeded`, `failed`, `cancelled`).           |
-| `GET`  | `/pipeline/run?username=...`| List queued/running/completed jobs for a user (status + timestamps only).           |
+## API Endpoints
 
-CORS is enabled for frontend consumption.
+All `GET` endpoints below require `?user=<username>` unless noted.
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `GET` | `/graph` | Full compact graph (UUID-keyed nodes). Optional `?limit=&offset=` pagination. |
+| `GET` | `/graph/node/:id` | Single node by UUID. |
+| `GET` | `/graph/neighbors/:id` | Node plus immediate neighbors by UUID. |
+| `GET` | `/graph/stats` | Summary counts + metadata. |
+| `GET` | `/graph/analysis` | Enrichment summary. Optional `?topN=`. |
+| `GET` | `/graph/path` | Path query. `from`/`to` accept UUIDs (preferred) or SongKeys; `algorithm=shortest|strongest`. |
+| `POST` | `/pipeline/fetch/lastfm` | Fetch scrobbles for `{ "username": "..." }`. |
+| `POST` | `/pipeline/build` | Build from fetched data for `{ "username": "..." }`. |
+| `POST` | `/pipeline/run` | Queue full pipeline for `{ "username": "..." }`, returns `202` + `jobId`. |
+| `GET` | `/pipeline/run/:jobId` | Job status (`queued`, `running`, `succeeded`, `failed`, `cancelled`) + timestamps. |
+| `GET` | `/pipeline/run?username=...` | List job statuses/timestamps for a username. |
 
 ## Scripts
 
 ```bash
-pnpm build      # Compile TypeScript
-pnpm dev        # Start dev server (tsx)
-pnpm test       # Run tests (vitest)
+pnpm build
+pnpm dev
+pnpm test
+pnpm lint
 ```
 
 ## Troubleshooting
 
-**Last.fm API rate limiting** — The fetcher sleeps 1 second between requests. If you get 429 errors, increase the delay in `lastfm-fetcher.ts`.
-
-**Last.fm fetch interrupted** — The fetcher saves a checkpoint every 10 pages. Re-run the fetch and it will resume from where it left off. Use `fullRefresh: true` to start over.
-
-**"LASTFM_API_KEY is not set"** — Make sure `.env` exists with your API key.
-
-**Large scrobble history** — A user with 100k+ scrobbles will take ~8+ minutes to fetch (200/page at 1 req/sec). The checkpoint system means you don't have to finish in one session.
+- Last.fm rate limiting: fetcher currently sleeps between requests; tune in `lastfm-fetcher.ts` if needed.
+- Last.fm fetch resume: checkpointed fetch can resume after interruption.
+- `LASTFM_API_KEY is not set`: confirm `graph-server/.env` exists.
+- Postgres not reachable: run `docker compose up -d` and confirm `DATABASE_URL`.

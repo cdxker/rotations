@@ -210,6 +210,37 @@ export function createApp(config: ServerConfig): Hono {
         return c.json(graph);
     });
 
+    // GET /graph/metrics — per-node metrics for a given layout
+    app.get("/graph/metrics", async (c) => {
+        let user: string;
+        try {
+            user = requireUserQuery(c);
+        } catch (e: unknown) {
+            const err = e as { error: string };
+            return c.json({ error: err.error }, 400);
+        }
+
+        const layoutParam = c.req.query("layout");
+        if (
+            layoutParam !== "pagerank" &&
+            layoutParam !== "mds" &&
+            layoutParam !== "weighted-mds"
+        ) {
+            return c.json(
+                { error: "Missing or invalid query parameter: layout (pagerank|mds|weighted-mds)" },
+                400,
+            );
+        }
+
+        const userId = await db.getUserId(user);
+        if (userId === null) {
+            return c.json({ error: "User not found" }, 404);
+        }
+
+        const metrics = await db.getNodeMetrics(userId, layoutParam);
+        return c.json({ metrics });
+    });
+
     // GET /graph/node/:id — single node by UUID
     app.get("/graph/node/:id", async (c) => {
         let user: string;

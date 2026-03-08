@@ -3,8 +3,7 @@ services:
     image: postgres:16
     container_name: graph-postgres
     restart: unless-stopped
-    ports:
-      - "5432:5432"
+    network_mode: host
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

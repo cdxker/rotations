@@ -56,6 +56,7 @@ export interface NodeAttributes {
   totalPlays: number
   sources: string[]
   pageRank: number
+  metric: number
   playDates: string[]
   positions?: {
     pagerank?: { x: number; y: number }

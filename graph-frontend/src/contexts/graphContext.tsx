@@ -10,6 +10,8 @@ import type {DateRange} from "react-day-picker";
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Graph from "graphology"
 import type { EdgeAttributes, ListeningGraph, NodeAttributes } from "#/lib/types"
+import setNodePositions from "../graph-utils/setNodePositions"
+import type { LayoutMode } from "../graph-utils/setNodePositions"
 
 const GRAPH_API_BASE =
   import.meta.env.VITE_GRAPH_API_URL ?? "http://localhost:3001"
@@ -50,6 +52,7 @@ function toGraphology(
       totalPlays: node.totalPlays,
       sources: node.sources,
       pageRank: node.pageRank ?? 0,
+      metric: 0,
       playDates: node.playDates,
       positions: node.positions,
       size: 4,
@@ -85,12 +88,17 @@ type GraphContextValue = {
   jobStatus: PipelineJobStatus | null
   dateRange: DateRange | undefined
   setDateRange: (range: DateRange | undefined) => void
+  layout: LayoutMode
+  setLayout: (mode: LayoutMode) => void
+  filteredPlayCounts: Map<string, number> | null
+  nodeMetrics: Map<string, number> | null
 };
 
 const GraphContext = createContext<GraphContextValue | null>(null)
 
 export function GraphProvider({ children, initialUser }: { children: ReactNode, initialUser: string }) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
+  const [layout, setLayout] = useState<LayoutMode>("pagerank")
   const [jobId, setJobId] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
@@ -142,7 +150,50 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
     }
   }, [jobData?.status, initialUser, queryClient])
 
-  const graph = useMemo(() => (data ? toGraphology(data) : null), [data])
+  const { data: metricsData } = useQuery({
+    queryKey: ["graph-metrics", initialUser, layout],
+    queryFn: async () => {
+      const res = await fetch(
+        `${GRAPH_API_BASE}/graph/metrics?user=${encodeURIComponent(initialUser)}&layout=${encodeURIComponent(layout)}`,
+      )
+      if (!res.ok) throw new Error("Failed to fetch metrics")
+      return res.json() as Promise<{ metrics: Record<string, number> }>
+    },
+    enabled: !!data,
+  })
+
+  const nodeMetrics = useMemo(() => {
+    if (!metricsData) return null
+    return new Map(Object.entries(metricsData.metrics))
+  }, [metricsData])
+
+  const graph = useMemo(() => {
+    if (!data) return null
+    const g = toGraphology(data)
+    if (nodeMetrics) {
+      g.forEachNode((key) => {
+        g.setNodeAttribute(key, "metric", nodeMetrics.get(key) ?? 0)
+      })
+    }
+    setNodePositions(g, layout)
+    return g
+  }, [data, layout, nodeMetrics])
+
+  const filteredPlayCounts = useMemo(() => {
+    if (!dateRange?.from || !graph) return null
+    const fromStr = dateRange.from.toISOString().slice(0, 10)
+    const toStr = (dateRange.to ?? dateRange.from).toISOString().slice(0, 10)
+    const counts = new Map<string, number>()
+    graph.forEachNode((key, attrs) => {
+      let count = 0
+      for (const d of attrs.playDates) {
+        const day = d.slice(0, 10)
+        if (day >= fromStr && day <= toStr) count++
+      }
+      if (count > 0) counts.set(key, count)
+    })
+    return counts
+  }, [dateRange, graph])
 
   const jobStatus = jobData?.status ?? null
   const isBuilding = jobId !== null && jobStatus !== "failed" && jobStatus !== "cancelled"
@@ -165,7 +216,11 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
     jobStatus,
     dateRange,
     setDateRange,
-  }), [graph, data, state, isError, graphError, jobStatus, dateRange])
+    layout,
+    setLayout,
+    filteredPlayCounts,
+    nodeMetrics,
+  }), [graph, data, state, isError, graphError, jobStatus, dateRange, layout, filteredPlayCounts, nodeMetrics])
 
   return (
     <GraphContext.Provider value={value}>

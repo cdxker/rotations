@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLoadGraph, useSigma } from '@react-sigma/core'
-import { type DateRange } from 'react-day-picker'
 import { useGraph } from '../contexts/graphContext'
-import setNodePositions, { type LayoutMode } from '../graph-utils/setNodePositions'
+import type { LayoutMode } from '../graph-utils/setNodePositions'
 
-export function Graph({ layout, dateRange, isDark }: { layout: LayoutMode; dateRange: DateRange | undefined; isDark: boolean }) {
+export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean }) {
   const loadGraph = useLoadGraph()
   const sigma = useSigma()
-  const { graph } = useGraph()
+  const { graph, filteredPlayCounts, nodeMetrics } = useGraph()
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
 
   const selectedNeighbors = useMemo(() => {
@@ -21,7 +20,6 @@ export function Graph({ layout, dateRange, isDark }: { layout: LayoutMode; dateR
   }, [selectedNode, graph])
 
   useEffect(() => {
-    if (!sigma) return
     const handleClickNode = ({ node }: { node: string }) => {
       setSelectedNode((prev) => (prev === node ? null : node))
     }
@@ -38,52 +36,10 @@ export function Graph({ layout, dateRange, isDark }: { layout: LayoutMode; dateR
 
   useEffect(() => {
     if (graph) {
-      setNodePositions(graph, layout)
       sigma.refresh()
       loadGraph(graph)
     }
   }, [graph, layout, loadGraph])
-
-  const filteredPlayCounts = useMemo(() => {
-    if (!dateRange?.from || !graph) return null
-    const fromStr = dateRange.from.toISOString().slice(0, 10)
-    const toStr = (dateRange.to ?? dateRange.from).toISOString().slice(0, 10)
-    const counts = new Map<string, number>()
-    graph.forEachNode((key, attrs) => {
-      let count = 0
-      for (const d of (attrs.playDates ?? [])) {
-        const day = d.slice(0, 10)
-        if (day >= fromStr && day <= toStr) count++
-      }
-      if (count > 0) counts.set(key, count)
-    })
-    return counts
-  }, [dateRange, graph])
-
-  const nodeMetrics = useMemo(() => {
-    if (!graph) return null
-    const metrics = new Map<string, number>()
-
-    if (layout === 'pagerank') {
-      graph.forEachNode((key, attrs) => {
-        metrics.set(key, attrs.pageRank)
-      })
-    } else if (layout === 'mds') {
-      graph.forEachNode((key) => {
-        metrics.set(key, graph.degree(key))
-      })
-    } else {
-      graph.forEachNode((key) => {
-        let wd = 0
-        graph.forEachEdge(key, (_edge, attrs) => {
-          wd += attrs.weight
-        })
-        metrics.set(key, wd)
-      })
-    }
-
-    return metrics
-  }, [graph, layout])
 
   const maxMetric = useMemo(() => {
     if (!nodeMetrics) return 1
@@ -104,7 +60,6 @@ export function Graph({ layout, dateRange, isDark }: { layout: LayoutMode; dateR
   }, [nodeMetrics, filteredPlayCounts])
 
   useEffect(() => {
-    if (!sigma) return
     const g = sigma.getGraph()
     const edgeBase = isDark
       ? (a: number) => `rgba(68, 68, 68, ${a})`

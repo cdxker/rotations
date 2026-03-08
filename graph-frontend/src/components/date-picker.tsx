@@ -1,7 +1,8 @@
 import { useState } from "react"
 import { addDays, addMonths, addYears, format } from "date-fns"
-import { type DateRange } from "react-day-picker"
+import type {DateRange} from "react-day-picker";
 
+import { useGraph } from "#/contexts/graphContext"
 import { Button } from "#/components/ui/button"
 import { Calendar } from "#/components/ui/calendar"
 import {
@@ -19,18 +20,14 @@ const PRESETS = [
   { label: "Past year", range: () => ({ from: addYears(new Date(), -1), to: new Date() }) },
 ] as const
 
-interface DatePickerProps {
-  dateRange: DateRange | undefined
-  onDateRangeChange: (range: DateRange | undefined) => void
-}
-
 function formatRange(range: DateRange | undefined): string {
   if (!range?.from) return ""
   if (!range.to || format(range.from, "PP") === format(range.to, "PP")) return format(range.from, "LLL dd, y")
   return `${format(range.from, "LLL dd, y")} – ${format(range.to, "LLL dd, y")}`
 }
 
-export function DatePicker({ dateRange, onDateRangeChange }: DatePickerProps) {
+export function DatePicker() {
+  const { dateRange, setDateRange: onDateRangeChange } = useGraph()
   const [open, setOpen] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
   const [activeLabel, setActiveLabel] = useState<string>("All time")
@@ -88,7 +85,7 @@ export function DatePicker({ dateRange, onDateRangeChange }: DatePickerProps) {
               selected={dateRange}
               onSelect={(range) => {
                 onDateRangeChange(range)
-                if (range?.from && range?.to) {
+                if (range?.from && range.to) {
                   setActiveLabel("Custom")
                 }
               }}
@@ -103,7 +100,7 @@ export function DatePicker({ dateRange, onDateRangeChange }: DatePickerProps) {
               >
                 Back
               </Button>
-              {dateRange?.from && dateRange?.to && (
+              {dateRange?.from && dateRange.to && (
                 <Button
                   variant="ghost"
                   className="flex-1 text-black dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800"

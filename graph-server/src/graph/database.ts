@@ -679,6 +679,53 @@ export class GraphDatabase {
         };
     }
 
+    /** Return per-node metrics for a given layout mode. */
+    async getNodeMetrics(
+        userId: number,
+        layout: "pagerank" | "mds" | "weighted-mds",
+    ): Promise<Record<string, number>> {
+        await this.ready();
+
+        let result: { rows: { id: string; metric: number }[] };
+
+        if (layout === "pagerank") {
+            result = await this.pool.query<{ id: string; metric: number }>(
+                `SELECT id, COALESCE(page_rank, 0) AS metric
+                 FROM nodes WHERE user_id = $1`,
+                [userId],
+            );
+        } else if (layout === "mds") {
+            result = await this.pool.query<{ id: string; metric: number }>(
+                `SELECT n.id,
+                        COUNT(DISTINCT e.to_id) + COUNT(DISTINCT e2.from_id) AS metric
+                 FROM nodes n
+                 LEFT JOIN edges e  ON e.from_id = n.id AND e.user_id = n.user_id
+                 LEFT JOIN edges e2 ON e2.to_id  = n.id AND e2.user_id = n.user_id
+                 WHERE n.user_id = $1
+                 GROUP BY n.id`,
+                [userId],
+            );
+        } else {
+            // weighted-mds
+            result = await this.pool.query<{ id: string; metric: number }>(
+                `SELECT n.id,
+                        COALESCE(SUM(e.weight), 0) AS metric
+                 FROM nodes n
+                 LEFT JOIN edges e ON (e.from_id = n.id OR e.to_id = n.id)
+                                   AND e.user_id = n.user_id
+                 WHERE n.user_id = $1
+                 GROUP BY n.id`,
+                [userId],
+            );
+        }
+
+        const metrics: Record<string, number> = {};
+        for (const row of result.rows) {
+            metrics[row.id] = Number(row.metric);
+        }
+        return metrics;
+    }
+
     /** Close the database connection pool. */
     async close(): Promise<void> {
         await this.pool.end();
