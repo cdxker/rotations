@@ -36,10 +36,10 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
 
   useEffect(() => {
     if (graph) {
-      sigma.refresh()
       loadGraph(graph)
+      sigma.refresh()
     }
-  }, [graph, layout, loadGraph])
+  }, [graph, layout, loadGraph, sigma])
 
   const maxMetric = useMemo(() => {
     if (!nodeMetrics) return 1
