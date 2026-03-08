@@ -54,6 +54,17 @@ function findUuidByName(
     return Object.entries(nodes).find(([, n]) => n.name === name)?.[0];
 }
 
+async function queuePipelineRun(app: Hono, username: string): Promise<string> {
+    const res = await app.request("/pipeline/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username }),
+    });
+    expect(res.status).toBe(202);
+    const data = await res.json();
+    return data.jobId as string;
+}
+
 describe("Graph API Server", () => {
     let app: Hono;
     let tmpDir: string;
@@ -65,7 +76,7 @@ describe("Graph API Server", () => {
         dbPath = join(tmpDir, "test.db");
         const seed = seedDatabase(dbPath);
         db = seed.db;
-        app = createApp({ dbPath });
+        app = createApp({ dbPath, enablePipelineWorker: false });
     });
 
     afterEach(() => {
@@ -221,6 +232,66 @@ describe("Graph API Server", () => {
 
         it("returns 400 without user param", async () => {
             const res = await app.request("/graph/stats");
+            expect(res.status).toBe(400);
+        });
+    });
+
+    describe("Pipeline Job Queue", () => {
+        it("queues a pipeline run and returns a job id", async () => {
+            const jobId = await queuePipelineRun(app, "testuser");
+            expect(jobId).toBeTruthy();
+            expect(jobId).toHaveLength(36);
+        });
+
+        it("returns 400 when /pipeline/run body is missing username", async () => {
+            const res = await app.request("/pipeline/run", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
+            });
+            expect(res.status).toBe(400);
+        });
+
+        it("returns queued job status by id", async () => {
+            const jobId = await queuePipelineRun(app, "testuser");
+
+            const res = await app.request(`/pipeline/jobs/${jobId}`);
+            expect(res.status).toBe(200);
+            const data = await res.json();
+
+            expect(data.id).toBe(jobId);
+            expect(data.status).toBe("queued");
+            expect(data.createdAt).toBeTruthy();
+            expect(data.updatedAt).toBeTruthy();
+            expect(data.startedAt).toBeNull();
+            expect(data.finishedAt).toBeNull();
+        });
+
+        it("returns 404 for unknown job id", async () => {
+            const res = await app.request("/pipeline/jobs/not-a-job-id");
+            expect(res.status).toBe(404);
+        });
+
+        it("lists queued jobs by username", async () => {
+            const first = await queuePipelineRun(app, "testuser");
+            const second = await queuePipelineRun(app, "testuser");
+
+            const res = await app.request("/pipeline/jobs?username=testuser");
+            expect(res.status).toBe(200);
+            const data = await res.json();
+
+            expect(Array.isArray(data.jobs)).toBe(true);
+            expect(data.jobs).toHaveLength(2);
+            const ids = new Set((data.jobs as Array<{ id: string }>).map((j) => j.id));
+            expect(ids.has(first)).toBe(true);
+            expect(ids.has(second)).toBe(true);
+            for (const job of data.jobs as Array<{ status: string }>) {
+                expect(job.status).toBe("queued");
+            }
+        });
+
+        it("returns 400 when username query is missing", async () => {
+            const res = await app.request("/pipeline/jobs");
             expect(res.status).toBe(400);
         });
     });

@@ -10,6 +10,27 @@ import type {
     CompactGraph,
 } from "./types.js";
 
+export type PipelineJobStatus =
+    | "queued"
+    | "running"
+    | "succeeded"
+    | "failed"
+    | "cancelled";
+
+export interface PipelineJobClaim {
+    id: string;
+    username: string;
+}
+
+export interface PipelineJobStatusRecord {
+    id: string;
+    status: PipelineJobStatus;
+    createdAt: string;
+    updatedAt: string;
+    startedAt: string | null;
+    finishedAt: string | null;
+}
+
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,6 +81,22 @@ CREATE TABLE IF NOT EXISTS metadata (
     PRIMARY KEY (user_id, key),
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS pipeline_jobs (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    started_at TEXT,
+    finished_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_pipeline_jobs_status_created_at
+    ON pipeline_jobs(status, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_pipeline_jobs_username_created_at_desc
+    ON pipeline_jobs(username, created_at DESC);
 `;
 
 export class GraphDatabase {
@@ -95,6 +132,98 @@ export class GraphDatabase {
             .prepare("SELECT id FROM users WHERE username = ?")
             .get(username) as { id: number } | undefined;
         return row?.id ?? null;
+    }
+
+    /** Queue a new pipeline job for a username and return its job id. */
+    enqueuePipelineJob(username: string): string {
+        const id = randomUUID();
+        this.db
+            .prepare(
+                `INSERT INTO pipeline_jobs (id, username, status, created_at, updated_at)
+                 VALUES (?, ?, 'queued', datetime('now'), datetime('now'))`,
+            )
+            .run(id, username);
+        return id;
+    }
+
+    /** Get a pipeline job by id for status polling. */
+    getPipelineJob(jobId: string): PipelineJobStatusRecord | null {
+        const row = this.db
+            .prepare(
+                `SELECT id, status, created_at, updated_at, started_at, finished_at
+                 FROM pipeline_jobs
+                 WHERE id = ?`,
+            )
+            .get(jobId) as PipelineJobRow | undefined;
+        return row ? this.rowToPipelineJobStatus(row) : null;
+    }
+
+    /** List all pipeline jobs for a username, newest first. */
+    listPipelineJobs(username: string): PipelineJobStatusRecord[] {
+        const rows = this.db
+            .prepare(
+                `SELECT id, status, created_at, updated_at, started_at, finished_at
+                 FROM pipeline_jobs
+                 WHERE username = ?
+                 ORDER BY created_at DESC, id DESC`,
+            )
+            .all(username) as PipelineJobRow[];
+        return rows.map((row) => this.rowToPipelineJobStatus(row));
+    }
+
+    /** Claim the oldest queued pipeline job and move it to running. */
+    claimNextQueuedPipelineJob(): PipelineJobClaim | null {
+        const claim = this.db.transaction(() => {
+            const row = this.db
+                .prepare(
+                    `SELECT id, username
+                     FROM pipeline_jobs
+                     WHERE status = 'queued'
+                     ORDER BY created_at ASC, id ASC
+                     LIMIT 1`,
+                )
+                .get() as PipelineJobClaimRow | undefined;
+
+            if (!row) {
+                return null;
+            }
+
+            const result = this.db
+                .prepare(
+                    `UPDATE pipeline_jobs
+                     SET status = 'running',
+                         started_at = COALESCE(started_at, datetime('now')),
+                         updated_at = datetime('now')
+                     WHERE id = ? AND status = 'queued'`,
+                )
+                .run(row.id);
+
+            if (result.changes === 0) {
+                return null;
+            }
+
+            return {
+                id: row.id,
+                username: row.username,
+            };
+        });
+
+        return claim();
+    }
+
+    /** Mark a running job as succeeded and stamp completion time. */
+    markPipelineJobSucceeded(jobId: string): void {
+        this.completePipelineJob(jobId, "succeeded");
+    }
+
+    /** Mark a running job as failed and stamp completion time. */
+    markPipelineJobFailed(jobId: string): void {
+        this.completePipelineJob(jobId, "failed");
+    }
+
+    /** Mark a queued/running job as cancelled and stamp completion time. */
+    markPipelineJobCancelled(jobId: string): void {
+        this.completePipelineJob(jobId, "cancelled");
     }
 
     /** Clear all graph data (nodes, edges, metadata) for a specific user. */
@@ -427,6 +556,36 @@ export class GraphDatabase {
         };
     }
 
+    /** Convert a pipeline job row into API-facing status shape. */
+    private rowToPipelineJobStatus(
+        row: PipelineJobRow,
+    ): PipelineJobStatusRecord {
+        return {
+            id: row.id,
+            status: row.status,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            startedAt: row.started_at,
+            finishedAt: row.finished_at,
+        };
+    }
+
+    /** Set terminal state + finished timestamp for a pipeline job. */
+    private completePipelineJob(
+        jobId: string,
+        status: Exclude<PipelineJobStatus, "queued" | "running">,
+    ): void {
+        this.db
+            .prepare(
+                `UPDATE pipeline_jobs
+                 SET status = ?,
+                     finished_at = datetime('now'),
+                     updated_at = datetime('now')
+                 WHERE id = ?`,
+            )
+            .run(status, jobId);
+    }
+
     /** Convert a database NodeRow into a GraphNode (without edges). */
     private rowToNode(row: NodeRow): GraphNode {
         return {
@@ -521,4 +680,20 @@ interface MetadataRow {
     user_id: number;
     key: string;
     value: string;
+}
+
+/** Row shape for pipeline_jobs status queries. */
+interface PipelineJobRow {
+    id: string;
+    status: PipelineJobStatus;
+    created_at: string;
+    updated_at: string;
+    started_at: string | null;
+    finished_at: string | null;
+}
+
+/** Row shape for claiming queued jobs. */
+interface PipelineJobClaimRow {
+    id: string;
+    username: string;
 }

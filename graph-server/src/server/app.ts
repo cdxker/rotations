@@ -2,12 +2,12 @@ import path from "node:path";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { GraphDatabase } from "../graph/database.js";
-import type { CompactGraphNode } from "../graph/types.js";
+import type { CompactGraphNode, ListeningGraph, SongKey } from "../graph/types.js";
 import { enrichGraph } from "../analysis/enrich.js";
 import { shortestPath, strongestPath } from "../analysis/paths.js";
 import { LastfmClient } from "../ingestion/lastfm-client.js";
 import { fetchLastfmScrobbles } from "../ingestion/lastfm-fetcher.js";
-import { buildGraph } from "../graph/build-graph.js";
+import { buildGraph, type RawScrobble } from "../graph/build-graph.js";
 import { requireEnv } from "../config.js";
 import { computeAllLayouts } from "../analysis/layout.js";
 
@@ -44,15 +44,111 @@ function requireUserQuery(c: Context): string {
     return user;
 }
 
-export interface ServerConfig {
-    dbPath: string;
+/** Compute and attach all supported layout modes onto graph nodes. */
+function attachLayoutPositions(graph: ListeningGraph): void {
+    const allPositions = computeAllLayouts(graph);
+    for (const [key, node] of Object.entries(graph.nodes)) {
+        const songKey = key as SongKey;
+        node.positions = {
+            pagerank: allPositions.pagerank[songKey],
+            mds: allPositions.mds[songKey],
+            "weighted-mds": allPositions["weighted-mds"][songKey],
+        };
+    }
 }
 
+/** Build + enrich + layout + persist a user's graph from fetched scrobbles. */
+function buildAndSaveUserGraph(
+    db: GraphDatabase,
+    username: string,
+    lastfmScrobbles: RawScrobble[],
+): {
+    nodeCount: number;
+    edgeCount: number;
+    clusterCount: number;
+    pageRankConverged: boolean;
+} {
+    const userId = db.getOrCreateUser(username);
+    const graph = buildGraph({
+        lastfmScrobbles,
+        lastfmUsername: username,
+    });
+    const { summary } = enrichGraph(graph);
+    attachLayoutPositions(graph);
+
+    db.clearGraph(userId);
+    db.saveGraph(graph, userId);
+
+    const nodeCount = Object.keys(graph.nodes).length;
+    const edgeCount = Object.values(graph.nodes).reduce(
+        (sum, node) => sum + Object.keys(node.next).length,
+        0,
+    );
+
+    return {
+        nodeCount,
+        edgeCount,
+        clusterCount: summary.clusters.clusterCount,
+        pageRankConverged: summary.pageRank.converged,
+    };
+}
+
+/** Full fetch→build pipeline for one user. */
+async function runPipelineForUser(
+    db: GraphDatabase,
+    username: string,
+): Promise<void> {
+    const apiKey = requireEnv("LASTFM_API_KEY");
+    const client = new LastfmClient({ apiKey, username });
+    await client.verifyAuth();
+    const scrobbles = await fetchLastfmScrobbles(client, { username });
+    buildAndSaveUserGraph(db, username, scrobbles);
+}
+
+export interface ServerConfig {
+    dbPath: string;
+    enablePipelineWorker?: boolean;
+    pipelineWorkerPollIntervalMs?: number;
+}
 
 /** Create the Hono app with all graph API routes. */
 export function createApp(config: ServerConfig): Hono {
     const app = new Hono();
     const db = new GraphDatabase(config.dbPath);
+    const enablePipelineWorker = config.enablePipelineWorker ?? true;
+    const pipelineWorkerPollIntervalMs =
+        config.pipelineWorkerPollIntervalMs ?? 2_000;
+    let workerBusy = false;
+
+    const pollPipelineQueue = async (): Promise<void> => {
+        if (workerBusy) return;
+        workerBusy = true;
+
+        try {
+            const job = db.claimNextQueuedPipelineJob();
+            if (!job) return;
+
+            try {
+                await runPipelineForUser(db, job.username);
+                db.markPipelineJobSucceeded(job.id);
+            } catch (err) {
+                db.markPipelineJobFailed(job.id);
+                console.error(
+                    `[pipeline-worker] job ${job.id} failed for ${job.username}:`,
+                    err,
+                );
+            }
+        } finally {
+            workerBusy = false;
+        }
+    };
+
+    if (enablePipelineWorker) {
+        const timer = setInterval(() => {
+            void pollPipelineQueue();
+        }, pipelineWorkerPollIntervalMs);
+        timer.unref();
+    }
 
     // CORS for frontend consumption
     app.use("*", cors());
@@ -288,8 +384,8 @@ export function createApp(config: ServerConfig): Hono {
 
         const result =
             algorithm === "strongest"
-                ? strongestPath(graph, fromKey as import("../graph/types.js").SongKey, toKey as import("../graph/types.js").SongKey)
-                : shortestPath(graph, fromKey as import("../graph/types.js").SongKey, toKey as import("../graph/types.js").SongKey);
+                ? strongestPath(graph, fromKey as SongKey, toKey as SongKey)
+                : shortestPath(graph, fromKey as SongKey, toKey as SongKey);
 
         return c.json(result);
     });
@@ -354,41 +450,20 @@ export function createApp(config: ServerConfig): Hono {
 
             const lastfmScrobbles = JSON.parse(
                 await readFile(lastfmPath, "utf-8"),
-            );
-
-            const graph = buildGraph({
-                lastfmScrobbles,
-                lastfmUsername: username,
-            });
-
-            const { summary } = enrichGraph(graph);
-
-            // Compute layout positions for all three modes
-            const allPositions = computeAllLayouts(graph);
-            for (const [key, node] of Object.entries(graph.nodes)) {
-                const sk = key as import("../graph/types.js").SongKey;
-                node.positions = {
-                    pagerank: allPositions.pagerank[sk],
-                    mds: allPositions.mds[sk],
-                    "weighted-mds": allPositions["weighted-mds"][sk],
-                };
-            }
-
-            db.clearGraph(userId);
-            db.saveGraph(graph, userId);
-
-            const nodeCount = Object.keys(graph.nodes).length;
-            const edgeCount = Object.values(graph.nodes).reduce(
-                (sum, n) => sum + Object.keys(n.next).length,
-                0,
-            );
+            ) as RawScrobble[];
+            const {
+                nodeCount,
+                edgeCount,
+                clusterCount,
+                pageRankConverged,
+            } = buildAndSaveUserGraph(db, username, lastfmScrobbles);
 
             return c.json({
                 status: "complete",
                 nodes: nodeCount,
                 edges: edgeCount,
-                clusters: summary.clusters.clusterCount,
-                pageRankConverged: summary.pageRank.converged,
+                clusters: clusterCount,
+                pageRankConverged,
             });
         } catch (err) {
             if (err && typeof err === "object" && "status" in err && "error" in err) {
@@ -399,50 +474,15 @@ export function createApp(config: ServerConfig): Hono {
         }
     });
 
-    // POST /pipeline/run — Run the full pipeline: fetch → build → enrich → save
+    // POST /pipeline/run — Queue a full pipeline run and return job id
     app.post("/pipeline/run", async (c) => {
         try {
             const username = await requireUsername(c);
-            const steps: string[] = [];
-
-            const apiKey = requireEnv("LASTFM_API_KEY");
-            const client = new LastfmClient({ apiKey, username });
-            await client.verifyAuth();
-            steps.push("Last.fm auth verified");
-
-            const userId = db.getOrCreateUser(username);
-
-            const scrobbles = await fetchLastfmScrobbles(client, { username });
-            steps.push(`Fetched ${scrobbles.length} scrobbles from Last.fm`);
-
-            const graph = buildGraph({
-                lastfmScrobbles: scrobbles,
-                lastfmUsername: username,
-            });
-            steps.push(`Built graph: ${Object.keys(graph.nodes).length} nodes`);
-
-            const { summary } = enrichGraph(graph);
-            steps.push(
-                `Enriched: ${summary.clusters.clusterCount} clusters, PageRank converged=${summary.pageRank.converged}`,
-            );
-
-            // Compute layout positions for all three modes
-            const allPositions = computeAllLayouts(graph);
-            for (const [key, node] of Object.entries(graph.nodes)) {
-                const sk = key as import("../graph/types.js").SongKey;
-                node.positions = {
-                    pagerank: allPositions.pagerank[sk],
-                    mds: allPositions.mds[sk],
-                    "weighted-mds": allPositions["weighted-mds"][sk],
-                };
+            const jobId = db.enqueuePipelineJob(username);
+            if (enablePipelineWorker) {
+                void pollPipelineQueue();
             }
-            steps.push("Computed layout positions");
-
-            db.clearGraph(userId);
-            db.saveGraph(graph, userId);
-            steps.push("Saved to database");
-
-            return c.json({ status: "complete", steps });
+            return c.json({ jobId }, 202);
         } catch (err) {
             if (err && typeof err === "object" && "status" in err && "error" in err) {
                 const e = err as { error: string; status: number };
@@ -450,6 +490,30 @@ export function createApp(config: ServerConfig): Hono {
             }
             return c.json({ error: `Pipeline failed: ${err instanceof Error ? err.message : err}` }, 500);
         }
+    });
+
+    // GET /pipeline/jobs/:jobId — fetch one job status
+    app.get("/pipeline/jobs/:jobId", (c) => {
+        const jobId = c.req.param("jobId");
+        const job = db.getPipelineJob(jobId);
+        if (!job) {
+            return c.json({ error: "Job not found" }, 404);
+        }
+        return c.json(job);
+    });
+
+    // GET /pipeline/jobs?username=... — list job statuses for a user
+    app.get("/pipeline/jobs", (c) => {
+        const username = c.req.query("username");
+        if (!username) {
+            return c.json(
+                { error: "Missing required query parameter: username" },
+                400,
+            );
+        }
+
+        const jobs = db.listPipelineJobs(username);
+        return c.json({ jobs });
     });
 
     return app;

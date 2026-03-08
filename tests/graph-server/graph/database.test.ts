@@ -98,6 +98,70 @@ describe("GraphDatabase", () => {
         expect(db.getUserId("alice")).toBe(id);
     });
 
+    it("enqueuePipelineJob stores a queued job with timestamps", () => {
+        const jobId = db.enqueuePipelineJob("alice");
+        const job = db.getPipelineJob(jobId);
+
+        expect(job).not.toBeNull();
+        expect(job!.id).toBe(jobId);
+        expect(job!.status).toBe("queued");
+        expect(job!.createdAt).toBeTruthy();
+        expect(job!.updatedAt).toBeTruthy();
+        expect(job!.startedAt).toBeNull();
+        expect(job!.finishedAt).toBeNull();
+    });
+
+    it("claimNextQueuedPipelineJob moves queued job to running", () => {
+        const jobId = db.enqueuePipelineJob("alice");
+        const claimed = db.claimNextQueuedPipelineJob();
+
+        expect(claimed).not.toBeNull();
+        expect(claimed!.id).toBe(jobId);
+        expect(claimed!.username).toBe("alice");
+
+        const job = db.getPipelineJob(jobId);
+        expect(job).not.toBeNull();
+        expect(job!.status).toBe("running");
+        expect(job!.startedAt).toBeTruthy();
+        expect(job!.finishedAt).toBeNull();
+    });
+
+    it("marks claimed jobs as succeeded or failed", () => {
+        const successId = db.enqueuePipelineJob("alice");
+        const failedId = db.enqueuePipelineJob("alice");
+
+        const claim1 = db.claimNextQueuedPipelineJob();
+        const claim2 = db.claimNextQueuedPipelineJob();
+        expect(claim1).not.toBeNull();
+        expect(claim2).not.toBeNull();
+
+        db.markPipelineJobSucceeded(successId);
+        db.markPipelineJobFailed(failedId);
+
+        const succeeded = db.getPipelineJob(successId);
+        const failed = db.getPipelineJob(failedId);
+
+        expect(succeeded).not.toBeNull();
+        expect(succeeded!.status).toBe("succeeded");
+        expect(succeeded!.finishedAt).toBeTruthy();
+
+        expect(failed).not.toBeNull();
+        expect(failed!.status).toBe("failed");
+        expect(failed!.finishedAt).toBeTruthy();
+    });
+
+    it("listPipelineJobs filters by username", () => {
+        const alice1 = db.enqueuePipelineJob("alice");
+        const alice2 = db.enqueuePipelineJob("alice");
+        db.enqueuePipelineJob("bob");
+
+        const aliceJobs = db.listPipelineJobs("alice");
+        expect(aliceJobs).toHaveLength(2);
+        const ids = new Set(aliceJobs.map((job) => job.id));
+        expect(ids.has(alice1)).toBe(true);
+        expect(ids.has(alice2)).toBe(true);
+    });
+
     it("round-trips a graph: save → loadGraph → matches original (SongKey-based)", () => {
         const original = makeTestGraph();
         db.saveGraph(original, userId);
