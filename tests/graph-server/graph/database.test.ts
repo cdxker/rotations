@@ -1,14 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { GraphDatabase } from "../../../graph-server/src/graph/database.js";
 import type { ListeningGraph, SongKey } from "../../../graph-server/src/graph/types.js";
 import { toSongKey } from "../../../graph-server/src/graph/types.js";
-
-function makeTmpDir(): string {
-    return mkdtempSync(join(tmpdir(), "graph-db-test-"));
-}
+import {
+    TEST_DATABASE_URL,
+    resetTestDatabase,
+} from "../postgres-test-utils.js";
 
 function makeTestGraph(): ListeningGraph {
     const keyA = toSongKey("Artist A", "Track 1");
@@ -62,45 +59,44 @@ function makeTestGraph(): ListeningGraph {
 }
 
 describe("GraphDatabase", () => {
-    let tmpDir: string;
     let db: GraphDatabase;
     let userId: number;
 
-    beforeEach(() => {
-        tmpDir = makeTmpDir();
-        db = new GraphDatabase(join(tmpDir, "test.db"));
-        userId = db.getOrCreateUser("testuser");
+    beforeEach(async () => {
+        db = new GraphDatabase(TEST_DATABASE_URL);
+        await db.getUserId("__schema_init__");
+        await resetTestDatabase();
+        userId = await db.getOrCreateUser("testuser");
     });
 
-    afterEach(() => {
-        db.close();
-        rmSync(tmpDir, { recursive: true, force: true });
+    afterEach(async () => {
+        await db.close();
     });
 
-    it("getOrCreateUser returns same id for same username", () => {
-        const id1 = db.getOrCreateUser("alice");
-        const id2 = db.getOrCreateUser("alice");
+    it("getOrCreateUser returns same id for same username", async () => {
+        const id1 = await db.getOrCreateUser("alice");
+        const id2 = await db.getOrCreateUser("alice");
         expect(id1).toBe(id2);
     });
 
-    it("getOrCreateUser returns different ids for different usernames", () => {
-        const id1 = db.getOrCreateUser("alice");
-        const id2 = db.getOrCreateUser("bob");
+    it("getOrCreateUser returns different ids for different usernames", async () => {
+        const id1 = await db.getOrCreateUser("alice");
+        const id2 = await db.getOrCreateUser("bob");
         expect(id1).not.toBe(id2);
     });
 
-    it("getUserId returns null for unknown username", () => {
-        expect(db.getUserId("unknown")).toBeNull();
+    it("getUserId returns null for unknown username", async () => {
+        expect(await db.getUserId("unknown")).toBeNull();
     });
 
-    it("getUserId returns id for known username", () => {
-        const id = db.getOrCreateUser("alice");
-        expect(db.getUserId("alice")).toBe(id);
+    it("getUserId returns id for known username", async () => {
+        const id = await db.getOrCreateUser("alice");
+        expect(await db.getUserId("alice")).toBe(id);
     });
 
-    it("enqueuePipelineJob stores a queued job with timestamps", () => {
-        const jobId = db.enqueuePipelineJob("alice");
-        const job = db.getPipelineJob(jobId);
+    it("enqueuePipelineJob stores a queued job with timestamps", async () => {
+        const jobId = await db.enqueuePipelineJob("alice");
+        const job = await db.getPipelineJob(jobId);
 
         expect(job).not.toBeNull();
         expect(job!.id).toBe(jobId);
@@ -111,35 +107,35 @@ describe("GraphDatabase", () => {
         expect(job!.finishedAt).toBeNull();
     });
 
-    it("claimNextQueuedPipelineJob moves queued job to running", () => {
-        const jobId = db.enqueuePipelineJob("alice");
-        const claimed = db.claimNextQueuedPipelineJob();
+    it("claimNextQueuedPipelineJob moves queued job to running", async () => {
+        const jobId = await db.enqueuePipelineJob("alice");
+        const claimed = await db.claimNextQueuedPipelineJob();
 
         expect(claimed).not.toBeNull();
         expect(claimed!.id).toBe(jobId);
         expect(claimed!.username).toBe("alice");
 
-        const job = db.getPipelineJob(jobId);
+        const job = await db.getPipelineJob(jobId);
         expect(job).not.toBeNull();
         expect(job!.status).toBe("running");
         expect(job!.startedAt).toBeTruthy();
         expect(job!.finishedAt).toBeNull();
     });
 
-    it("marks claimed jobs as succeeded or failed", () => {
-        const successId = db.enqueuePipelineJob("alice");
-        const failedId = db.enqueuePipelineJob("alice");
+    it("marks claimed jobs as succeeded or failed", async () => {
+        const successId = await db.enqueuePipelineJob("alice");
+        const failedId = await db.enqueuePipelineJob("alice");
 
-        const claim1 = db.claimNextQueuedPipelineJob();
-        const claim2 = db.claimNextQueuedPipelineJob();
+        const claim1 = await db.claimNextQueuedPipelineJob();
+        const claim2 = await db.claimNextQueuedPipelineJob();
         expect(claim1).not.toBeNull();
         expect(claim2).not.toBeNull();
 
-        db.markPipelineJobSucceeded(successId);
-        db.markPipelineJobFailed(failedId);
+        await db.markPipelineJobSucceeded(successId);
+        await db.markPipelineJobFailed(failedId);
 
-        const succeeded = db.getPipelineJob(successId);
-        const failed = db.getPipelineJob(failedId);
+        const succeeded = await db.getPipelineJob(successId);
+        const failed = await db.getPipelineJob(failedId);
 
         expect(succeeded).not.toBeNull();
         expect(succeeded!.status).toBe("succeeded");
@@ -150,22 +146,22 @@ describe("GraphDatabase", () => {
         expect(failed!.finishedAt).toBeTruthy();
     });
 
-    it("listPipelineJobs filters by username", () => {
-        const alice1 = db.enqueuePipelineJob("alice");
-        const alice2 = db.enqueuePipelineJob("alice");
-        db.enqueuePipelineJob("bob");
+    it("listPipelineJobs filters by username", async () => {
+        const alice1 = await db.enqueuePipelineJob("alice");
+        const alice2 = await db.enqueuePipelineJob("alice");
+        await db.enqueuePipelineJob("bob");
 
-        const aliceJobs = db.listPipelineJobs("alice");
+        const aliceJobs = await db.listPipelineJobs("alice");
         expect(aliceJobs).toHaveLength(2);
         const ids = new Set(aliceJobs.map((job) => job.id));
         expect(ids.has(alice1)).toBe(true);
         expect(ids.has(alice2)).toBe(true);
     });
 
-    it("round-trips a graph: save → loadGraph → matches original (SongKey-based)", () => {
+    it("round-trips a graph: save → loadGraph → matches original (SongKey-based)", async () => {
         const original = makeTestGraph();
-        db.saveGraph(original, userId);
-        const loaded = db.loadGraph(userId);
+        await db.saveGraph(original, userId);
+        const loaded = await db.loadGraph(userId);
 
         // Compare nodes
         const origKeys = Object.keys(original.nodes).sort();
@@ -203,10 +199,10 @@ describe("GraphDatabase", () => {
         );
     });
 
-    it("loadGraphCompact returns UUID-keyed nodes with compact edges", () => {
+    it("loadGraphCompact returns UUID-keyed nodes with compact edges", async () => {
         const original = makeTestGraph();
-        db.saveGraph(original, userId);
-        const compact = db.loadGraphCompact(userId);
+        await db.saveGraph(original, userId);
+        const compact = await db.loadGraphCompact(userId);
 
         // UUID keys should not contain "::"
         const uuids = Object.keys(compact.nodes);
@@ -246,15 +242,15 @@ describe("GraphDatabase", () => {
         expect(compact.metadata.totalScrobbles).toBe(original.metadata.totalScrobbles);
     });
 
-    it("getNodeById returns compact node by UUID", () => {
-        db.saveGraph(makeTestGraph(), userId);
-        const compact = db.loadGraphCompact(userId);
+    it("getNodeById returns compact node by UUID", async () => {
+        await db.saveGraph(makeTestGraph(), userId);
+        const compact = await db.loadGraphCompact(userId);
 
         const [uuid, expectedNode] = Object.entries(compact.nodes).find(
             ([, n]) => n.name === "Track 1",
         )!;
 
-        const fetched = db.getNodeById(uuid, userId);
+        const fetched = await db.getNodeById(uuid, userId);
         expect(fetched).not.toBeNull();
         expect(fetched!.id).toBe(uuid);
         expect(fetched!.name).toBe("Track 1");
@@ -266,12 +262,12 @@ describe("GraphDatabase", () => {
         expect(nextUuids[0]).not.toContain("::");
     });
 
-    it("getNodeById returns null for unknown UUID", () => {
-        const result = db.getNodeById("nonexistent-uuid", userId);
+    it("getNodeById returns null for unknown UUID", async () => {
+        const result = await db.getNodeById("nonexistent-uuid", userId);
         expect(result).toBeNull();
     });
 
-    it("supports incremental updates — merges edge weights and play counts", () => {
+    it("supports incremental updates — merges edge weights and play counts", async () => {
         const keyA = toSongKey("Artist A", "Track 1");
         const keyB = toSongKey("Artist B", "Track 2");
 
@@ -307,7 +303,7 @@ describe("GraphDatabase", () => {
             },
         };
 
-        db.saveGraph(graph1, userId);
+        await db.saveGraph(graph1, userId);
 
         // Second insert — adds more plays
         const graph2: ListeningGraph = {
@@ -341,9 +337,9 @@ describe("GraphDatabase", () => {
             },
         };
 
-        db.saveGraph(graph2, userId);
+        await db.saveGraph(graph2, userId);
 
-        const loaded = db.loadGraph(userId);
+        const loaded = await db.loadGraph(userId);
 
         // Play counts should be summed
         expect(loaded.nodes[keyA]!.totalPlays).toBe(5); // 3 + 2
@@ -356,7 +352,7 @@ describe("GraphDatabase", () => {
         expect(loaded.metadata.exportTimestamp).toBe("2025-02-01T00:00:00Z");
     });
 
-    it("supports incremental updates — merges source_plays per-source counts", () => {
+    it("supports incremental updates — merges source_plays per-source counts", async () => {
         const keyA = toSongKey("Artist A", "Track 1");
 
         // First save with lastfm plays
@@ -383,7 +379,7 @@ describe("GraphDatabase", () => {
             },
         };
 
-        db.saveGraph(graph1, userId);
+        await db.saveGraph(graph1, userId);
 
         // Second save with more lastfm plays
         const graph2: ListeningGraph = {
@@ -409,9 +405,9 @@ describe("GraphDatabase", () => {
             },
         };
 
-        db.saveGraph(graph2, userId);
+        await db.saveGraph(graph2, userId);
 
-        const loaded = db.loadGraph(userId);
+        const loaded = await db.loadGraph(userId);
 
         // source_plays should be merged additively
         expect(loaded.nodes[keyA]!.sourcePlays).toEqual({
@@ -419,9 +415,9 @@ describe("GraphDatabase", () => {
         });
     });
 
-    it("isolates data between users", () => {
-        const aliceId = db.getOrCreateUser("alice");
-        const bobId = db.getOrCreateUser("bob");
+    it("isolates data between users", async () => {
+        const aliceId = await db.getOrCreateUser("alice");
+        const bobId = await db.getOrCreateUser("bob");
 
         const keyA = toSongKey("Artist A", "Track 1");
 
@@ -444,56 +440,56 @@ describe("GraphDatabase", () => {
             },
         };
 
-        db.saveGraph(aliceGraph, aliceId);
+        await db.saveGraph(aliceGraph, aliceId);
 
         // Bob should have no data
-        expect(db.getNodeCount(bobId)).toBe(0);
-        expect(db.getNodeCount(aliceId)).toBe(1);
+        expect(await db.getNodeCount(bobId)).toBe(0);
+        expect(await db.getNodeCount(aliceId)).toBe(1);
     });
 
-    it("getNode returns a single node with edges (SongKey-based)", () => {
+    it("getNode returns a single node with edges (SongKey-based)", async () => {
         const graph = makeTestGraph();
-        db.saveGraph(graph, userId);
+        await db.saveGraph(graph, userId);
 
         const keyA = toSongKey("Artist A", "Track 1");
         const keyB = toSongKey("Artist B", "Track 2");
 
-        const node = db.getNode(keyA, userId);
+        const node = await db.getNode(keyA, userId);
         expect(node).not.toBeNull();
         expect(node!.name).toBe("Track 1");
         expect(node!.next[keyB]).toBe(3);
     });
 
-    it("getNode returns null for nonexistent key", () => {
-        const node = db.getNode("nonexistent::key" as SongKey, userId);
+    it("getNode returns null for nonexistent key", async () => {
+        const node = await db.getNode("nonexistent::key" as SongKey, userId);
         expect(node).toBeNull();
     });
 
-    it("getNodeCount and getEdgeCount", () => {
+    it("getNodeCount and getEdgeCount", async () => {
         const graph = makeTestGraph();
-        db.saveGraph(graph, userId);
+        await db.saveGraph(graph, userId);
 
-        expect(db.getNodeCount(userId)).toBe(3);
-        expect(db.getEdgeCount(userId)).toBe(2); // A→B, B→C
+        expect(await db.getNodeCount(userId)).toBe(3);
+        expect(await db.getEdgeCount(userId)).toBe(2); // A→B, B→C
     });
 
-    it("clearGraph + saveGraph is idempotent — repeated saves produce identical data", () => {
+    it("clearGraph + saveGraph is idempotent — repeated saves produce identical data", async () => {
         const graph = makeTestGraph();
         const keyA = toSongKey("Artist A", "Track 1");
         const keyB = toSongKey("Artist B", "Track 2");
 
         // Save once
-        db.clearGraph(userId);
-        db.saveGraph(graph, userId);
-        const first = db.loadGraph(userId);
+        await db.clearGraph(userId);
+        await db.saveGraph(graph, userId);
+        const first = await db.loadGraph(userId);
 
         // Save again with clear — should be identical
-        db.clearGraph(userId);
-        db.saveGraph(graph, userId);
-        const second = db.loadGraph(userId);
+        await db.clearGraph(userId);
+        await db.saveGraph(graph, userId);
+        const second = await db.loadGraph(userId);
 
-        expect(db.getNodeCount(userId)).toBe(Object.keys(graph.nodes).length);
-        expect(db.getEdgeCount(userId)).toBe(2);
+        expect(await db.getNodeCount(userId)).toBe(Object.keys(graph.nodes).length);
+        expect(await db.getEdgeCount(userId)).toBe(2);
         expect(second.nodes[keyA]!.totalPlays).toBe(
             first.nodes[keyA]!.totalPlays,
         );
@@ -505,7 +501,7 @@ describe("GraphDatabase", () => {
         );
     });
 
-    it("handles empty graph", () => {
+    it("handles empty graph", async () => {
         const empty: ListeningGraph = {
             nodes: {} as Record<SongKey, ListeningGraph["nodes"][SongKey]>,
             metadata: {
@@ -515,14 +511,14 @@ describe("GraphDatabase", () => {
             },
         };
 
-        db.saveGraph(empty, userId);
-        const loaded = db.loadGraph(userId);
+        await db.saveGraph(empty, userId);
+        const loaded = await db.loadGraph(userId);
 
         expect(Object.keys(loaded.nodes)).toHaveLength(0);
         expect(loaded.metadata.totalScrobbles).toBe(0);
     });
 
-    it("preserves UUIDs across incremental saves", () => {
+    it("preserves UUIDs across incremental saves", async () => {
         const keyA = toSongKey("Artist A", "Track 1");
 
         const graph1: ListeningGraph = {
@@ -544,13 +540,13 @@ describe("GraphDatabase", () => {
             },
         };
 
-        db.saveGraph(graph1, userId);
-        const compact1 = db.loadGraphCompact(userId);
+        await db.saveGraph(graph1, userId);
+        const compact1 = await db.loadGraphCompact(userId);
         const uuid1 = Object.keys(compact1.nodes)[0]!;
 
         // Second save — same node should keep same UUID
-        db.saveGraph(graph1, userId);
-        const compact2 = db.loadGraphCompact(userId);
+        await db.saveGraph(graph1, userId);
+        const compact2 = await db.loadGraphCompact(userId);
         const uuid2 = Object.keys(compact2.nodes)[0]!;
 
         expect(uuid2).toBe(uuid1);

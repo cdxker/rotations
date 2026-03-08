@@ -43,7 +43,7 @@ LASTFM_API_KEY=your_api_key
 pnpm dev
 ```
 
-The server reads `GRAPH_SERVER_PORT` (default: `3001`) and `GRAPH_DB_PATH` (default: `graph.db`) from `.env`.
+The server reads `GRAPH_SERVER_PORT` (default: `3001`) and `DATABASE_URL` from `.env`.
 
 ### Run the pipeline
 
@@ -71,7 +71,9 @@ All GET endpoints require `?user=<username>`.
 | `GET`  | `/graph/path`               | Find path between two songs. `?from=&to=&algorithm=shortest\|strongest`.          |
 | `POST` | `/pipeline/fetch/lastfm`    | Fetch scrobbles. Body: `{"username": "..."}`.                                     |
 | `POST` | `/pipeline/build`           | Build graph from fetched data. Body: `{"username": "..."}`.                       |
-| `POST` | `/pipeline/run`             | Full pipeline (fetch → build → enrich → save). Body: `{"username": "..."}`.       |
+| `POST` | `/pipeline/run`             | Queue full pipeline job. Body: `{"username": "..."}`. Returns `202` + `jobId`.     |
+| `GET`  | `/pipeline/run/:jobId`      | Get job status (`queued`, `running`, `succeeded`, `failed`, `cancelled`).           |
+| `GET`  | `/pipeline/run?username=...`| List queued/running/completed jobs for a user (status + timestamps only).           |
 
 CORS is enabled for frontend consumption.
 

@@ -168,7 +168,7 @@ importers:
         specifier: ^4.12.3
         version: 4.12.5
       pg:
-        specifier: ^8.16.3
+        specifier: 8.20.0
         version: 8.20.0
     devDependencies:
       '@eslint/js':
@@ -178,7 +178,7 @@ importers:
         specifier: ^22.15.0
         version: 22.19.15
       '@types/pg':
-        specifier: ^8.15.6
+        specifier: 8.18.0
         version: 8.18.0
       eslint:
         specifier: ^9.39.2

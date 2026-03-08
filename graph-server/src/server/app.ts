@@ -2,7 +2,11 @@ import path from "node:path";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { GraphDatabase } from "../graph/database.js";
-import type { CompactGraphNode, ListeningGraph, SongKey } from "../graph/types.js";
+import type {
+    CompactGraphNode,
+    ListeningGraph,
+    SongKey,
+} from "../graph/types.js";
 import { enrichGraph } from "../analysis/enrich.js";
 import { shortestPath, strongestPath } from "../analysis/paths.js";
 import { LastfmClient } from "../ingestion/lastfm-client.js";
@@ -58,17 +62,17 @@ function attachLayoutPositions(graph: ListeningGraph): void {
 }
 
 /** Build + enrich + layout + persist a user's graph from fetched scrobbles. */
-function buildAndSaveUserGraph(
+async function buildAndSaveUserGraph(
     db: GraphDatabase,
     username: string,
     lastfmScrobbles: RawScrobble[],
-): {
+): Promise<{
     nodeCount: number;
     edgeCount: number;
     clusterCount: number;
     pageRankConverged: boolean;
-} {
-    const userId = db.getOrCreateUser(username);
+}> {
+    const userId = await db.getOrCreateUser(username);
     const graph = buildGraph({
         lastfmScrobbles,
         lastfmUsername: username,
@@ -76,8 +80,8 @@ function buildAndSaveUserGraph(
     const { summary } = enrichGraph(graph);
     attachLayoutPositions(graph);
 
-    db.clearGraph(userId);
-    db.saveGraph(graph, userId);
+    await db.clearGraph(userId);
+    await db.saveGraph(graph, userId);
 
     const nodeCount = Object.keys(graph.nodes).length;
     const edgeCount = Object.values(graph.nodes).reduce(
@@ -102,11 +106,12 @@ async function runPipelineForUser(
     const client = new LastfmClient({ apiKey, username });
     await client.verifyAuth();
     const scrobbles = await fetchLastfmScrobbles(client, { username });
-    buildAndSaveUserGraph(db, username, scrobbles);
+    await buildAndSaveUserGraph(db, username, scrobbles);
 }
 
 export interface ServerConfig {
-    dbPath: string;
+    databaseUrl?: string;
+    db?: GraphDatabase;
     enablePipelineWorker?: boolean;
     pipelineWorkerPollIntervalMs?: number;
 }
@@ -114,7 +119,15 @@ export interface ServerConfig {
 /** Create the Hono app with all graph API routes. */
 export function createApp(config: ServerConfig): Hono {
     const app = new Hono();
-    const db = new GraphDatabase(config.dbPath);
+    const db =
+        config.db ??
+        (config.databaseUrl
+            ? new GraphDatabase(config.databaseUrl)
+            : (() => {
+                  throw new Error(
+                      "createApp requires either config.db or config.databaseUrl",
+                  );
+              })());
     const enablePipelineWorker = config.enablePipelineWorker ?? true;
     const pipelineWorkerPollIntervalMs =
         config.pipelineWorkerPollIntervalMs ?? 2_000;
@@ -125,14 +138,14 @@ export function createApp(config: ServerConfig): Hono {
         workerBusy = true;
 
         try {
-            const job = db.claimNextQueuedPipelineJob();
+            const job = await db.claimNextQueuedPipelineJob();
             if (!job) return;
 
             try {
                 await runPipelineForUser(db, job.username);
-                db.markPipelineJobSucceeded(job.id);
+                await db.markPipelineJobSucceeded(job.id);
             } catch (err) {
-                db.markPipelineJobFailed(job.id);
+                await db.markPipelineJobFailed(job.id);
                 console.error(
                     `[pipeline-worker] job ${job.id} failed for ${job.username}:`,
                     err,
@@ -154,7 +167,7 @@ export function createApp(config: ServerConfig): Hono {
     app.use("*", cors());
 
     // GET /graph — full compact graph (with optional pagination)
-    app.get("/graph", (c) => {
+    app.get("/graph", async (c) => {
         let user: string;
         try {
             user = requireUserQuery(c);
@@ -163,7 +176,7 @@ export function createApp(config: ServerConfig): Hono {
             return c.json({ error: err.error }, 400);
         }
 
-        const userId = db.getUserId(user);
+        const userId = await db.getUserId(user);
         if (userId === null) {
             return c.json({ error: "User not found" }, 404);
         }
@@ -171,7 +184,7 @@ export function createApp(config: ServerConfig): Hono {
         const limit = parseInt(c.req.query("limit") ?? "0", 10);
         const offset = parseInt(c.req.query("offset") ?? "0", 10);
 
-        const graph = db.loadGraphCompact(userId);
+        const graph = await db.loadGraphCompact(userId);
         const allKeys = Object.keys(graph.nodes);
 
         if (limit > 0) {
@@ -196,7 +209,7 @@ export function createApp(config: ServerConfig): Hono {
     });
 
     // GET /graph/node/:id — single node by UUID
-    app.get("/graph/node/:id", (c) => {
+    app.get("/graph/node/:id", async (c) => {
         let user: string;
         try {
             user = requireUserQuery(c);
@@ -205,7 +218,7 @@ export function createApp(config: ServerConfig): Hono {
             return c.json({ error: err.error }, 400);
         }
 
-        const userId = db.getUserId(user);
+        const userId = await db.getUserId(user);
         if (userId === null) {
             return c.json({ error: "User not found" }, 404);
         }
@@ -218,7 +231,7 @@ export function createApp(config: ServerConfig): Hono {
             return c.json({ error: err.error }, 400);
         }
 
-        const node = db.getNodeById(nodeId, userId);
+        const node = await db.getNodeById(nodeId, userId);
         if (!node) {
             return c.json({ error: "Node not found" }, 404);
         }
@@ -227,7 +240,7 @@ export function createApp(config: ServerConfig): Hono {
     });
 
     // GET /graph/neighbors/:id — immediate neighbors by UUID
-    app.get("/graph/neighbors/:id", (c) => {
+    app.get("/graph/neighbors/:id", async (c) => {
         let user: string;
         try {
             user = requireUserQuery(c);
@@ -236,7 +249,7 @@ export function createApp(config: ServerConfig): Hono {
             return c.json({ error: err.error }, 400);
         }
 
-        const userId = db.getUserId(user);
+        const userId = await db.getUserId(user);
         if (userId === null) {
             return c.json({ error: "User not found" }, 404);
         }
@@ -249,18 +262,17 @@ export function createApp(config: ServerConfig): Hono {
             return c.json({ error: err.error }, 400);
         }
 
-        const node = db.getNodeById(nodeId, userId);
+        const node = await db.getNodeById(nodeId, userId);
         if (!node) {
             return c.json({ error: "Node not found" }, 404);
         }
 
-        // Fetch full node data for each neighbor
         const nextNeighbors: Record<
             string,
             { node: CompactGraphNode & { id: string }; weight: number }
         > = {};
         for (const [id, weight] of Object.entries(node.next)) {
-            const neighborNode = db.getNodeById(id, userId);
+            const neighborNode = await db.getNodeById(id, userId);
             if (neighborNode) {
                 nextNeighbors[id] = { node: neighborNode, weight };
             }
@@ -271,7 +283,7 @@ export function createApp(config: ServerConfig): Hono {
             { node: CompactGraphNode & { id: string }; weight: number }
         > = {};
         for (const [id, weight] of Object.entries(node.previous)) {
-            const neighborNode = db.getNodeById(id, userId);
+            const neighborNode = await db.getNodeById(id, userId);
             if (neighborNode) {
                 previousNeighbors[id] = { node: neighborNode, weight };
             }
@@ -286,7 +298,7 @@ export function createApp(config: ServerConfig): Hono {
     });
 
     // GET /graph/stats — summary statistics
-    app.get("/graph/stats", (c) => {
+    app.get("/graph/stats", async (c) => {
         let user: string;
         try {
             user = requireUserQuery(c);
@@ -295,14 +307,14 @@ export function createApp(config: ServerConfig): Hono {
             return c.json({ error: err.error }, 400);
         }
 
-        const userId = db.getUserId(user);
+        const userId = await db.getUserId(user);
         if (userId === null) {
             return c.json({ error: "User not found" }, 404);
         }
 
-        const nodeCount = db.getNodeCount(userId);
-        const edgeCount = db.getEdgeCount(userId);
-        const graph = db.loadGraphCompact(userId);
+        const nodeCount = await db.getNodeCount(userId);
+        const edgeCount = await db.getEdgeCount(userId);
+        const graph = await db.loadGraphCompact(userId);
 
         return c.json({
             totalNodes: nodeCount,
@@ -312,7 +324,7 @@ export function createApp(config: ServerConfig): Hono {
     });
 
     // GET /graph/analysis — full analysis: stats, rankings, PageRank top songs, cluster summaries
-    app.get("/graph/analysis", (c) => {
+    app.get("/graph/analysis", async (c) => {
         let user: string;
         try {
             user = requireUserQuery(c);
@@ -321,19 +333,19 @@ export function createApp(config: ServerConfig): Hono {
             return c.json({ error: err.error }, 400);
         }
 
-        const userId = db.getUserId(user);
+        const userId = await db.getUserId(user);
         if (userId === null) {
             return c.json({ error: "User not found" }, 404);
         }
 
         const topN = parseInt(c.req.query("topN") ?? "20", 10);
-        const graph = db.loadGraph(userId);
+        const graph = await db.loadGraph(userId);
         const { summary } = enrichGraph(graph, { topN });
         return c.json(summary);
     });
 
     // GET /graph/path — find a path between two songs (accepts UUIDs)
-    app.get("/graph/path", (c) => {
+    app.get("/graph/path", async (c) => {
         let user: string;
         try {
             user = requireUserQuery(c);
@@ -342,7 +354,7 @@ export function createApp(config: ServerConfig): Hono {
             return c.json({ error: err.error }, 400);
         }
 
-        const userId = db.getUserId(user);
+        const userId = await db.getUserId(user);
         if (userId === null) {
             return c.json({ error: "User not found" }, 404);
         }
@@ -365,19 +377,17 @@ export function createApp(config: ServerConfig): Hono {
             );
         }
 
-        // Load SongKey-based graph for path algorithms
-        const graph = db.loadGraph(userId);
+        const graph = await db.loadGraph(userId);
 
-        // Resolve UUIDs to SongKeys if they don't contain "::" (i.e., they're UUIDs)
         let fromKey = from;
         let toKey = to;
         if (!from.includes("::")) {
-            const fromNode = db.getNodeById(from, userId);
+            const fromNode = await db.getNodeById(from, userId);
             if (!fromNode) return c.json({ error: "From node not found" }, 404);
             fromKey = fromNode.songKey;
         }
         if (!to.includes("::")) {
-            const toNode = db.getNodeById(to, userId);
+            const toNode = await db.getNodeById(to, userId);
             if (!toNode) return c.json({ error: "To node not found" }, 404);
             toKey = toNode.songKey;
         }
@@ -400,7 +410,7 @@ export function createApp(config: ServerConfig): Hono {
             const client = new LastfmClient({ apiKey, username });
             await client.verifyAuth();
 
-            db.getOrCreateUser(username);
+            await db.getOrCreateUser(username);
 
             const logs: string[] = [];
             const scrobbles = await fetchLastfmScrobbles(client, {
@@ -414,11 +424,21 @@ export function createApp(config: ServerConfig): Hono {
                 logs,
             });
         } catch (err) {
-            if (err && typeof err === "object" && "status" in err && "error" in err) {
+            if (
+                err &&
+                typeof err === "object" &&
+                "status" in err &&
+                "error" in err
+            ) {
                 const e = err as { error: string; status: number };
                 return c.json({ error: e.error }, e.status as 400);
             }
-            return c.json({ error: `Last.fm fetch failed: ${err instanceof Error ? err.message : err}` }, 500);
+            return c.json(
+                {
+                    error: `Last.fm fetch failed: ${err instanceof Error ? err.message : err}`,
+                },
+                500,
+            );
         }
     });
 
@@ -426,10 +446,12 @@ export function createApp(config: ServerConfig): Hono {
     app.post("/pipeline/build", async (c) => {
         try {
             const username = await requireUsername(c);
-            const userId = db.getUserId(username);
+            const userId = await db.getUserId(username);
             if (userId === null) {
                 return c.json(
-                    { error: "User not found. Fetch data first via /pipeline/fetch/lastfm" },
+                    {
+                        error: "User not found. Fetch data first via /pipeline/fetch/lastfm",
+                    },
                     404,
                 );
             }
@@ -437,7 +459,10 @@ export function createApp(config: ServerConfig): Hono {
             const { readFile } = await import("node:fs/promises");
             const { existsSync } = await import("node:fs");
 
-            const lastfmPath = path.join(DATA_DIR, `lastfm-scrobbles-${username}.json`);
+            const lastfmPath = path.join(
+                DATA_DIR,
+                `lastfm-scrobbles-${username}.json`,
+            );
 
             if (!existsSync(lastfmPath)) {
                 return c.json(
@@ -451,12 +476,8 @@ export function createApp(config: ServerConfig): Hono {
             const lastfmScrobbles = JSON.parse(
                 await readFile(lastfmPath, "utf-8"),
             ) as RawScrobble[];
-            const {
-                nodeCount,
-                edgeCount,
-                clusterCount,
-                pageRankConverged,
-            } = buildAndSaveUserGraph(db, username, lastfmScrobbles);
+            const { nodeCount, edgeCount, clusterCount, pageRankConverged } =
+                await buildAndSaveUserGraph(db, username, lastfmScrobbles);
 
             return c.json({
                 status: "complete",
@@ -466,11 +487,21 @@ export function createApp(config: ServerConfig): Hono {
                 pageRankConverged,
             });
         } catch (err) {
-            if (err && typeof err === "object" && "status" in err && "error" in err) {
+            if (
+                err &&
+                typeof err === "object" &&
+                "status" in err &&
+                "error" in err
+            ) {
                 const e = err as { error: string; status: number };
                 return c.json({ error: e.error }, e.status as 400);
             }
-            return c.json({ error: `Build failed: ${err instanceof Error ? err.message : err}` }, 500);
+            return c.json(
+                {
+                    error: `Build failed: ${err instanceof Error ? err.message : err}`,
+                },
+                500,
+            );
         }
     });
 
@@ -478,24 +509,34 @@ export function createApp(config: ServerConfig): Hono {
     app.post("/pipeline/run", async (c) => {
         try {
             const username = await requireUsername(c);
-            const jobId = db.enqueuePipelineJob(username);
+            const jobId = await db.enqueuePipelineJob(username);
             if (enablePipelineWorker) {
                 void pollPipelineQueue();
             }
             return c.json({ jobId }, 202);
         } catch (err) {
-            if (err && typeof err === "object" && "status" in err && "error" in err) {
+            if (
+                err &&
+                typeof err === "object" &&
+                "status" in err &&
+                "error" in err
+            ) {
                 const e = err as { error: string; status: number };
                 return c.json({ error: e.error }, e.status as 400);
             }
-            return c.json({ error: `Pipeline failed: ${err instanceof Error ? err.message : err}` }, 500);
+            return c.json(
+                {
+                    error: `Pipeline failed: ${err instanceof Error ? err.message : err}`,
+                },
+                500,
+            );
         }
     });
 
     // GET /pipeline/run/:jobId — fetch one job status
-    app.get("/pipeline/run/:jobId", (c) => {
+    app.get("/pipeline/run/:jobId", async (c) => {
         const jobId = c.req.param("jobId");
-        const job = db.getPipelineJob(jobId);
+        const job = await db.getPipelineJob(jobId);
         if (!job) {
             return c.json({ error: "Job not found" }, 404);
         }
@@ -503,7 +544,7 @@ export function createApp(config: ServerConfig): Hono {
     });
 
     // GET /pipeline/run?username=... — list job statuses for a user
-    app.get("/pipeline/run", (c) => {
+    app.get("/pipeline/run", async (c) => {
         const username = c.req.query("username");
         if (!username) {
             return c.json(
@@ -512,7 +553,7 @@ export function createApp(config: ServerConfig): Hono {
             );
         }
 
-        const jobs = db.listPipelineJobs(username);
+        const jobs = await db.listPipelineJobs(username);
         return c.json({ jobs });
     });
 

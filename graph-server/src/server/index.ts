@@ -3,12 +3,14 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 
 const port = parseInt(process.env.GRAPH_SERVER_PORT ?? "3001", 10);
-const dbPath = process.env.GRAPH_DB_PATH ?? "graph.db";
+const databaseUrl =
+    process.env.DATABASE_URL ??
+    "postgresql://postgres:postgres@localhost:5432/graph";
 
-const app = createApp({ dbPath, enablePipelineWorker: true });
+const app = createApp({ databaseUrl, enablePipelineWorker: true });
 
 console.log(`Graph API server starting on http://localhost:${port}`);
-console.log(`Database: ${dbPath}`);
+console.log(`Database: ${databaseUrl}`);
 
 serve({ fetch: app.fetch, port }, (info) => {
     console.log(`Listening on http://localhost:${info.port}`);

@@ -2,16 +2,18 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createApp } from "../../../graph-server/src/server/app.js";
 import { GraphDatabase } from "../../../graph-server/src/graph/database.js";
 import { buildGraph } from "../../../graph-server/src/graph/build-graph.js";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { mkdtempSync } from "node:fs";
-import { unlinkSync } from "node:fs";
 import type { Hono } from "hono";
 import type { CompactGraphNode } from "../../../graph-server/src/graph/types.js";
+import {
+    TEST_DATABASE_URL,
+    resetTestDatabase,
+} from "../postgres-test-utils.js";
 
-function seedDatabase(dbPath: string): { db: GraphDatabase; userId: number } {
-    const db = new GraphDatabase(dbPath);
-    const userId = db.getOrCreateUser("testuser");
+async function seedDatabase(databaseUrl: string): Promise<GraphDatabase> {
+    const db = new GraphDatabase(databaseUrl);
+    await db.getUserId("__schema_init__");
+    await resetTestDatabase();
+    const userId = await db.getOrCreateUser("testuser");
     const graph = buildGraph({
         lastfmScrobbles: [
             {
@@ -42,8 +44,8 @@ function seedDatabase(dbPath: string): { db: GraphDatabase; userId: number } {
         ],
         lastfmUsername: "testuser",
     });
-    db.saveGraph(graph, userId);
-    return { db, userId };
+    await db.saveGraph(graph, userId);
+    return db;
 }
 
 /** Helper to find a UUID by song name in compact graph response. */
@@ -67,25 +69,15 @@ async function queuePipelineRun(app: Hono, username: string): Promise<string> {
 
 describe("Graph API Server", () => {
     let app: Hono;
-    let tmpDir: string;
-    let dbPath: string;
     let db: GraphDatabase;
 
-    beforeEach(() => {
-        tmpDir = mkdtempSync(join(tmpdir(), "graph-server-test-"));
-        dbPath = join(tmpDir, "test.db");
-        const seed = seedDatabase(dbPath);
-        db = seed.db;
-        app = createApp({ dbPath, enablePipelineWorker: false });
+    beforeEach(async () => {
+        db = await seedDatabase(TEST_DATABASE_URL);
+        app = createApp({ db, enablePipelineWorker: false });
     });
 
-    afterEach(() => {
-        db.close();
-        try {
-            unlinkSync(dbPath);
-        } catch {
-            // ignore
-        }
+    afterEach(async () => {
+        await db.close();
     });
 
     describe("GET /graph", () => {
