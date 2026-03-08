@@ -72,7 +72,7 @@
 - [X] `01-FixPathPanelStaleAsync.md` — Use functional state updates in async callbacks to prevent stale closure overwrites
 - [X] `01-FixSourceBreakdownSemantics.md` — Track per-source play counts and report scrobbles instead of nodes
 - [X] `01-FixModularityNormalization.md` — Divide by 2m instead of m in modularity formula
-- [ ] `02-FixSidebarNavigationHighlighting.md` — *(manual)* Sidebar neighbor click moves camera but does not update graph highlighting (Sigma reducer issue) — human-only
+- [X] `02-FixSidebarNavigationHighlighting.md` — Closed (Not Planned): backend rewritten in Phase 9; old graph-pipeline code no longer applies
 - [X] `02-FixLastfmFetcherSpreadOverflow.md` — Replace Math.max spread in checkpoint with loop to handle >65k scrobbles
 - [X] `02-FixDataPathInconsistency.md` — Unify CWD-relative and import.meta.dirname data paths between fetch and build
 - [X] `02-FixModularityFormula.md` — Fix computeModularity to account for non-adjacent same-community pairs
@@ -86,8 +86,8 @@
 - [X] `04-RemoveUnusedKeyIndexParam.md` — Remove unused keyIndex parameter from computeClusterStats
 - [X] `04-OptimizeDepthLayerEdgeIteration.md` — Replace full-graph edge scan with per-node iteration in depth layers
 - [X] `04-FixBootstrapReducerRace.md` — Prevent GraphEvents from clearing bootstrap reducers on initial mount
-- [ ] `05-FixPathPanelCleanupRace.md` — Fix cleanup effect racing with just-resolved promise in PathPanel
-- [ ] `05-FixSourcePlaysSqlMerge.md` — Make source_plays SQL upsert merge additively instead of overwriting
+- [X] `05-FixPathPanelCleanupRace.md` — Closed (Not Planned): backend rewritten in Phase 9; old graph-pipeline code no longer applies
+- [X] `05-FixSourcePlaysSqlMerge.md` — Closed (Not Planned): backend rewritten in Phase 9; old graph-pipeline code no longer applies
 
 ## Phase 8 — Unclanking (Code Cleanup ~2,000 lines)
 
@@ -106,8 +106,8 @@
 - [X] `02-RewriteSpotifyClient.md` — Rewrite `spotify-client.ts` from scratch, inline all interfaces/helpers
 - [X] `03-VerifyAndReindex.md` — Update imports, test paths, `reindex.sh`, run full end-to-end reindex
 - [X] `04-PerUserFetchBuild.md` — Add `users` table, per-user fetch+build pipeline with `{ username }` body
-- [ ] `05-UserGraphEndpoint.md` — `GET /graph?user=username` required on all graph read endpoints
-- [ ] `06-ServerSideLayoutComputation.md` — Move MDS/weighted-MDS/PageRank layout from frontend to build pipeline
+- [X] `05-UserGraphEndpoint.md` — Done: migrated with per-user graph endpoints in graph-server
+- [X] `06-ServerSideLayoutComputation.md` — Done: layout computed server-side in build pipeline, stored in DB, frontend reads with fallback
 
 ## Phase 10 — Postgres Migration
 
