@@ -1,31 +1,71 @@
 import { useEffect, useState } from 'react'
-import { SigmaContainer } from '@react-sigma/core'
-import { EdgeArrowProgram, NodePointProgram } from 'sigma/rendering'
+import type { ComponentType, CSSProperties, ReactNode } from 'react'
 import '@react-sigma/core/lib/style.css'
-import { type DateRange } from 'react-day-picker'
 import { useGraph } from '../contexts/graphContext'
-import { type LayoutMode } from '../graph-utils/setNodePositions'
+import type { LayoutMode } from '../graph-utils/setNodePositions'
 import { DatePicker } from '#/components/date-picker'
-import { Graph } from '../components/Graph'
 import { SunIcon, MoonIcon } from 'lucide-react'
+
+type SigmaRuntime = {
+  SigmaContainer: ComponentType<{
+    style: CSSProperties
+    settings: Record<string, unknown>
+    children: ReactNode
+  }>
+  Graph: ComponentType<{ layout: LayoutMode; isDark: boolean }>
+  EdgeArrowProgram: unknown
+  NodePointProgram: unknown
+}
 
 export function MusicGraph() {
   const { state, error } = useGraph()
   const [layout, setLayout] = useState<LayoutMode>('pagerank')
-  const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [isDark, setIsDark] = useState(true)
+  const [sigmaRuntime, setSigmaRuntime] = useState<SigmaRuntime | null>(null)
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark)
   }, [isDark])
 
+  useEffect(() => {
+    let cancelled = false
+
+    if (typeof window === 'undefined') return
+
+    void Promise.all([
+      import('@react-sigma/core'),
+      import('sigma/rendering'),
+      import('../components/Graph'),
+    ])
+      .then(([sigmaCore, sigmaRendering, graphModule]) => {
+        if (cancelled) return
+        setSigmaRuntime({
+          SigmaContainer: sigmaCore.SigmaContainer,
+          Graph: graphModule.Graph,
+          EdgeArrowProgram: sigmaRendering.EdgeArrowProgram,
+          NodePointProgram: sigmaRendering.NodePointProgram,
+        })
+      })
+      .catch((err) => {
+        console.error('Failed to load sigma runtime', err)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   if (state === 'loading') return <div className="bg-white dark:bg-black text-black dark:text-white min-h-screen flex items-center justify-center">Loading graph…</div>
+  if (state === 'building') return <div className="bg-white dark:bg-black text-black dark:text-white min-h-screen flex items-center justify-center">Building your graph…</div>
   if (state === 'error') return <div className="bg-white dark:bg-black text-black dark:text-white min-h-screen flex items-center justify-center">Error: {error}</div>
+  if (!sigmaRuntime) return <div className="bg-white dark:bg-black text-black dark:text-white min-h-screen flex items-center justify-center">Loading renderer…</div>
+
+  const { SigmaContainer, Graph, EdgeArrowProgram, NodePointProgram } = sigmaRuntime
 
   return (
     <main className="bg-white dark:bg-black text-black dark:text-white min-h-screen">
       <div className="absolute top-4 left-4 z-10">
-        <DatePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
+        <DatePicker />
       </div>
       <div className="absolute top-4 right-4 z-10 flex gap-2">
         <button
@@ -67,7 +107,7 @@ export function MusicGraph() {
           labelColor: { color: isDark ? '#ffffff' : '#000000' },
         }}
       >
-        <Graph layout={layout} dateRange={dateRange} isDark={isDark} />
+        <Graph layout={layout} isDark={isDark} />
       </SigmaContainer>
     </main>
   )

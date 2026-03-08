@@ -154,6 +154,23 @@ export class GraphDatabase {
         return row.rows[0]?.id ?? null;
     }
 
+    /** Return an active (queued/running) job for this user, if one exists.
+     *  Running jobs older than 1 hour are treated as stale and ignored. */
+    async getActiveJob(username: string): Promise<string | null> {
+        await this.ready();
+        const result = await this.pool.query<{ id: string }>(
+            `SELECT id
+             FROM pipeline_jobs
+             WHERE username = $1
+               AND status IN ('queued', 'running')
+               AND NOT (status = 'running' AND started_at < now() - interval '1 hour')
+             ORDER BY created_at DESC
+             LIMIT 1`,
+            [username],
+        );
+        return result.rows[0]?.id ?? null;
+    }
+
     /** Queue a new pipeline job for a username and return its job id. */
     async enqueuePipelineJob(username: string): Promise<string> {
         await this.ready();

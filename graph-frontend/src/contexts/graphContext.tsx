@@ -1,59 +1,28 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
-  type ReactNode,
+  useState,
 } from "react"
-import { useQuery } from "@tanstack/react-query"
+import type {ReactNode} from "react";
+import type {DateRange} from "react-day-picker";
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Graph from "graphology"
 import type { EdgeAttributes, ListeningGraph, NodeAttributes } from "#/lib/types"
 
 const GRAPH_API_BASE =
   import.meta.env.VITE_GRAPH_API_URL ?? "http://localhost:3001"
 
-class UserNotFoundError extends Error {
-  constructor(user: string) {
-    super(`User not found: ${user}`)
-    this.name = "UserNotFoundError"
-  }
-}
+export type PipelineJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled"
 
-async function fetchGraph(user: string): Promise<ListeningGraph> {
-  const response = await fetch(`${GRAPH_API_BASE}/graph?user=${encodeURIComponent(user)}`)
-  if (response.status === 404) {
-    throw new UserNotFoundError(user)
-  }
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch graph: ${response.status} ${response.statusText}`,
-    )
-  }
-  return response.json()
-}
-
-async function runPipeline(username: string): Promise<void> {
-  const response = await fetch(`${GRAPH_API_BASE}/pipeline/run`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username }),
-  })
-  if (!response.ok) {
-    throw new Error(
-      `Pipeline failed: ${response.status} ${response.statusText}`,
-    )
-  }
-}
-
-async function fetchGraphWithPipelineFallback(user: string): Promise<ListeningGraph> {
-  try {
-    return await fetchGraph(user)
-  } catch (e) {
-    if (e instanceof UserNotFoundError) {
-      await runPipeline(user)
-      return await fetchGraph(user)
-    }
-    throw e
-  }
+interface PipelineJobStatusRecord {
+  id: string
+  status: PipelineJobStatus
+  createdAt: string
+  updatedAt: string
+  startedAt: string | null
+  finishedAt: string | null
 }
 
 function toGraphology(
@@ -81,7 +50,7 @@ function toGraphology(
       totalPlays: node.totalPlays,
       sources: node.sources,
       pageRank: node.pageRank ?? 0,
-      playDates: node.playDates ?? [],
+      playDates: node.playDates,
       positions: node.positions,
       size: 4,
       color: "#ffffff",
@@ -106,45 +75,109 @@ function toGraphology(
   return graph
 }
 
-export type LoadState = "loading" | "loaded" | "error"
+export type LoadState = "loading" | "building" | "loaded" | "error"
 
 type GraphContextValue = {
   graph: Graph<NodeAttributes, EdgeAttributes> | null
   raw: ListeningGraph | null
   state: LoadState
   error: string | null
+  jobStatus: PipelineJobStatus | null
+  dateRange: DateRange | undefined
+  setDateRange: (range: DateRange | undefined) => void
 };
 
-const GraphContext = createContext<string | null>(null)
+const GraphContext = createContext<GraphContextValue | null>(null)
 
 export function GraphProvider({ children, initialUser }: { children: ReactNode, initialUser: string }) {
+  const [dateRange, setDateRange] = useState<DateRange | undefined>()
+  const [jobId, setJobId] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+
+  const { data, isPending, isError, error: graphError } = useQuery({
+    queryKey: ["graph", initialUser],
+    queryFn: async () => {
+      const response = await fetch(`${GRAPH_API_BASE}/graph?user=${encodeURIComponent(initialUser)}`)
+      if (response.status === 404) {
+        const pipelineRes = await fetch(`${GRAPH_API_BASE}/pipeline/run`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: initialUser }),
+        })
+        if (pipelineRes.ok) {
+          const { jobId: id } = await pipelineRes.json() as { jobId: string }
+          setJobId(id)
+        }
+        return null
+      }
+      if (!response.ok) {
+        throw new Error(`Failed to fetch graph: ${response.status} ${response.statusText}`)
+      }
+      return response.json() as Promise<ListeningGraph>
+    },
+    retry: false,
+  })
+
+  const { data: jobData } = useQuery({
+    queryKey: ["pipeline-job", jobId],
+    queryFn: async () => {
+      const res = await fetch(`${GRAPH_API_BASE}/pipeline/run/${jobId}`)
+      if (!res.ok) throw new Error("Failed to fetch job status")
+      return res.json() as Promise<PipelineJobStatusRecord>
+    },
+    enabled: jobId !== null,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      if (status === "succeeded" || status === "failed" || status === "cancelled") {
+        return false // stop polling
+      }
+      return 2000
+    },
+  })
+
+  useEffect(() => {
+    if (jobData?.status === "succeeded") {
+      setJobId(null)
+      void queryClient.invalidateQueries({ queryKey: ["graph", initialUser] })
+    }
+  }, [jobData?.status, initialUser, queryClient])
+
+  const graph = useMemo(() => (data ? toGraphology(data) : null), [data])
+
+  const jobStatus = jobData?.status ?? null
+  const isBuilding = jobId !== null && jobStatus !== "failed" && jobStatus !== "cancelled"
+
+  const state: LoadState = isPending
+    ? "loading"
+    : isBuilding
+      ? "building"
+      : isError
+        ? "error"
+        : data === null
+          ? "loading"
+          : "loaded"
+
+  const value: GraphContextValue = useMemo(() => ({
+    graph,
+    raw: data ?? null,
+    state,
+    error: isError ? graphError.message : jobStatus === "failed" ? "Pipeline job failed" : null,
+    jobStatus,
+    dateRange,
+    setDateRange,
+  }), [graph, data, state, isError, graphError, jobStatus, dateRange])
+
   return (
-    <GraphContext.Provider value={initialUser}>
+    <GraphContext.Provider value={value}>
       {children}
     </GraphContext.Provider>
   )
 }
 
 export function useGraph(): GraphContextValue {
-  const user = useContext(GraphContext)
-  if (!user) {
+  const ctx = useContext(GraphContext)
+  if (!ctx) {
     throw new Error("useGraph must be used within a <GraphProvider>")
   }
-
-  const { data, isPending, isError } = useQuery({
-    queryKey: ["graph", user],
-    queryFn: () => fetchGraphWithPipelineFallback(user),
-    retry: false,
-  })
-
-  const graph = useMemo(() => (data ? toGraphology(data) : null), [data])
-
-  const state: LoadState = isPending ? "loading" : isError ? "error" : "loaded"
-
-  return {
-    graph,
-    raw: data ?? null,
-    state,
-    error: isError ? "Could not reach graph API" : null,
-  }
+  return ctx
 }

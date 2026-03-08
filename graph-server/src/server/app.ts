@@ -1,6 +1,7 @@
 import path from "node:path";
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
+import { logger } from "hono/logger";
 import { GraphDatabase } from "../graph/database.js";
 import type {
     CompactGraphNode,
@@ -164,6 +165,7 @@ export function createApp(config: ServerConfig): Hono {
     }
 
     // CORS for frontend consumption
+    app.use("*", logger());
     app.use("*", cors());
 
     // GET /graph — full compact graph (with optional pagination)
@@ -509,6 +511,13 @@ export function createApp(config: ServerConfig): Hono {
     app.post("/pipeline/run", async (c) => {
         try {
             const username = await requireUsername(c);
+
+            // Return existing active job instead of creating a duplicate
+            const existingJobId = await db.getActiveJob(username);
+            if (existingJobId) {
+                return c.json({ jobId: existingJobId }, 202);
+            }
+
             const jobId = await db.enqueuePipelineJob(username);
             if (enablePipelineWorker) {
                 void pollPipelineQueue();
