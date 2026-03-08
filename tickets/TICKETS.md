@@ -113,3 +113,8 @@
 
 - [X] `00-DockerComposePostgres.md` — Add docker-compose.yaml with local Postgres for development
 - [X] `01-SwapSqliteToPostgres.md` — Replace better-sqlite3 with Postgres driver, migrate all schema and queries
+
+## Phase 11 — Search Bar
+
+- [ ] `00-HighlightNodeOnSearchSelect.md` — Lift selectedNode into graphContext so search result selection highlights the node with neighbor-dimming
+- [ ] `01-ExtractDarkModeToggle.md` — Lift isDark state and classList toggle out of MusicGraph into a shared context or hook
