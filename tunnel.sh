@@ -94,8 +94,8 @@ echo "→ Configuring ingress rules..."
 CONFIG_BODY=$(jq -n '{
   config: {
     ingress: [
-      { hostname: "everysong.fm", service: "http://localhost:3000" },
-      { hostname: "api.everysong.fm", service: "http://localhost:3001" },
+      { hostname: "everysong.fm", service: "http://localhost:3000", originRequest: { httpHostHeader: "localhost:3000" } },
+      { hostname: "api.everysong.fm", service: "http://localhost:3001", originRequest: { httpHostHeader: "localhost:3001" } },
       { service: "http_status:404" }
     ]
   }
