@@ -255,7 +255,7 @@ describe("Graph API Server", () => {
         it("returns queued job status by id", async () => {
             const jobId = await queuePipelineRun(app, "testuser");
 
-            const res = await app.request(`/pipeline/jobs/${jobId}`);
+            const res = await app.request(`/pipeline/run/${jobId}`);
             expect(res.status).toBe(200);
             const data = await res.json();
 
@@ -268,7 +268,7 @@ describe("Graph API Server", () => {
         });
 
         it("returns 404 for unknown job id", async () => {
-            const res = await app.request("/pipeline/jobs/not-a-job-id");
+            const res = await app.request("/pipeline/run/not-a-job-id");
             expect(res.status).toBe(404);
         });
 
@@ -276,7 +276,7 @@ describe("Graph API Server", () => {
             const first = await queuePipelineRun(app, "testuser");
             const second = await queuePipelineRun(app, "testuser");
 
-            const res = await app.request("/pipeline/jobs?username=testuser");
+            const res = await app.request("/pipeline/run?username=testuser");
             expect(res.status).toBe(200);
             const data = await res.json();
 
@@ -291,7 +291,7 @@ describe("Graph API Server", () => {
         });
 
         it("returns 400 when username query is missing", async () => {
-            const res = await app.request("/pipeline/jobs");
+            const res = await app.request("/pipeline/run");
             expect(res.status).toBe(400);
         });
     });

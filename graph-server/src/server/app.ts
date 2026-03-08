@@ -492,8 +492,8 @@ export function createApp(config: ServerConfig): Hono {
         }
     });
 
-    // GET /pipeline/jobs/:jobId — fetch one job status
-    app.get("/pipeline/jobs/:jobId", (c) => {
+    // GET /pipeline/run/:jobId — fetch one job status
+    app.get("/pipeline/run/:jobId", (c) => {
         const jobId = c.req.param("jobId");
         const job = db.getPipelineJob(jobId);
         if (!job) {
@@ -502,8 +502,8 @@ export function createApp(config: ServerConfig): Hono {
         return c.json(job);
     });
 
-    // GET /pipeline/jobs?username=... — list job statuses for a user
-    app.get("/pipeline/jobs", (c) => {
+    // GET /pipeline/run?username=... — list job statuses for a user
+    app.get("/pipeline/run", (c) => {
         const username = c.req.query("username");
         if (!username) {
             return c.json(
