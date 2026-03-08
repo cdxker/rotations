@@ -1,18 +1,28 @@
 import {
   createContext,
   useContext,
-  useEffect,
-  useState,
+  useMemo,
   type ReactNode,
 } from "react"
+import { useQuery } from "@tanstack/react-query"
 import Graph from "graphology"
 import type { EdgeAttributes, ListeningGraph, NodeAttributes } from "#/lib/types"
 
 const GRAPH_API_BASE =
   import.meta.env.VITE_GRAPH_API_URL ?? "http://localhost:3001"
 
+class UserNotFoundError extends Error {
+  constructor(user: string) {
+    super(`User not found: ${user}`)
+    this.name = "UserNotFoundError"
+  }
+}
+
 async function fetchGraph(user: string): Promise<ListeningGraph> {
   const response = await fetch(`${GRAPH_API_BASE}/graph?user=${encodeURIComponent(user)}`)
+  if (response.status === 404) {
+    throw new UserNotFoundError(user)
+  }
   if (!response.ok) {
     throw new Error(
       `Failed to fetch graph: ${response.status} ${response.statusText}`,
@@ -21,6 +31,30 @@ async function fetchGraph(user: string): Promise<ListeningGraph> {
   return response.json()
 }
 
+async function runPipeline(username: string): Promise<void> {
+  const response = await fetch(`${GRAPH_API_BASE}/pipeline/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username }),
+  })
+  if (!response.ok) {
+    throw new Error(
+      `Pipeline failed: ${response.status} ${response.statusText}`,
+    )
+  }
+}
+
+async function fetchGraphWithPipelineFallback(user: string): Promise<ListeningGraph> {
+  try {
+    return await fetchGraph(user)
+  } catch (e) {
+    if (e instanceof UserNotFoundError) {
+      await runPipeline(user)
+      return await fetchGraph(user)
+    }
+    throw e
+  }
+}
 
 function toGraphology(
   listeningGraph: ListeningGraph,
@@ -79,65 +113,38 @@ type GraphContextValue = {
   raw: ListeningGraph | null
   state: LoadState
   error: string | null
-  setUser: (user: string) => void
 };
 
-const GraphContext = createContext<GraphContextValue | null>(null)
+const GraphContext = createContext<string | null>(null)
 
 export function GraphProvider({ children, initialUser }: { children: ReactNode, initialUser: string }) {
-  const [graph, setGraph] =
-    useState<Graph<NodeAttributes, EdgeAttributes> | null>(null)
-  const [raw, setRaw] = useState<ListeningGraph | null>(null)
-  const [state, setState] = useState<LoadState>("loading")
-  const [error, setError] = useState<string | null>(null)
-  const [user, setUser] = useState<string>(initialUser);
-
-  useEffect(() => {
-    let cancelled = false
-    setState("loading")
-    setError(null)
-
-    async function load() {
-      try {
-        const data = await fetchGraph(user)
-        if (cancelled) return
-
-        const g = toGraphology(data)
-        setRaw(data)
-        setGraph(g)
-        setState("loaded")
-      } catch {
-        if (cancelled) return
-        setState("error")
-        setError("Could not reach graph API")
-      }
-    }
-
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [user])
-
-  const context: GraphContextValue = {
-    graph,
-    raw,
-    state,
-    error,
-    setUser
-  };
-
   return (
-    <GraphContext.Provider value={context}>
+    <GraphContext.Provider value={initialUser}>
       {children}
     </GraphContext.Provider>
   )
 }
 
 export function useGraph(): GraphContextValue {
-  const ctx = useContext(GraphContext)
-  if (!ctx) {
+  const user = useContext(GraphContext)
+  if (!user) {
     throw new Error("useGraph must be used within a <GraphProvider>")
   }
-  return ctx
+
+  const { data, isPending, isError } = useQuery({
+    queryKey: ["graph", user],
+    queryFn: () => fetchGraphWithPipelineFallback(user),
+    retry: false,
+  })
+
+  const graph = useMemo(() => (data ? toGraphology(data) : null), [data])
+
+  const state: LoadState = isPending ? "loading" : isError ? "error" : "loaded"
+
+  return {
+    graph,
+    raw: data ?? null,
+    state,
+    error: isError ? "Could not reach graph API" : null,
+  }
 }
