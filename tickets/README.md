@@ -15,6 +15,7 @@ tickets/
 ├── phase7-bugfixes/      — Bug fixes from triage
 ├── phase8-unclanking/    — Aggressive code cleanup targeting ~2,000 line reduction
 ├── phase9-graph-server-rewrite/ — Copy graph-pipeline to graph-server, rewrite Spotify auth/client from scratch
+├── phase10-postgres-migration/  — Swap SQLite for Postgres with docker-compose for local dev
 ```
 
 ## Numbering = Dependency Chain

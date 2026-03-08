@@ -105,6 +105,11 @@
 - [X] `01-RewriteSpotifyAuth.md` — Rewrite `spotify-auth.ts` from scratch, inline all helpers
 - [X] `02-RewriteSpotifyClient.md` — Rewrite `spotify-client.ts` from scratch, inline all interfaces/helpers
 - [X] `03-VerifyAndReindex.md` — Update imports, test paths, `reindex.sh`, run full end-to-end reindex
-- [ ] `04-PerUserFetchBuild.md` — Add `users` table, per-user fetch+build pipeline with `{ username }` body
+- [X] `04-PerUserFetchBuild.md` — Add `users` table, per-user fetch+build pipeline with `{ username }` body
 - [ ] `05-UserGraphEndpoint.md` — `GET /graph?user=username` required on all graph read endpoints
 - [ ] `06-ServerSideLayoutComputation.md` — Move MDS/weighted-MDS/PageRank layout from frontend to build pipeline
+
+## Phase 10 — Postgres Migration
+
+- [ ] `00-DockerComposePostgres.md` — Add docker-compose.yaml with local Postgres for development
+- [ ] `01-SwapSqliteToPostgres.md` — Replace better-sqlite3 with Postgres driver, migrate all schema and queries
