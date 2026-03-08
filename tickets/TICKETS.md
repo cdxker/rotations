@@ -111,5 +111,5 @@
 
 ## Phase 10 — Postgres Migration
 
-- [ ] `00-DockerComposePostgres.md` — Add docker-compose.yaml with local Postgres for development
+- [X] `00-DockerComposePostgres.md` — Add docker-compose.yaml with local Postgres for development
 - [ ] `01-SwapSqliteToPostgres.md` — Replace better-sqlite3 with Postgres driver, migrate all schema and queries

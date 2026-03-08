@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: graph-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: graph
+    volumes:
+      - graph-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  graph-postgres-data:
