@@ -1,9 +1,7 @@
 import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
 import appCss from '../styles.css?url'
-import { RootLayout } from '../layouts/RootLayout'
 
 export const Route = createRootRoute({
-  component: RootLayout,
   head: () => ({
     meta: [
       {
