@@ -4,7 +4,7 @@
     "version": "0.0.1",
     "scripts": {
         "build": "tsc",
-        "dev": "node --import tsx src/server/index.ts",
+        "dev": "node --watch --import tsx src/server/index.ts",
         "test": "vitest run",
         "format": "prettier --write .",
         "lint": "eslint . && tsc --noEmit"
