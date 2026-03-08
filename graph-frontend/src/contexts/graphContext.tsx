@@ -11,8 +11,8 @@ import type { EdgeAttributes, ListeningGraph, NodeAttributes } from "#/lib/types
 const GRAPH_API_BASE =
   import.meta.env.VITE_GRAPH_API_URL ?? "http://localhost:3001"
 
-async function fetchGraph(): Promise<ListeningGraph> {
-  const response = await fetch(`${GRAPH_API_BASE}/graph`)
+async function fetchGraph(user: string): Promise<ListeningGraph> {
+  const response = await fetch(`${GRAPH_API_BASE}/graph?user=${encodeURIComponent(user)}`)
   if (!response.ok) {
     throw new Error(
       `Failed to fetch graph: ${response.status} ${response.statusText}`,
@@ -74,28 +74,32 @@ function toGraphology(
 
 export type LoadState = "loading" | "loaded" | "error"
 
-interface GraphContextValue {
+type GraphContextValue = {
   graph: Graph<NodeAttributes, EdgeAttributes> | null
   raw: ListeningGraph | null
   state: LoadState
   error: string | null
-}
+  setUser: (user: string) => void
+};
 
 const GraphContext = createContext<GraphContextValue | null>(null)
 
-export function GraphProvider({ children }: { children: ReactNode }) {
+export function GraphProvider({ children, initialUser }: { children: ReactNode, initialUser: string }) {
   const [graph, setGraph] =
     useState<Graph<NodeAttributes, EdgeAttributes> | null>(null)
   const [raw, setRaw] = useState<ListeningGraph | null>(null)
   const [state, setState] = useState<LoadState>("loading")
   const [error, setError] = useState<string | null>(null)
+  const [user, setUser] = useState<string>(initialUser);
 
   useEffect(() => {
     let cancelled = false
+    setState("loading")
+    setError(null)
 
     async function load() {
       try {
-        const data = await fetchGraph()
+        const data = await fetchGraph(user)
         if (cancelled) return
 
         const g = toGraphology(data)
@@ -113,10 +117,18 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [user])
+
+  const context: GraphContextValue = {
+    graph,
+    raw,
+    state,
+    error,
+    setUser
+  };
 
   return (
-    <GraphContext.Provider value={{ graph, raw, state, error }}>
+    <GraphContext.Provider value={context}>
       {children}
     </GraphContext.Provider>
   )
