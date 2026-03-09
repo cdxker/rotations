@@ -118,3 +118,5 @@
 
 - [ ] `00-HighlightNodeOnSearchSelect.md` — Lift selectedNode into graphContext so search result selection highlights the node with neighbor-dimming
 - [ ] `01-ExtractDarkModeToggle.md` — Lift isDark state and classList toggle out of MusicGraph into a shared context or hook
+- [ ] `02-DepthSliders.md` — Two sliders (next/previous) to control how many hops of songs are shown from the selected node
+- [ ] `02-ArtistFilter.md` — Multi-select artist filter to show only tracks by selected artists

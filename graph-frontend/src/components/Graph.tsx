@@ -6,7 +6,7 @@ import type { LayoutMode } from '#/lib/types'
 export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean }) {
   const loadGraph = useLoadGraph()
   const sigma = useSigma()
-  const { graph, filteredPlayCounts, getNodeMetrics, selectedNode, setSelectedNode } = useGraph()
+  const { graph, filteredPlayCounts, getNodeMetrics, selectedNode, setSelectedNode, nextDepth, prevDepth, artistFilter } = useGraph()
 
   const metricKey =
     layout === "pagerank" ? "pageRank"
@@ -15,13 +15,41 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
 
   const selectedNeighbors = useMemo(() => {
     if (!selectedNode || !graph) return null
-    const neighbors = new Set<string>()
-    neighbors.add(selectedNode)
-    graph.forEachNeighbor(selectedNode, (neighbor) => {
-      neighbors.add(neighbor)
-    })
-    return neighbors
-  }, [selectedNode, graph])
+    const visible = new Set<string>()
+    visible.add(selectedNode)
+
+    // BFS forward (outgoing edges)
+    const forwardQueue: Array<{ node: string; depth: number }> = [{ node: selectedNode, depth: 0 }]
+    const visitedForward = new Set<string>([selectedNode])
+    while (forwardQueue.length > 0) {
+      const { node, depth } = forwardQueue.shift()!
+      if (depth >= nextDepth) continue
+      graph.forEachOutEdge(node, (_edge, _attrs, _source, target) => {
+        if (!visitedForward.has(target)) {
+          visible.add(target)
+          visitedForward.add(target)
+          forwardQueue.push({ node: target, depth: depth + 1 })
+        }
+      })
+    }
+
+    // BFS backward (incoming edges)
+    const backwardQueue: Array<{ node: string; depth: number }> = [{ node: selectedNode, depth: 0 }]
+    const visitedBackward = new Set<string>([selectedNode])
+    while (backwardQueue.length > 0) {
+      const { node, depth } = backwardQueue.shift()!
+      if (depth >= prevDepth) continue
+      graph.forEachInEdge(node, (_edge, _attrs, source) => {
+        if (!visitedBackward.has(source)) {
+          visible.add(source)
+          visitedBackward.add(source)
+          backwardQueue.push({ node: source, depth: depth + 1 })
+        }
+      })
+    }
+
+    return visible
+  }, [selectedNode, graph, nextDepth, prevDepth])
 
   useEffect(() => {
     const handleClickNode = ({ node }: { node: string }) => {
@@ -72,13 +100,18 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
 
     sigma.setSetting('labelColor', { color: isDark ? '#ffffff' : '#000000' })
 
+    const isNodeHidden = (node: string): boolean => {
+      if (filteredPlayCounts && !filteredPlayCounts.has(node)) return true
+      if (selectedNeighbors && !selectedNeighbors.has(node)) return true
+      if (artistFilter) {
+        const attrs = g.getNodeAttributes(node)
+        if (!attrs.artists.some((a: string) => artistFilter.has(a))) return true
+      }
+      return false
+    }
+
     sigma.setSetting('nodeReducer', (node: string, data: Record<string, unknown>) => {
-      if (filteredPlayCounts && !filteredPlayCounts.has(node)) {
-        return { ...data, hidden: true }
-      }
-      if (selectedNeighbors && !selectedNeighbors.has(node)) {
-        return { ...data, hidden: true }
-      }
+      if (isNodeHidden(node)) return { ...data, hidden: true }
       const metric = getNodeMetrics(node, layout)?.[metricKey] ?? 0
       const size = metric > 0 && maxMetric > 0
         ? 4 + 16 * Math.log1p(metric) / Math.log1p(maxMetric)
@@ -88,21 +121,14 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
     sigma.setSetting('edgeReducer', (edge: string, data: Record<string, unknown>) => {
       const source = g.source(edge)
       const target = g.target(edge)
-      if (filteredPlayCounts) {
-        if (!filteredPlayCounts.has(source) || !filteredPlayCounts.has(target)) {
-          return { ...data, hidden: true }
-        }
-      }
-      if (selectedNeighbors) {
-        if (!selectedNeighbors.has(source) || !selectedNeighbors.has(target)) {
-          return { ...data, hidden: true }
-        }
+      if (isNodeHidden(source) || isNodeHidden(target)) {
+        return { ...data, hidden: true }
       }
       const w = (data as { weight?: number }).weight ?? 1
       return { ...data, color: edgeBase(Math.min(0.6, 0.15 + w * 0.05)) }
     })
     sigma.refresh()
-  }, [filteredPlayCounts, selectedNeighbors, getNodeMetrics, layout, metricKey, maxMetric, sigma, isDark])
+  }, [filteredPlayCounts, selectedNeighbors, artistFilter, getNodeMetrics, layout, metricKey, maxMetric, sigma, isDark])
 
   return null
 }

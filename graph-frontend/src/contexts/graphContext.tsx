@@ -87,6 +87,12 @@ type GraphContextValue = {
   getNodeMetrics: (id: string, layout: LayoutMode) => NodeMetrics | null
   selectedNode: string | null
   setSelectedNode: (nodeId: string | null) => void
+  nextDepth: number
+  setNextDepth: (depth: number) => void
+  prevDepth: number
+  setPrevDepth: (depth: number) => void
+  artistFilter: Set<string> | null
+  setArtistFilter: (artists: Set<string> | null) => void
 };
 
 const GraphContext = createContext<GraphContextValue | null>(null)
@@ -95,6 +101,9 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [layout, setLayout] = useState<LayoutMode>("pagerank")
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
+  const [nextDepth, setNextDepth] = useState(2)
+  const [prevDepth, setPrevDepth] = useState(2)
+  const [artistFilter, setArtistFilter] = useState<Set<string> | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
@@ -218,7 +227,13 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
     getNodeMetrics,
     selectedNode,
     setSelectedNode,
-  }), [graph, data, state, isError, graphError, jobStatus, dateRange, layout, filteredPlayCounts, nodeMetrics, selectedNode])
+    nextDepth,
+    setNextDepth,
+    prevDepth,
+    setPrevDepth,
+    artistFilter,
+    setArtistFilter,
+  }), [graph, data, state, isError, graphError, jobStatus, dateRange, layout, filteredPlayCounts, nodeMetrics, selectedNode, nextDepth, prevDepth, artistFilter])
 
   return (
     <GraphContext.Provider value={value}>

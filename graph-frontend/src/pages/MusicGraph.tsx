@@ -6,6 +6,8 @@ import type { LayoutMode } from '#/lib/types'
 import { DatePicker } from '#/components/date-picker'
 import { SunIcon, MoonIcon } from 'lucide-react'
 import { SearchBar } from '../components/SearchBar'
+import { DepthSliders } from '../components/DepthSliders'
+import { ArtistFilter } from '../components/ArtistFilter'
 
 type SigmaRuntime = {
   SigmaContainer: ComponentType<{
@@ -67,6 +69,8 @@ export function MusicGraph() {
       <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
         <DatePicker />
         <SearchBar />
+        <DepthSliders />
+        <ArtistFilter />
       </div>
       <div className="absolute top-4 right-4 z-10 flex gap-2">
         <button
