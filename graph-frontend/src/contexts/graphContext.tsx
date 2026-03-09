@@ -10,7 +10,7 @@ import type {ReactNode} from "react";
 import type {DateRange} from "react-day-picker";
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Graph from "graphology"
-import type { EdgeAttributes, GraphMetricsResponse, ListeningGraph, NodeAttributes } from "#/lib/types"
+import type { EdgeAttributes, GraphMetricsResponse, ListeningGraph, NodeAttributes, NodeMetrics } from "#/lib/types"
 import setNodePositions from "../graph-utils/setNodePositions"
 import type { LayoutMode } from "../graph-utils/setNodePositions"
 
@@ -91,7 +91,7 @@ type GraphContextValue = {
   layout: LayoutMode
   setLayout: (mode: LayoutMode) => void
   filteredPlayCounts: Map<string, number> | null
-  getNodeMetric: (id: string) => number
+  getNodeMetrics: (id: string) => NodeMetrics | null
   selectedNode: string | null
   setSelectedNode: (node: string | null) => void
 };
@@ -166,13 +166,9 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
   })
 
   const nodeMetrics = metricsData?.metrics ?? null
-  const metricKey =
-    layout === "pagerank" ? "pageRank"
-    : layout === "mds" ? "mdsScore"
-    : "weightedMdsScore" as const
-  const getNodeMetric = useCallback(
-    (id: string) => nodeMetrics?.[id]?.[metricKey] ?? 0,
-    [nodeMetrics, metricKey],
+  const getNodeMetrics = useCallback(
+    (id: string): NodeMetrics | null => nodeMetrics?.[id] ?? null,
+    [nodeMetrics],
   )
 
   const graph = useMemo(() => {
@@ -222,10 +218,10 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
     layout,
     setLayout,
     filteredPlayCounts,
-    getNodeMetric,
+    getNodeMetrics,
     selectedNode,
     setSelectedNode,
-  }), [graph, data, state, isError, graphError, jobStatus, dateRange, layout, filteredPlayCounts, getNodeMetric, selectedNode])
+  }), [graph, data, state, isError, graphError, jobStatus, dateRange, layout, filteredPlayCounts, getNodeMetrics, selectedNode])
 
   return (
     <GraphContext.Provider value={value}>
