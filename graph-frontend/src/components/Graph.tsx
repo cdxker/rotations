@@ -49,7 +49,7 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
     if (!nodeMetrics) return 1
     let max = 1e-10
 
-    const resolve = (id: string) => nodeMetrics.get(id)?.[metricKey] ?? 0
+    const resolve = (id: string) => nodeMetrics[id]?.[metricKey] ?? 0
 
     if (filteredPlayCounts) {
       for (const key of filteredPlayCounts.keys()) {
@@ -57,7 +57,7 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
         if (val > max) max = val
       }
     } else {
-      for (const [id] of nodeMetrics) {
+      for (const id of Object.keys(nodeMetrics)) {
         const val = resolve(id)
         if (val > max) max = val
       }
@@ -81,7 +81,7 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
       if (selectedNeighbors && !selectedNeighbors.has(_node)) {
         return { ...data, hidden: true }
       }
-      const metric = nodeMetrics?.get(_node)?.[metricKey] ?? 0
+      const metric = nodeMetrics?.[_node]?.[metricKey] ?? 0
       const size = metric > 0 && maxMetric > 0
         ? 4 + 16 * Math.log1p(metric) / Math.log1p(maxMetric)
         : 4

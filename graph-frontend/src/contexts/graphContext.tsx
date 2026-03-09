@@ -91,7 +91,7 @@ type GraphContextValue = {
   layout: LayoutMode
   setLayout: (mode: LayoutMode) => void
   filteredPlayCounts: Map<string, number> | null
-  nodeMetrics: Map<string, NodeMetrics> | null
+  nodeMetrics: Record<string, NodeMetrics> | null
   selectedNode: string | null
   setSelectedNode: (node: string | null) => void
 };
@@ -165,10 +165,7 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
     enabled: !!data,
   })
 
-  const nodeMetrics = useMemo(() => {
-    if (!metricsData) return null
-    return new Map(Object.entries(metricsData.metrics))
-  }, [metricsData])
+  const nodeMetrics = metricsData?.metrics ?? null
 
   const graph = useMemo(() => {
     if (!data) return null
@@ -179,8 +176,7 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
       : "weightedMdsScore" as const
     if (nodeMetrics) {
       g.forEachNode((key) => {
-        const m = nodeMetrics.get(key)
-        g.setNodeAttribute(key, "metric", m?.[metricKey] ?? 0)
+        g.setNodeAttribute(key, "metric", nodeMetrics[key]?.[metricKey] ?? 0)
       })
     }
     setNodePositions(g, layout)
