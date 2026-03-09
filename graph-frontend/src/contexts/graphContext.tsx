@@ -1,6 +1,5 @@
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -166,10 +165,7 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
   })
 
   const nodeMetrics = metricsData?.metrics ?? null
-  const getNodeMetrics = useCallback(
-    (id: string): NodeMetrics | null => nodeMetrics?.[id] ?? null,
-    [nodeMetrics],
-  )
+  const getNodeMetrics = (id: string): NodeMetrics | null => nodeMetrics?.[id] ?? null
 
   const graph = useMemo(() => {
     if (!data) return null
