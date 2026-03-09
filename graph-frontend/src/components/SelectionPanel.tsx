@@ -2,6 +2,12 @@ import { useMemo } from "react"
 import { X } from "lucide-react"
 import { useNavigate } from "@tanstack/react-router"
 import { useGraph } from "../contexts/graphContext"
+import {
+  SidebarHeader,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+} from "#/components/ui/sidebar"
 
 export function SelectionPanel() {
   const { graph, selectedNodes, visibleNodes, toggleSelectedNode, clearSelection, selectAllVisible } = useGraph()
@@ -17,65 +23,73 @@ export function SelectionPanel() {
       })
   }, [graph, selectedNodes])
 
-  if (items.length === 0) return null
-
   return (
-    <div className="absolute top-1/2 -translate-y-1/2 right-4 z-10 bg-neutral-900/95 backdrop-blur-sm border border-white/10 rounded-2xl shadow-lg h-[10vh] w-56 flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
-        <span className="text-white/60 text-xs font-mono">
-          {items.length} selected
-        </span>
-        <div className="flex items-center gap-2">
-          {visibleNodes && visibleNodes.size > selectedNodes.size && (
-            <button
-              onClick={selectAllVisible}
-              className="text-white/40 hover:text-white/80 text-xs font-mono transition-colors"
-            >
-              Select visible
-            </button>
-          )}
-          <button
-            onClick={() => {
-              clearSelection()
-              void navigate({
-                from: "/user/$username",
-                search: (prev) => ({ ...prev, artists: undefined }),
-                replace: true,
-              })
-            }}
-            className="text-white/40 hover:text-white/80 text-xs font-mono transition-colors"
-          >
-            Clear all
-          </button>
-        </div>
-      </div>
-      <div className="overflow-y-auto flex-1 p-1.5 flex flex-col gap-1">
-        {items.map(item => (
-          <div
-            key={item.id}
-            className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 group"
-          >
-            {item.imageUrl ? (
-              <img
-                src={item.imageUrl}
-                alt=""
-                className="w-6 h-6 rounded object-cover shrink-0"
-              />
-            ) : (
-              <div className="w-6 h-6 rounded bg-white/10 shrink-0" />
+    <>
+      <SidebarHeader className="border-b border-sidebar-border">
+        <div className="flex items-center justify-between">
+          <span className="text-sidebar-foreground/60 text-xs font-mono">
+            {items.length} selected
+          </span>
+          <div className="flex items-center gap-2">
+            {visibleNodes && visibleNodes.size > selectedNodes.size && (
+              <button
+                onClick={selectAllVisible}
+                className="text-sidebar-foreground/40 hover:text-sidebar-foreground/80 text-xs font-mono transition-colors"
+              >
+                Select visible
+              </button>
             )}
-            <span className="text-white/80 text-[11px] font-mono truncate flex-1 min-w-0">
-              {item.label}
-            </span>
-            <button
-              onClick={() => toggleSelectedNode(item.id)}
-              className="text-white/20 hover:text-white/60 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <X size={12} />
-            </button>
+            {items.length > 0 && (
+              <button
+                onClick={() => {
+                  clearSelection()
+                  void navigate({
+                    from: "/user/$username",
+                    search: (prev) => ({ ...prev, artists: undefined }),
+                    replace: true,
+                  })
+                }}
+                className="text-sidebar-foreground/40 hover:text-sidebar-foreground/80 text-xs font-mono transition-colors"
+              >
+                Clear all
+              </button>
+            )}
           </div>
-        ))}
-      </div>
-    </div>
+        </div>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <div className="flex flex-col gap-1">
+              {items.map(item => (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-sidebar-accent group"
+                >
+                  {item.imageUrl ? (
+                    <img
+                      src={item.imageUrl}
+                      alt=""
+                      className="w-6 h-6 rounded object-cover shrink-0"
+                    />
+                  ) : (
+                    <div className="w-6 h-6 rounded bg-sidebar-foreground/10 shrink-0" />
+                  )}
+                  <span className="text-sidebar-foreground/80 text-[11px] font-mono truncate flex-1 min-w-0">
+                    {item.label}
+                  </span>
+                  <button
+                    onClick={() => toggleSelectedNode(item.id)}
+                    className="text-sidebar-foreground/20 hover:text-sidebar-foreground/60 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+    </>
   )
 }

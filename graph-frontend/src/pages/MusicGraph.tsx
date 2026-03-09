@@ -4,11 +4,12 @@ import '@react-sigma/core/lib/style.css'
 import { useGraph } from '../contexts/graphContext'
 import type { LayoutMode } from '#/lib/types'
 import { DatePicker } from '#/components/date-picker'
-import { SunIcon, MoonIcon } from 'lucide-react'
+import { SunIcon, MoonIcon, PanelRightIcon } from 'lucide-react'
 import { SearchBar } from '../components/SearchBar'
 import { DepthSliders } from '../components/DepthSliders'
 import { ArtistFilter } from '../components/ArtistFilter'
 import { SelectionPanel } from '../components/SelectionPanel'
+import { SidebarProvider, Sidebar, useSidebar } from '#/components/ui/sidebar'
 
 type SigmaRuntime = {
   SigmaContainer: ComponentType<{
@@ -19,6 +20,18 @@ type SigmaRuntime = {
   Graph: ComponentType<{ layout: LayoutMode; isDark: boolean }>
   EdgeArrowProgram: unknown
   NodePointProgram: unknown
+}
+
+function SidebarToggle() {
+  const { toggleSidebar } = useSidebar()
+  return (
+    <button
+      className="px-3 py-1.5 text-sm bg-neutral-800 dark:bg-white text-white dark:text-black"
+      onClick={toggleSidebar}
+    >
+      <PanelRightIcon className="size-4" />
+    </button>
+  )
 }
 
 export function MusicGraph() {
@@ -66,58 +79,63 @@ export function MusicGraph() {
   const { SigmaContainer, Graph, EdgeArrowProgram, NodePointProgram } = sigmaRuntime
 
   return (
-    <main className="bg-white dark:bg-black text-black dark:text-white min-h-screen">
-      <div className="absolute top-4 left-4 z-10 flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <DatePicker />
-          <SearchBar />
-          <ArtistFilter />
+    <SidebarProvider defaultOpen={false}>
+      <main className="relative flex-1 bg-white dark:bg-black text-black dark:text-white min-h-screen">
+        <div className="absolute top-4 left-4 z-10 flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <DatePicker />
+            <SearchBar />
+            <ArtistFilter />
+          </div>
+          <DepthSliders />
         </div>
-        <DepthSliders />
-      </div>
-      <div className="absolute top-4 right-4 z-10 flex gap-2">
-        <button
-          className={`px-3 py-1.5  text-sm ${layout === 'pagerank' ? 'bg-neutral-200 dark:bg-neutral-800 text-black dark:text-white' : 'bg-neutral-800 dark:bg-white text-white dark:text-black'}`}
-          onClick={() => setLayout('pagerank')}
+        <div className="absolute top-4 right-4 z-10 flex gap-2">
+          <button
+            className={`px-3 py-1.5  text-sm ${layout === 'pagerank' ? 'bg-neutral-200 dark:bg-neutral-800 text-black dark:text-white' : 'bg-neutral-800 dark:bg-white text-white dark:text-black'}`}
+            onClick={() => setLayout('pagerank')}
+          >
+            PageRank
+          </button>
+          <button
+            className={`px-3 py-1.5  text-sm ${layout === 'mds' ? 'bg-neutral-200 dark:bg-neutral-800 text-black dark:text-white' : 'bg-neutral-800 dark:bg-white text-white dark:text-black'}`}
+            onClick={() => setLayout('mds')}
+          >
+            MDS
+          </button>
+          <button
+            className={`px-3 py-1.5  text-sm ${layout === 'weighted-mds' ? 'bg-neutral-200 dark:bg-neutral-800 text-black dark:text-white' : 'bg-neutral-800 dark:bg-white text-white dark:text-black'}`}
+            onClick={() => setLayout('weighted-mds')}
+          >
+            Weighted MDS
+          </button>
+          <button
+            className="px-3 py-1.5  text-sm bg-neutral-800 dark:bg-white text-white dark:text-black"
+            onClick={() => setIsDark(!isDark)}
+          >
+            {isDark ? <SunIcon className="size-4" /> : <MoonIcon className="size-4" />}
+          </button>
+          <SidebarToggle />
+        </div>
+        <SigmaContainer
+          style={{ height: '100vh', width: '100vw', backgroundColor: 'transparent' }}
+          settings={{
+            labelRenderedSizeThreshold: 0,
+            maxCameraRatio: 4,
+            minCameraRatio: 0.1,
+            defaultNodeType: 'point',
+            defaultEdgeType: 'arrow',
+            nodeProgramClasses: { point: NodePointProgram },
+            edgeProgramClasses: { arrow: EdgeArrowProgram },
+            defaultDrawNodeHover: () => {},
+            labelColor: { color: isDark ? '#ffffff' : '#000000' },
+          }}
         >
-          PageRank
-        </button>
-        <button
-          className={`px-3 py-1.5  text-sm ${layout === 'mds' ? 'bg-neutral-200 dark:bg-neutral-800 text-black dark:text-white' : 'bg-neutral-800 dark:bg-white text-white dark:text-black'}`}
-          onClick={() => setLayout('mds')}
-        >
-          MDS
-        </button>
-        <button
-          className={`px-3 py-1.5  text-sm ${layout === 'weighted-mds' ? 'bg-neutral-200 dark:bg-neutral-800 text-black dark:text-white' : 'bg-neutral-800 dark:bg-white text-white dark:text-black'}`}
-          onClick={() => setLayout('weighted-mds')}
-        >
-          Weighted MDS
-        </button>
-        <button
-          className="px-3 py-1.5  text-sm bg-neutral-800 dark:bg-white text-white dark:text-black"
-          onClick={() => setIsDark(!isDark)}
-        >
-          {isDark ? <SunIcon className="size-4" /> : <MoonIcon className="size-4" />}
-        </button>
-      </div>
-      <SelectionPanel />
-      <SigmaContainer
-        style={{ height: '100vh', width: '100vw', backgroundColor: 'transparent' }}
-        settings={{
-          labelRenderedSizeThreshold: 0,
-          maxCameraRatio: 4,
-          minCameraRatio: 0.1,
-          defaultNodeType: 'point',
-          defaultEdgeType: 'arrow',
-          nodeProgramClasses: { point: NodePointProgram },
-          edgeProgramClasses: { arrow: EdgeArrowProgram },
-          defaultDrawNodeHover: () => {},
-          labelColor: { color: isDark ? '#ffffff' : '#000000' },
-        }}
-      >
-        <Graph layout={layout} isDark={isDark} />
-      </SigmaContainer>
-    </main>
+          <Graph layout={layout} isDark={isDark} />
+        </SigmaContainer>
+      </main>
+      <Sidebar side="right" collapsible="offcanvas">
+        <SelectionPanel />
+      </Sidebar>
+    </SidebarProvider>
   )
 }
