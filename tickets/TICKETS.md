@@ -120,3 +120,38 @@
 - [ ] `01-ExtractDarkModeToggle.md` — Lift isDark state and classList toggle out of MusicGraph into a shared context or hook
 - [ ] `02-DepthSliders.md` — Two sliders (next/previous) to control how many hops of songs are shown from the selected node
 - [ ] `02-ArtistFilter.md` — Multi-select artist filter to show only tracks by selected artists
+
+## Phase 12 — Cloudflare Code Splitting
+
+- [X] `00-SeparateServerInstances.md` — Separate prod/dev/staging API server instances on different ports so dev restarts don't take prod down
+- [X] `00-SplitApiAndPipeline.md` — Split Hono app into API-only and pipeline-only modules; clean `node:*` imports from shared code
+- [X] `01-WorkerEntryPoint.md` — Create CF Worker entry point (`worker.ts`) + `wrangler.toml`; proxy `/pipeline/*` to server
+- [X] `01-PipelineServerEntryPoint.md` — Create standalone pipeline server entry point for the box
+- [X] `02-FrontendCfPages.md` — Switch frontend Nitro preset to `cloudflare-pages`, add `wrangler.toml`
+
+## Phase 13 — Cloudflare Staging Deploy
+
+- [X] `00-StagingDb.md` — Add staging Postgres instance (docker-compose service); populate with test data via pipeline
+- [X] `00-StagingTunnel.md` — Add `pipeline-staging.everysong.fm` and `staging.everysong.fm` to tunnel ingress
+- [X] `01-DeployStagingWorker.md` — Done: staging API served via tunnel at `staging-api.everysong.fm` (:3004)
+- [X] `01-DeployStagingFrontend.md` — Done: staging frontend served via tunnel at `staging.everysong.fm` (:3007)
+- [X] `01-DeployStagingPipeline.md` — Done: pipeline server running at `pipeline-staging.everysong.fm` (:3006)
+- [X] `02-StagingE2eValidation.md` — All routes verified: frontend, API, pipeline all returning 200
+
+## Phase 14 — Cloudflare Production Cutover & CI
+
+- [ ] `00-DeployProdCommand.md` — Add `pnpm deploy:prod` script that deploys frontend (Pages) + API (Worker)
+- [ ] `00-UpdateTunnelAndDns.md` — Reconfigure tunnel for pipeline-only; swap DNS to CF Pages/Workers *(manual)*
+- [ ] `01-DeployGithubAction.md` — GitHub Action that deploys on push to main; needs `CLOUDFLARE_API_TOKEN` secret
+- [ ] `01-BranchPreviews.md` — Per-branch preview deploys via CF Pages + Worker preview environments
+- [ ] `02-TeardownStaging.md` — Remove staging DB, tunnel routes, Worker env, DNS records
+
+## Phase 15 — Staging API on Cloudflare Containers
+
+- [ ] `00-ExposePostgresStaging.md` — Publish staging Postgres on `0.0.0.0:5433` for remote access
+- [ ] `00-InstallContainersDep.md` — Add `@cloudflare/containers` dev dependency to graph-server
+- [ ] `01-ContainerEntryPoint.md` — Create `container-entry.ts` Node.js entry point for the container image
+- [ ] `01-Dockerfile.md` — Create Dockerfile and .dockerignore for graph-server
+- [ ] `02-ContainerWorkerEntry.md` — Create `container-worker.ts` CF Worker that manages the container
+- [ ] `02-UpdateWranglerToml.md` — Add containers + durable objects config to `wrangler.toml` staging env
+- [ ] `03-DeployAndVerify.md` — *(manual)* Deploy staging Worker+Container, set secrets, verify, configure custom domain
