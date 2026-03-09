@@ -6,51 +6,12 @@ import type { LayoutMode } from '#/lib/types'
 export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean }) {
   const loadGraph = useLoadGraph()
   const sigma = useSigma()
-  const { graph, filteredPlayCounts, getNodeMetrics, selectedNodes, toggleSelectedNode, clearSelection, nextDepth, prevDepth } = useGraph()
+  const { graph, filteredPlayCounts, getNodeMetrics, selectedNodes, visibleNodes, toggleSelectedNode, clearSelection } = useGraph()
 
   const metricKey =
     layout === "pagerank" ? "pageRank"
     : layout === "mds" ? "mdsScore"
     : "weightedMdsScore" as const
-
-  const visibleNodes = useMemo(() => {
-    if (selectedNodes.size === 0 || !graph) return null
-    const visible = new Set<string>(selectedNodes)
-
-    // BFS forward (outgoing edges) from all selected nodes
-    const forwardQueue: Array<{ node: string; depth: number }> =
-      [...selectedNodes].map(n => ({ node: n, depth: 0 }))
-    const visitedForward = new Set<string>(selectedNodes)
-    while (forwardQueue.length > 0) {
-      const { node, depth } = forwardQueue.shift()!
-      if (depth >= nextDepth) continue
-      graph.forEachOutEdge(node, (_edge, _attrs, _source, target) => {
-        if (!visitedForward.has(target)) {
-          visible.add(target)
-          visitedForward.add(target)
-          forwardQueue.push({ node: target, depth: depth + 1 })
-        }
-      })
-    }
-
-    // BFS backward (incoming edges) from all selected nodes
-    const backwardQueue: Array<{ node: string; depth: number }> =
-      [...selectedNodes].map(n => ({ node: n, depth: 0 }))
-    const visitedBackward = new Set<string>(selectedNodes)
-    while (backwardQueue.length > 0) {
-      const { node, depth } = backwardQueue.shift()!
-      if (depth >= prevDepth) continue
-      graph.forEachInEdge(node, (_edge, _attrs, source) => {
-        if (!visitedBackward.has(source)) {
-          visible.add(source)
-          visitedBackward.add(source)
-          backwardQueue.push({ node: source, depth: depth + 1 })
-        }
-      })
-    }
-
-    return visible
-  }, [selectedNodes, graph, nextDepth, prevDepth])
 
   useEffect(() => {
     const handleClickNode = ({ node }: { node: string }) => {
@@ -115,7 +76,7 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
         : 4
       const color = selectedNodes.size > 0
         ? (selectedNodes.has(node) ? '#ffffff' : '#666666')
-        : data.color
+        : data.color as string
       return { ...data, size, color }
     })
     sigma.setSetting('edgeReducer', (edge: string, data: Record<string, unknown>) => {

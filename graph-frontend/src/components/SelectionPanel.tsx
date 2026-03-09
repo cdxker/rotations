@@ -4,7 +4,7 @@ import { useNavigate } from "@tanstack/react-router"
 import { useGraph } from "../contexts/graphContext"
 
 export function SelectionPanel() {
-  const { graph, selectedNodes, toggleSelectedNode, clearSelection } = useGraph()
+  const { graph, selectedNodes, visibleNodes, toggleSelectedNode, clearSelection, selectAllVisible } = useGraph()
   const navigate = useNavigate()
 
   const items = useMemo(() => {
@@ -20,24 +20,34 @@ export function SelectionPanel() {
   if (items.length === 0) return null
 
   return (
-    <div className="absolute top-[50%] right-4 z-10 bg-neutral-900/95 backdrop-blur-sm border border-white/10 rounded-2xl shadow-lg max-h-[20vh] w-56 flex flex-col overflow-hidden">
+    <div className="absolute top-1/2 -translate-y-1/2 right-4 z-10 bg-neutral-900/95 backdrop-blur-sm border border-white/10 rounded-2xl shadow-lg h-[10vh] w-56 flex flex-col overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
         <span className="text-white/60 text-xs font-mono">
           {items.length} selected
         </span>
-        <button
-          onClick={() => {
-            clearSelection()
-            void navigate({
-              from: "/user/$username",
-              search: (prev) => ({ ...prev, artists: undefined }),
-              replace: true,
-            })
-          }}
-          className="text-white/40 hover:text-white/80 text-xs font-mono transition-colors"
-        >
-          Clear all
-        </button>
+        <div className="flex items-center gap-2">
+          {visibleNodes && visibleNodes.size > selectedNodes.size && (
+            <button
+              onClick={selectAllVisible}
+              className="text-white/40 hover:text-white/80 text-xs font-mono transition-colors"
+            >
+              Select visible
+            </button>
+          )}
+          <button
+            onClick={() => {
+              clearSelection()
+              void navigate({
+                from: "/user/$username",
+                search: (prev) => ({ ...prev, artists: undefined }),
+                replace: true,
+              })
+            }}
+            className="text-white/40 hover:text-white/80 text-xs font-mono transition-colors"
+          >
+            Clear all
+          </button>
+        </div>
       </div>
       <div className="overflow-y-auto flex-1 p-1.5 flex flex-col gap-1">
         {items.map(item => (
