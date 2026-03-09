@@ -3,6 +3,8 @@
   "scripts": {
     "dev": "pnpm --parallel --filter graph-pipeline --filter graph-frontend",
     "dev:all": "pnpm --parallel -r dev",
+    "build": "pnpm --filter graph-frontend build",
+    "prod": "pnpm build && PORT=3000 pnpm --filter graph-frontend start & GRAPH_SERVER_PORT=3001 node --import tsx graph-server/src/server/index.ts",
     "format": "pnpm -r format",
     "tunnel": "./tunnel.sh"
   },

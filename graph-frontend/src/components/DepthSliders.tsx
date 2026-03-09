@@ -8,11 +8,10 @@ export function DepthSliders() {
   const { next: urlNext, prev: urlPrev } = useSearch({ from: "/user/$username" })
   const navigate = useNavigate()
 
-  // Initialize context from URL params on mount
   useEffect(() => {
     if (urlNext != null && urlNext !== nextDepth) setNextDepth(urlNext)
     if (urlPrev != null && urlPrev !== prevDepth) setPrevDepth(urlPrev)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- only on mount
+  }, [])
 
   if (selectedNodes.size === 0) return null
 

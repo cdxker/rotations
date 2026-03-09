@@ -2,7 +2,7 @@ import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 
-const port = parseInt(process.env.GRAPH_SERVER_PORT ?? "3001", 10);
+const port = parseInt(process.env.GRAPH_SERVER_PORT ?? "3003", 10);
 const databaseUrl =
     process.env.DATABASE_URL ??
     "postgresql://postgres:postgres@localhost:5432/graph";
