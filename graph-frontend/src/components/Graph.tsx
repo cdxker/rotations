@@ -6,21 +6,21 @@ import type { LayoutMode } from '#/lib/types'
 export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean }) {
   const loadGraph = useLoadGraph()
   const sigma = useSigma()
-  const { graph, filteredPlayCounts, getNodeMetrics, selectedNode, setSelectedNode, nextDepth, prevDepth, artistFilter } = useGraph()
+  const { graph, filteredPlayCounts, getNodeMetrics, selectedNodes, toggleSelectedNode, clearSelection, nextDepth, prevDepth } = useGraph()
 
   const metricKey =
     layout === "pagerank" ? "pageRank"
     : layout === "mds" ? "mdsScore"
     : "weightedMdsScore" as const
 
-  const selectedNeighbors = useMemo(() => {
-    if (!selectedNode || !graph) return null
-    const visible = new Set<string>()
-    visible.add(selectedNode)
+  const visibleNodes = useMemo(() => {
+    if (selectedNodes.size === 0 || !graph) return null
+    const visible = new Set<string>(selectedNodes)
 
-    // BFS forward (outgoing edges)
-    const forwardQueue: Array<{ node: string; depth: number }> = [{ node: selectedNode, depth: 0 }]
-    const visitedForward = new Set<string>([selectedNode])
+    // BFS forward (outgoing edges) from all selected nodes
+    const forwardQueue: Array<{ node: string; depth: number }> =
+      [...selectedNodes].map(n => ({ node: n, depth: 0 }))
+    const visitedForward = new Set<string>(selectedNodes)
     while (forwardQueue.length > 0) {
       const { node, depth } = forwardQueue.shift()!
       if (depth >= nextDepth) continue
@@ -33,9 +33,10 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
       })
     }
 
-    // BFS backward (incoming edges)
-    const backwardQueue: Array<{ node: string; depth: number }> = [{ node: selectedNode, depth: 0 }]
-    const visitedBackward = new Set<string>([selectedNode])
+    // BFS backward (incoming edges) from all selected nodes
+    const backwardQueue: Array<{ node: string; depth: number }> =
+      [...selectedNodes].map(n => ({ node: n, depth: 0 }))
+    const visitedBackward = new Set<string>(selectedNodes)
     while (backwardQueue.length > 0) {
       const { node, depth } = backwardQueue.shift()!
       if (depth >= prevDepth) continue
@@ -49,14 +50,14 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
     }
 
     return visible
-  }, [selectedNode, graph, nextDepth, prevDepth])
+  }, [selectedNodes, graph, nextDepth, prevDepth])
 
   useEffect(() => {
     const handleClickNode = ({ node }: { node: string }) => {
-      setSelectedNode(selectedNode === node ? null : node)
+      toggleSelectedNode(node)
     }
     const handleClickStage = () => {
-      setSelectedNode(null)
+      clearSelection()
     }
     sigma.on('clickNode', handleClickNode)
     sigma.on('clickStage', handleClickStage)
@@ -64,7 +65,7 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
       sigma.off('clickNode', handleClickNode)
       sigma.off('clickStage', handleClickStage)
     }
-  }, [sigma, selectedNode, setSelectedNode])
+  }, [sigma, toggleSelectedNode, clearSelection])
 
   useEffect(() => {
     if (graph) {
@@ -102,11 +103,7 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
 
     const isNodeHidden = (node: string): boolean => {
       if (filteredPlayCounts && !filteredPlayCounts.has(node)) return true
-      if (selectedNeighbors && !selectedNeighbors.has(node)) return true
-      if (artistFilter) {
-        const attrs = g.getNodeAttributes(node)
-        if (!attrs.artists.some((a: string) => artistFilter.has(a))) return true
-      }
+      if (visibleNodes && !visibleNodes.has(node)) return true
       return false
     }
 
@@ -116,7 +113,10 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
       const size = metric > 0 && maxMetric > 0
         ? 4 + 16 * Math.log1p(metric) / Math.log1p(maxMetric)
         : 4
-      return { ...data, size }
+      const color = selectedNodes.size > 0
+        ? (selectedNodes.has(node) ? '#ffffff' : '#666666')
+        : data.color
+      return { ...data, size, color }
     })
     sigma.setSetting('edgeReducer', (edge: string, data: Record<string, unknown>) => {
       const source = g.source(edge)
@@ -128,7 +128,7 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
       return { ...data, color: edgeBase(Math.min(0.6, 0.15 + w * 0.05)) }
     })
     sigma.refresh()
-  }, [filteredPlayCounts, selectedNeighbors, artistFilter, getNodeMetrics, layout, metricKey, maxMetric, sigma, isDark])
+  }, [filteredPlayCounts, visibleNodes, selectedNodes, getNodeMetrics, layout, metricKey, maxMetric, sigma, isDark])
 
   return null
 }

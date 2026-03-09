@@ -8,6 +8,7 @@ import { SunIcon, MoonIcon } from 'lucide-react'
 import { SearchBar } from '../components/SearchBar'
 import { DepthSliders } from '../components/DepthSliders'
 import { ArtistFilter } from '../components/ArtistFilter'
+import { SelectionPanel } from '../components/SelectionPanel'
 
 type SigmaRuntime = {
   SigmaContainer: ComponentType<{
@@ -98,6 +99,7 @@ export function MusicGraph() {
           {isDark ? <SunIcon className="size-4" /> : <MoonIcon className="size-4" />}
         </button>
       </div>
+      <SelectionPanel />
       <SigmaContainer
         style={{ height: '100vh', width: '100vw', backgroundColor: 'transparent' }}
         settings={{

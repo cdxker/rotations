@@ -19,7 +19,7 @@ type SearchItem = NodeAttributes & { key: string }
  * Reads the graph from GraphContext so it can be rendered outside a SigmaContainer.
  */
 export function SearchBar() {
-  const { graph, setSelectedNode } = useGraph()
+  const { graph, addSelectedNode } = useGraph()
   const { q } = useSearch({ from: "/user/$username" })
   const navigate = useNavigate()
 
@@ -34,13 +34,13 @@ export function SearchBar() {
   }, [graph])
 
   function handleSelect(result: SearchItem | null) {
-    if (result) setSelectedNode(result.key)
+    if (result) addSelectedNode(result.key)
   }
 
   function handleInputChange(value: string) {
     void navigate({
       from: "/user/$username",
-      search: { q: value || undefined },
+      search: (prev) => ({ ...prev, q: value || undefined }),
       replace: true,
     })
   }

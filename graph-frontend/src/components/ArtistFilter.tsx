@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { Users } from "lucide-react"
+import { useNavigate, useSearch } from "@tanstack/react-router"
 import { Combobox as ComboboxPrimitive } from "@base-ui/react"
 import { useGraph } from "../contexts/graphContext"
 import {
@@ -16,7 +17,8 @@ type ArtistEntry = { name: string; count: number }
 
 export function ArtistFilter() {
   const { graph, setArtistFilter } = useGraph()
-  const [selected, setSelected] = useState<ArtistEntry[]>([])
+  const { artists: urlArtists } = useSearch({ from: "/user/$username" })
+  const navigate = useNavigate()
   const anchorRef = useRef<HTMLDivElement | null>(null)
 
   const artists = useMemo(() => {
@@ -32,13 +34,30 @@ export function ArtistFilter() {
       .sort((a, b) => b.count - a.count)
   }, [graph])
 
-  function handleValueChange(value: ArtistEntry[]) {
-    setSelected(value)
-    if (value.length === 0) {
+  // Initialize selected from URL params once artists are loaded
+  const selected = useMemo(() => {
+    if (!urlArtists?.length) return []
+    const urlSet = new Set(urlArtists)
+    return artists.filter((a) => urlSet.has(a.name))
+  }, [urlArtists, artists])
+
+  // Sync artist filter to context whenever selected changes
+  useEffect(() => {
+    if (!artists.length) return
+    if (selected.length === 0) {
       setArtistFilter(null)
     } else {
-      setArtistFilter(new Set(value.map((a) => a.name)))
+      setArtistFilter(new Set(selected.map((a) => a.name)))
     }
+  }, [selected, setArtistFilter, artists.length])
+
+  function handleValueChange(value: ArtistEntry[]) {
+    const names = value.map((a) => a.name)
+    void navigate({
+      from: "/user/$username",
+      search: (prev) => ({ ...prev, artists: names.length ? names : undefined }),
+      replace: true,
+    })
   }
 
   return (

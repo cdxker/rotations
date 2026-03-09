@@ -85,8 +85,10 @@ type GraphContextValue = {
   setLayout: (mode: LayoutMode) => void
   filteredPlayCounts: Map<string, number> | null
   getNodeMetrics: (id: string, layout: LayoutMode) => NodeMetrics | null
-  selectedNode: string | null
-  setSelectedNode: (nodeId: string | null) => void
+  selectedNodes: Set<string>
+  toggleSelectedNode: (nodeId: string) => void
+  addSelectedNode: (nodeId: string) => void
+  clearSelection: () => void
   nextDepth: number
   setNextDepth: (depth: number) => void
   prevDepth: number
@@ -100,9 +102,9 @@ const GraphContext = createContext<GraphContextValue | null>(null)
 export function GraphProvider({ children, initialUser }: { children: ReactNode, initialUser: string }) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [layout, setLayout] = useState<LayoutMode>("pagerank")
-  const [selectedNode, setSelectedNode] = useState<string | null>(null)
-  const [nextDepth, setNextDepth] = useState(2)
-  const [prevDepth, setPrevDepth] = useState(2)
+  const [manualSelections, setManualSelections] = useState<Set<string>>(new Set())
+  const [nextDepth, setNextDepth] = useState(1)
+  const [prevDepth, setPrevDepth] = useState(1)
   const [artistFilter, setArtistFilter] = useState<Set<string> | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
   const queryClient = useQueryClient()
@@ -200,6 +202,44 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
     return counts
   }, [dateRange, graph])
 
+  const artistMatchingNodes = useMemo(() => {
+    if (!artistFilter || !graph) return new Set<string>()
+    const matching = new Set<string>()
+    graph.forEachNode((id, attrs) => {
+      if (attrs.artists.some(a => artistFilter.has(a))) {
+        matching.add(id)
+      }
+    })
+    return matching
+  }, [artistFilter, graph])
+
+  const selectedNodes = useMemo(() => {
+    if (artistMatchingNodes.size === 0 && manualSelections.size === 0) return new Set<string>()
+    const combined = new Set(artistMatchingNodes)
+    for (const id of manualSelections) combined.add(id)
+    return combined
+  }, [artistMatchingNodes, manualSelections])
+
+  function toggleSelectedNode(nodeId: string) {
+    setManualSelections(prev => {
+      const next = new Set(prev)
+      if (next.has(nodeId)) next.delete(nodeId)
+      else next.add(nodeId)
+      return next
+    })
+  }
+
+  function addSelectedNode(nodeId: string) {
+    setManualSelections(prev => {
+      if (prev.has(nodeId)) return prev
+      return new Set([...prev, nodeId])
+    })
+  }
+
+  function clearSelection() {
+    setManualSelections(new Set())
+  }
+
   const jobStatus = jobData?.status ?? null
   const isBuilding = jobId !== null && jobStatus !== "failed" && jobStatus !== "cancelled"
 
@@ -225,15 +265,17 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
     setLayout,
     filteredPlayCounts,
     getNodeMetrics,
-    selectedNode,
-    setSelectedNode,
+    selectedNodes,
+    toggleSelectedNode,
+    addSelectedNode,
+    clearSelection,
     nextDepth,
     setNextDepth,
     prevDepth,
     setPrevDepth,
     artistFilter,
     setArtistFilter,
-  }), [graph, data, state, isError, graphError, jobStatus, dateRange, layout, filteredPlayCounts, nodeMetrics, selectedNode, nextDepth, prevDepth, artistFilter])
+  }), [graph, data, state, isError, graphError, jobStatus, dateRange, layout, filteredPlayCounts, nodeMetrics, selectedNodes, nextDepth, prevDepth, artistFilter])
 
   return (
     <GraphContext.Provider value={value}>
