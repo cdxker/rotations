@@ -9,7 +9,7 @@ import type {ReactNode} from "react";
 import type {DateRange} from "react-day-picker";
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Graph from "graphology"
-import type { EdgeAttributes, ListeningGraph, NodeAttributes } from "#/lib/types"
+import type { EdgeAttributes, GraphMetricsResponse, ListeningGraph, NodeAttributes } from "#/lib/types"
 import setNodePositions from "../graph-utils/setNodePositions"
 import type { LayoutMode } from "../graph-utils/setNodePositions"
 
@@ -160,15 +160,23 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
         `${GRAPH_API_BASE}/graph/metrics?user=${encodeURIComponent(initialUser)}&layout=${encodeURIComponent(layout)}`,
       )
       if (!res.ok) throw new Error("Failed to fetch metrics")
-      return res.json() as Promise<{ metrics: Record<string, number> }>
+      return res.json() as Promise<GraphMetricsResponse>
     },
     enabled: !!data,
   })
 
   const nodeMetrics = useMemo(() => {
     if (!metricsData) return null
-    return new Map(Object.entries(metricsData.metrics))
-  }, [metricsData])
+    const metricKey =
+      layout === "pagerank" ? "pageRank"
+      : layout === "mds" ? "mdsScore"
+      : "weightedMdsScore" as const
+    const map = new Map<string, number>()
+    for (const [id, metrics] of Object.entries(metricsData.metrics)) {
+      map.set(id, metrics[metricKey] ?? 0)
+    }
+    return map
+  }, [metricsData, layout])
 
   const graph = useMemo(() => {
     if (!data) return null

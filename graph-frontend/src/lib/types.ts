@@ -41,6 +41,18 @@ export interface ListeningGraph {
   metadata: GraphMetadata
 }
 
+/** Per-node metric scores — only the field matching the requested layout is populated. */
+export interface NodeMetrics {
+  pageRank?: number
+  mdsScore?: number
+  weightedMdsScore?: number
+}
+
+/** Response from GET /graph/metrics — per-node metrics keyed by node UUID. */
+export interface GraphMetricsResponse {
+  metrics: Record<string, NodeMetrics>
+}
+
 // ---------------------------------------------------------------------------
 // Graphology attribute types
 // ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ import type {
     ListeningSource,
     CompactGraphNode,
     CompactGraph,
+    NodeMetrics,
 } from "./types.js";
 
 export type PipelineJobStatus =
@@ -679,11 +680,11 @@ export class GraphDatabase {
         };
     }
 
-    /** Return per-node metrics for a given layout mode. */
+    /** Return per-node metrics for a given layout mode. Only the requested metric field is populated. */
     async getNodeMetrics(
         userId: number,
         layout: "pagerank" | "mds" | "weighted-mds",
-    ): Promise<Record<string, number>> {
+    ): Promise<Record<string, NodeMetrics>> {
         await this.ready();
 
         let result: { rows: { id: string; metric: number }[] };
@@ -719,9 +720,14 @@ export class GraphDatabase {
             );
         }
 
-        const metrics: Record<string, number> = {};
+        const metricKey =
+            layout === "pagerank" ? "pageRank"
+            : layout === "mds" ? "mdsScore"
+            : "weightedMdsScore" as const;
+
+        const metrics: Record<string, NodeMetrics> = {};
         for (const row of result.rows) {
-            metrics[row.id] = Number(row.metric);
+            metrics[row.id] = { [metricKey]: Number(row.metric) };
         }
         return metrics;
     }

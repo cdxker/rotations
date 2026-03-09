@@ -74,6 +74,13 @@ export interface GraphNode {
     };
 }
 
+/** Per-node metric scores — only the field matching the requested layout is populated. */
+export interface NodeMetrics {
+    pageRank?: number;
+    mdsScore?: number;
+    weightedMdsScore?: number;
+}
+
 export interface GraphMetadata {
     totalScrobbles: number;
     dateRange: { from: string; to: string };
