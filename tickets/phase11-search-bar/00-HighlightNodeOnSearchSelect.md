@@ -22,6 +22,6 @@ Selecting a search result should visually highlight that node in the graph, usin
 
 ## Acceptance Criteria
 
-- [ ] Selecting a search result highlights the node and dims non-neighbors, identical to clicking the node on the canvas.
-- [ ] Clicking the canvas (stage) still clears the selection.
-- [ ] No regressions to existing click-to-select behavior.
+- [x] Selecting a search result highlights the node and dims non-neighbors, identical to clicking the node on the canvas.
+- [x] Clicking the canvas (stage) still clears the selection.
+- [x] No regressions to existing click-to-select behavior.

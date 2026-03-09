@@ -86,7 +86,7 @@ type GraphContextValue = {
   filteredPlayCounts: Map<string, number> | null
   getNodeMetrics: (id: string, layout: LayoutMode) => NodeMetrics | null
   selectedNode: string | null
-  setSelectedNode: (node: string | null) => void
+  setSelectedNode: (nodeId: string | null) => void
 };
 
 const GraphContext = createContext<GraphContextValue | null>(null)
