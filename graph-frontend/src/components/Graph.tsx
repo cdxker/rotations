@@ -8,6 +8,11 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
   const sigma = useSigma()
   const { graph, filteredPlayCounts, nodeMetrics, selectedNode, setSelectedNode } = useGraph()
 
+  const metricKey =
+    layout === "pagerank" ? "pageRank"
+    : layout === "mds" ? "mdsScore"
+    : "weightedMdsScore" as const
+
   const selectedNeighbors = useMemo(() => {
     if (!selectedNode || !graph) return null
     const neighbors = new Set<string>()
@@ -44,19 +49,22 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
     if (!nodeMetrics) return 1
     let max = 1e-10
 
+    const resolve = (id: string) => nodeMetrics.get(id)?.[metricKey] ?? 0
+
     if (filteredPlayCounts) {
       for (const key of filteredPlayCounts.keys()) {
-        const val = nodeMetrics.get(key)
-        if (val !== undefined && val > max) max = val
+        const val = resolve(key)
+        if (val > max) max = val
       }
     } else {
-      for (const val of nodeMetrics.values()) {
+      for (const [id] of nodeMetrics) {
+        const val = resolve(id)
         if (val > max) max = val
       }
     }
 
     return max
-  }, [nodeMetrics, filteredPlayCounts])
+  }, [nodeMetrics, filteredPlayCounts, metricKey])
 
   useEffect(() => {
     const g = sigma.getGraph()
@@ -73,7 +81,7 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
       if (selectedNeighbors && !selectedNeighbors.has(_node)) {
         return { ...data, hidden: true }
       }
-      const metric = nodeMetrics?.get(_node) ?? 0
+      const metric = nodeMetrics?.get(_node)?.[metricKey] ?? 0
       const size = metric > 0 && maxMetric > 0
         ? 4 + 16 * Math.log1p(metric) / Math.log1p(maxMetric)
         : 4
@@ -96,7 +104,7 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
       return { ...data, color: edgeBase(Math.min(0.6, 0.15 + w * 0.05)) }
     })
     sigma.refresh()
-  }, [filteredPlayCounts, selectedNeighbors, nodeMetrics, maxMetric, sigma, isDark])
+  }, [filteredPlayCounts, selectedNeighbors, nodeMetrics, maxMetric, metricKey, sigma, isDark])
 
   return null
 }

@@ -9,7 +9,7 @@ import type {ReactNode} from "react";
 import type {DateRange} from "react-day-picker";
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Graph from "graphology"
-import type { EdgeAttributes, GraphMetricsResponse, ListeningGraph, NodeAttributes } from "#/lib/types"
+import type { EdgeAttributes, GraphMetricsResponse, ListeningGraph, NodeAttributes, NodeMetrics } from "#/lib/types"
 import setNodePositions from "../graph-utils/setNodePositions"
 import type { LayoutMode } from "../graph-utils/setNodePositions"
 
@@ -91,7 +91,7 @@ type GraphContextValue = {
   layout: LayoutMode
   setLayout: (mode: LayoutMode) => void
   filteredPlayCounts: Map<string, number> | null
-  nodeMetrics: Map<string, number> | null
+  nodeMetrics: Map<string, NodeMetrics> | null
   selectedNode: string | null
   setSelectedNode: (node: string | null) => void
 };
@@ -167,23 +167,20 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
 
   const nodeMetrics = useMemo(() => {
     if (!metricsData) return null
-    const metricKey =
-      layout === "pagerank" ? "pageRank"
-      : layout === "mds" ? "mdsScore"
-      : "weightedMdsScore" as const
-    const map = new Map<string, number>()
-    for (const [id, metrics] of Object.entries(metricsData.metrics)) {
-      map.set(id, metrics[metricKey] ?? 0)
-    }
-    return map
-  }, [metricsData, layout])
+    return new Map(Object.entries(metricsData.metrics))
+  }, [metricsData])
 
   const graph = useMemo(() => {
     if (!data) return null
     const g = toGraphology(data)
+    const metricKey =
+      layout === "pagerank" ? "pageRank"
+      : layout === "mds" ? "mdsScore"
+      : "weightedMdsScore" as const
     if (nodeMetrics) {
       g.forEachNode((key) => {
-        g.setNodeAttribute(key, "metric", nodeMetrics.get(key) ?? 0)
+        const m = nodeMetrics.get(key)
+        g.setNodeAttribute(key, "metric", m?.[metricKey] ?? 0)
       })
     }
     setNodePositions(g, layout)
