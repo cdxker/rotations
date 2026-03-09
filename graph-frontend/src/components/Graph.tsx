@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useLoadGraph, useSigma } from '@react-sigma/core'
 import { useGraph } from '../contexts/graphContext'
 import type { LayoutMode } from '../graph-utils/setNodePositions'
@@ -6,8 +6,7 @@ import type { LayoutMode } from '../graph-utils/setNodePositions'
 export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean }) {
   const loadGraph = useLoadGraph()
   const sigma = useSigma()
-  const { graph, filteredPlayCounts, nodeMetrics } = useGraph()
-  const [selectedNode, setSelectedNode] = useState<string | null>(null)
+  const { graph, filteredPlayCounts, nodeMetrics, selectedNode, setSelectedNode } = useGraph()
 
   const selectedNeighbors = useMemo(() => {
     if (!selectedNode || !graph) return null
@@ -21,7 +20,7 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
 
   useEffect(() => {
     const handleClickNode = ({ node }: { node: string }) => {
-      setSelectedNode((prev) => (prev === node ? null : node))
+      setSelectedNode(selectedNode === node ? null : node)
     }
     const handleClickStage = () => {
       setSelectedNode(null)
@@ -32,7 +31,7 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
       sigma.off('clickNode', handleClickNode)
       sigma.off('clickStage', handleClickStage)
     }
-  }, [sigma])
+  }, [sigma, selectedNode, setSelectedNode])
 
   useEffect(() => {
     if (graph) {

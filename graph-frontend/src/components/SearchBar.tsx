@@ -8,7 +8,7 @@ import type { NodeAttributes } from "#/lib/types"
  * Reads the graph from GraphContext so it can be rendered outside a SigmaContainer.
  */
 export function SearchBar() {
-  const { graph } = useGraph()
+  const { graph, setSelectedNode } = useGraph()
   const [query, setQuery] = useState("")
 
   function handleChange(value: string) {
@@ -17,7 +17,7 @@ export function SearchBar() {
 
     const nodeKey = graph.findNode((_key, attrs) => attrs.label === value)
     if (nodeKey) {
-      console.log("Selected node:", nodeKey)
+      setSelectedNode(nodeKey)
     }
   }
 
