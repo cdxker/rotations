@@ -12,7 +12,7 @@ import Graph from "graphology"
 import type { EdgeAttributes, GraphMetricsResponse, LayoutMode, ListeningGraph, NodeAttributes, NodeMetrics } from "#/lib/types"
 
 const GRAPH_API_BASE =
-  import.meta.env.VITE_GRAPH_API_URL ?? "http://localhost:3001"
+  import.meta.env.VITE_GRAPH_API_URL ?? "https://api.everysong.fm"
 
 export type PipelineJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled"
 

@@ -44,7 +44,7 @@ export interface GraphFilter {
     clusterIds?: number[]
 }
 
-const GRAPH_API_BASE = import.meta.env.PUBLIC_GRAPH_API_URL ?? "http://localhost:3001"
+const GRAPH_API_BASE = import.meta.env.PUBLIC_GRAPH_API_URL ?? "https://api.everysong.fm"
 
 /** Compute a monochrome node color from importance (0–1 scale). Brighter = more important. */
 export function nodeBrightness(importance: number): string {
