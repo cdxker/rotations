@@ -52,7 +52,6 @@ function toGraphology(
       totalPlays: node.totalPlays,
       sources: node.sources,
       pageRank: node.pageRank ?? 0,
-      metric: 0,
       playDates: node.playDates,
       positions: node.positions,
       size: 4,
@@ -170,18 +169,9 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
   const graph = useMemo(() => {
     if (!data) return null
     const g = toGraphology(data)
-    const metricKey =
-      layout === "pagerank" ? "pageRank"
-      : layout === "mds" ? "mdsScore"
-      : "weightedMdsScore" as const
-    if (nodeMetrics) {
-      g.forEachNode((key) => {
-        g.setNodeAttribute(key, "metric", nodeMetrics[key]?.[metricKey] ?? 0)
-      })
-    }
     setNodePositions(g, layout)
     return g
-  }, [data, layout, nodeMetrics])
+  }, [data, layout])
 
   const filteredPlayCounts = useMemo(() => {
     if (!dateRange?.from || !graph) return null
