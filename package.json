@@ -1,7 +1,6 @@
 {
   "private": true,
   "scripts": {
-    "install": "pnpm -r install --filter graph-pipeline --filter graph-frontend",
     "dev": "pnpm --parallel --filter graph-pipeline --filter graph-frontend",
     "dev:all": "pnpm --parallel -r dev",
     "format": "pnpm -r format",
