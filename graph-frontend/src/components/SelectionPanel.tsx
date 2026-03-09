@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { X } from "lucide-react"
+import { X, PanelRightCloseIcon } from "lucide-react"
 import { useNavigate } from "@tanstack/react-router"
 import { useGraph } from "../contexts/graphContext"
 import {
@@ -7,10 +7,12 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
+  useSidebar,
 } from "#/components/ui/sidebar"
 
 export function SelectionPanel() {
   const { graph, selectedNodes, visibleNodes, toggleSelectedNode, clearSelection, selectAllVisible } = useGraph()
+  const { toggleSidebar } = useSidebar()
   const navigate = useNavigate()
 
   const items = useMemo(() => {
@@ -27,9 +29,17 @@ export function SelectionPanel() {
     <>
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="flex items-center justify-between">
-          <span className="text-sidebar-foreground/60 text-xs font-mono">
-            {items.length} selected
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleSidebar}
+              className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors"
+            >
+              <PanelRightCloseIcon className="size-4" />
+            </button>
+            <span className="text-sidebar-foreground/60 text-xs font-mono">
+              {items.length} selected
+            </span>
+          </div>
           <div className="flex items-center gap-2">
             {visibleNodes && visibleNodes.size > selectedNodes.size && (
               <button
