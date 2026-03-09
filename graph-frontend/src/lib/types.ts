@@ -1,23 +1,32 @@
+/** Layout mode for node positioning. */
+export type LayoutMode = "pagerank" | "mds" | "weighted-mds"
+
+/** Pre-computed x/y positions keyed by layout mode. */
+export type LayoutPositions = Partial<Record<LayoutMode, { x: number; y: number }>>
+
 /** Canonical song identity: `lowercase(artist)::lowercase(track_name)`. */
 export type SongKey = `${string}::${string}`
 
 /** Data source that contributed a scrobble or track ordering. */
-export type ListeningSource = "lastfm" | "spotify-recent" | "spotify-playlist"
+export type ListeningSource = "lastfm"
 
-/** A node in the listening graph representing a single song. */
+/** A node in the listening graph representing a single song (compact API format with UUID keys). */
 export interface GraphNode {
+  songKey: SongKey
+  mbid?: string
   name: string
   artists: string[]
   albumName?: string
-  spotifyId?: string
   lastfmUrl?: string
   imageUrl?: string
-  next: Record<SongKey, number>
-  previous: Record<SongKey, number>
+  next: Record<string, number>
+  previous: Record<string, number>
   totalPlays: number
   sources: ListeningSource[]
-  pageRank: number
+  pageRank?: number
+  clusterId?: number
   playDates: string[]
+  positions?: LayoutPositions
 }
 
 /** Metadata about the graph export. */
@@ -26,13 +35,24 @@ export interface GraphMetadata {
   dateRange: { from: string; to: string }
   exportTimestamp: string
   lastfmUsername?: string
-  spotifyUsername?: string
 }
 
-/** The full listening graph as returned by GET /graph. */
+/** The full listening graph as returned by GET /graph (UUID-keyed nodes). */
 export interface ListeningGraph {
-  nodes: Record<SongKey, GraphNode>
+  nodes: Record<string, GraphNode>
   metadata: GraphMetadata
+}
+
+/** Per-node metric scores — only the field matching the requested layout is populated. */
+export interface NodeMetrics {
+  pageRank?: number
+  mdsScore?: number
+  weightedMdsScore?: number
+}
+
+/** Response from GET /graph/metrics — per-node metrics keyed by node UUID. */
+export interface GraphMetricsResponse {
+  metrics: Record<string, NodeMetrics>
 }
 
 // ---------------------------------------------------------------------------
@@ -42,15 +62,16 @@ export interface ListeningGraph {
 /** Attributes stored on each graphology node. */
 export interface NodeAttributes {
   label: string
+  songKey: SongKey
   artists: string[]
   albumName?: string
-  spotifyId?: string
   lastfmUrl?: string
   imageUrl?: string
   totalPlays: number
   sources: string[]
   pageRank: number
   playDates: string[]
+  positions?: LayoutPositions
   size: number
   color: string
   x: number

@@ -1,0 +1,30 @@
+{
+    "name": "graph-pipeline",
+    "type": "module",
+    "version": "0.0.1",
+    "scripts": {
+        "build": "tsc",
+        "dev": "node --watch --import tsx src/server/index.ts",
+        "test": "vitest run",
+        "format": "prettier --write .",
+        "lint": "eslint . && tsc --noEmit"
+    },
+    "dependencies": {
+        "@hono/node-server": "^1.19.9",
+        "dotenv": "^17.3.1",
+        "hono": "^4.12.3",
+        "pg": "8.20.0"
+    },
+    "devDependencies": {
+        "@eslint/js": "^9.39.2",
+        "@types/node": "^22.15.0",
+        "@types/pg": "8.18.0",
+        "eslint": "^9.39.2",
+        "prettier": "^3.7.4",
+        "tsx": "^4.21.0",
+        "typescript": "^5.9.3",
+        "typescript-eslint": "^8.50.0",
+        "vitest": "^4.0.15"
+    },
+    "packageManager": "pnpm@10.28.0+sha512.05df71d1421f21399e053fde567cea34d446fa02c76571441bfc1c7956e98e363088982d940465fd34480d4d90a0668bc12362f8aa88000a64e83d0b0e47be48"
+}

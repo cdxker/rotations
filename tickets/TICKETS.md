@@ -72,7 +72,7 @@
 - [X] `01-FixPathPanelStaleAsync.md` — Use functional state updates in async callbacks to prevent stale closure overwrites
 - [X] `01-FixSourceBreakdownSemantics.md` — Track per-source play counts and report scrobbles instead of nodes
 - [X] `01-FixModularityNormalization.md` — Divide by 2m instead of m in modularity formula
-- [ ] `02-FixSidebarNavigationHighlighting.md` — *(manual)* Sidebar neighbor click moves camera but does not update graph highlighting (Sigma reducer issue) — human-only
+- [X] `02-FixSidebarNavigationHighlighting.md` — Closed (Not Planned): backend rewritten in Phase 9; old graph-pipeline code no longer applies
 - [X] `02-FixLastfmFetcherSpreadOverflow.md` — Replace Math.max spread in checkpoint with loop to handle >65k scrobbles
 - [X] `02-FixDataPathInconsistency.md` — Unify CWD-relative and import.meta.dirname data paths between fetch and build
 - [X] `02-FixModularityFormula.md` — Fix computeModularity to account for non-adjacent same-community pairs
@@ -86,8 +86,8 @@
 - [X] `04-RemoveUnusedKeyIndexParam.md` — Remove unused keyIndex parameter from computeClusterStats
 - [X] `04-OptimizeDepthLayerEdgeIteration.md` — Replace full-graph edge scan with per-node iteration in depth layers
 - [X] `04-FixBootstrapReducerRace.md` — Prevent GraphEvents from clearing bootstrap reducers on initial mount
-- [ ] `05-FixPathPanelCleanupRace.md` — Fix cleanup effect racing with just-resolved promise in PathPanel
-- [ ] `05-FixSourcePlaysSqlMerge.md` — Make source_plays SQL upsert merge additively instead of overwriting
+- [X] `05-FixPathPanelCleanupRace.md` — Closed (Not Planned): backend rewritten in Phase 9; old graph-pipeline code no longer applies
+- [X] `05-FixSourcePlaysSqlMerge.md` — Closed (Not Planned): backend rewritten in Phase 9; old graph-pipeline code no longer applies
 
 ## Phase 8 — Unclanking (Code Cleanup ~2,000 lines)
 
@@ -98,3 +98,25 @@
 - [X] `02-GraphEventsReducerCleanup.md` — Extract filter hook, consolidate reducers, remove debug logging (~100 lines)
 - [X] `02-MicroOptimizationsHygiene.md` — Trim JSDoc, fix Vercel best practices, sweep unused code (~200 lines)
 - [X] `03-LintAndFormat.md` — Run lint + format across both projects, fix any issues, final verification
+
+## Phase 9 — Graph Server Rewrite
+
+- [X] `00-CopyGraphPipeline.md` — Copy `graph-pipeline/` to `graph-server/`, verify tests pass
+- [X] `01-RewriteSpotifyAuth.md` — Rewrite `spotify-auth.ts` from scratch, inline all helpers
+- [X] `02-RewriteSpotifyClient.md` — Rewrite `spotify-client.ts` from scratch, inline all interfaces/helpers
+- [X] `03-VerifyAndReindex.md` — Update imports, test paths, `reindex.sh`, run full end-to-end reindex
+- [X] `04-PerUserFetchBuild.md` — Add `users` table, per-user fetch+build pipeline with `{ username }` body
+- [X] `05-UserGraphEndpoint.md` — Done: migrated with per-user graph endpoints in graph-server
+- [X] `06-ServerSideLayoutComputation.md` — Done: layout computed server-side in build pipeline, stored in DB, frontend reads with fallback
+
+## Phase 10 — Postgres Migration
+
+- [X] `00-DockerComposePostgres.md` — Add docker-compose.yaml with local Postgres for development
+- [X] `01-SwapSqliteToPostgres.md` — Replace better-sqlite3 with Postgres driver, migrate all schema and queries
+
+## Phase 11 — Search Bar
+
+- [ ] `00-HighlightNodeOnSearchSelect.md` — Lift selectedNode into graphContext so search result selection highlights the node with neighbor-dimming
+- [ ] `01-ExtractDarkModeToggle.md` — Lift isDark state and classList toggle out of MusicGraph into a shared context or hook
+- [ ] `02-DepthSliders.md` — Two sliders (next/previous) to control how many hops of songs are shown from the selected node
+- [ ] `02-ArtistFilter.md` — Multi-select artist filter to show only tracks by selected artists

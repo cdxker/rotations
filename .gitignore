@@ -20,6 +20,9 @@ pnpm-debug.log*
 # spotify token storage
 .spotify-tokens.json
 
+# cloudflare tunnel credentials
+.tunnel-credentials
+
 # macOS-specific files
 .DS_Store
 

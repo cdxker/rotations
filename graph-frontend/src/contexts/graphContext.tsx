@@ -2,87 +2,65 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useState,
-  type ReactNode,
 } from "react"
+import type {ReactNode} from "react";
+import type {DateRange} from "react-day-picker";
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Graph from "graphology"
-import { connectedComponents } from "graphology-components"
-import type { EdgeAttributes, ListeningGraph, NodeAttributes } from "#/lib/types"
+import type { EdgeAttributes, GraphMetricsResponse, LayoutMode, ListeningGraph, NodeAttributes, NodeMetrics } from "#/lib/types"
 
 const GRAPH_API_BASE =
   import.meta.env.VITE_GRAPH_API_URL ?? "http://localhost:3001"
 
-/** Distinct high-contrast colors for connected components. */
-const COMPONENT_COLORS = [
-  "#ff3366", // hot pink
-  "#00ffcc", // cyan/mint
-  "#ffcc00", // yellow
-  "#7b4dff", // purple
-  "#ff6600", // orange
-  "#00ccff", // sky blue
-  "#ff0099", // magenta
-  "#33ff66", // green
-  "#ff4444", // red
-  "#00ffff", // aqua
-  "#ffff00", // bright yellow
-  "#cc33ff", // violet
-  "#ff8833", // tangerine
-  "#33ccff", // light blue
-  "#66ff33", // lime
-  "#ff3399", // pink
-]
+export type PipelineJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled"
 
-/** Fetch the full graph JSON from the API. */
-async function fetchGraph(): Promise<ListeningGraph> {
-  const response = await fetch(`${GRAPH_API_BASE}/graph`)
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch graph: ${response.status} ${response.statusText}`,
-    )
-  }
-  return response.json()
+interface PipelineJobStatusRecord {
+  id: string
+  status: PipelineJobStatus
+  createdAt: string
+  updatedAt: string
+  startedAt: string | null
+  finishedAt: string | null
 }
-
 
 function toGraphology(
   listeningGraph: ListeningGraph,
+  layout: LayoutMode,
 ): Graph<NodeAttributes, EdgeAttributes> {
   const graph = new Graph<NodeAttributes, EdgeAttributes>()
   const entries = Object.entries(listeningGraph.nodes)
 
   if (entries.length === 0) return graph
 
-  let maxPageRank = 1e-10
-  for (const [, n] of entries) {
-    const pr = n.pageRank ?? 0
-    if (pr > maxPageRank) maxPageRank = pr
-  }
-
-  for (const [key, node] of entries) {
-    graph.addNode(key, {
+  for (const [uuid, node] of entries) {
+    const position = node.positions?.[layout] ?? { x: 0, y: 0 }
+    graph.addNode(uuid, {
       label: `${node.artists[0] ?? "Unknown"} — ${node.name}`,
+      songKey: node.songKey,
       artists: node.artists,
       albumName: node.albumName,
-      spotifyId: node.spotifyId,
       lastfmUrl: node.lastfmUrl,
       imageUrl: node.imageUrl,
       totalPlays: node.totalPlays,
       sources: node.sources,
       pageRank: node.pageRank ?? 0,
-      playDates: node.playDates ?? [],
-      size: 4, // placeholder; nodeReducer in RenderGraph sets actual size per layout
-      color: "#ffffff", // placeholder, overwritten by component coloring
-      x: 0,
-      y: 0,
+      playDates: node.playDates,
+      positions: node.positions,
+      size: 4,
+      color: "#ffffff",
+      x: position.x,
+      y: position.y,
     })
   }
 
-  for (const [fromKey, node] of entries) {
-    for (const [toKey, weight] of Object.entries(node.next)) {
-      if (!graph.hasNode(toKey)) continue
-      if (graph.hasEdge(fromKey, toKey)) continue
+  for (const [fromUuid, node] of entries) {
+    for (const [toUuid, weight] of Object.entries(node.next)) {
+      if (!graph.hasNode(toUuid)) continue
+      if (graph.hasEdge(fromUuid, toUuid)) continue
 
-      graph.addDirectedEdge(fromKey, toKey, {
+      graph.addDirectedEdge(fromUuid, toUuid, {
         weight,
         size: Math.max(0.5, Math.min(3, Math.log(weight + 1))),
         color: `rgba(0, 0, 0, ${Math.min(0.6, 0.15 + weight * 0.05)})`,
@@ -90,63 +68,217 @@ function toGraphology(
     }
   }
 
-  // Color each disconnected component a different high-contrast color
-  const components = connectedComponents(graph)
-  for (let i = 0; i < components.length; i++) {
-    const color = COMPONENT_COLORS[i % COMPONENT_COLORS.length]
-    for (const key of components[i]) {
-      graph.setNodeAttribute(key, "color", color)
-    }
-  }
-
   return graph
 }
 
-export type LoadState = "loading" | "loaded" | "error"
+export type LoadState = "loading" | "building" | "loaded" | "error"
 
-interface GraphContextValue {
+type GraphContextValue = {
   graph: Graph<NodeAttributes, EdgeAttributes> | null
   raw: ListeningGraph | null
   state: LoadState
   error: string | null
-}
+  jobStatus: PipelineJobStatus | null
+  dateRange: DateRange | undefined
+  setDateRange: (range: DateRange | undefined) => void
+  layout: LayoutMode
+  setLayout: (mode: LayoutMode) => void
+  filteredPlayCounts: Map<string, number> | null
+  getNodeMetrics: (id: string, layout: LayoutMode) => NodeMetrics | null
+  selectedNodes: Set<string>
+  toggleSelectedNode: (nodeId: string) => void
+  addSelectedNode: (nodeId: string) => void
+  clearSelection: () => void
+  nextDepth: number
+  setNextDepth: (depth: number) => void
+  prevDepth: number
+  setPrevDepth: (depth: number) => void
+  artistFilter: Set<string> | null
+  setArtistFilter: (artists: Set<string> | null) => void
+};
 
 const GraphContext = createContext<GraphContextValue | null>(null)
 
-export function GraphProvider({ children }: { children: ReactNode }) {
-  const [graph, setGraph] =
-    useState<Graph<NodeAttributes, EdgeAttributes> | null>(null)
-  const [raw, setRaw] = useState<ListeningGraph | null>(null)
-  const [state, setState] = useState<LoadState>("loading")
-  const [error, setError] = useState<string | null>(null)
+export function GraphProvider({ children, initialUser }: { children: ReactNode, initialUser: string }) {
+  const [dateRange, setDateRange] = useState<DateRange | undefined>()
+  const [layout, setLayout] = useState<LayoutMode>("pagerank")
+  const [manualSelections, setManualSelections] = useState<Set<string>>(new Set())
+  const [nextDepth, setNextDepth] = useState(1)
+  const [prevDepth, setPrevDepth] = useState(1)
+  const [artistFilter, setArtistFilter] = useState<Set<string> | null>(null)
+  const [jobId, setJobId] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+
+  const { data, isPending, isError, error: graphError } = useQuery({
+    queryKey: ["graph", initialUser],
+    queryFn: async () => {
+      const response = await fetch(`${GRAPH_API_BASE}/graph?user=${encodeURIComponent(initialUser)}`)
+      if (response.status === 404) {
+        const pipelineRes = await fetch(`${GRAPH_API_BASE}/pipeline/run`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: initialUser }),
+        })
+        if (pipelineRes.ok) {
+          const { jobId: id } = await pipelineRes.json() as { jobId: string }
+          setJobId(id)
+        }
+        return null
+      }
+      if (!response.ok) {
+        throw new Error(`Failed to fetch graph: ${response.status} ${response.statusText}`)
+      }
+      return response.json() as Promise<ListeningGraph>
+    },
+    retry: false,
+  })
+
+  const { data: jobData } = useQuery({
+    queryKey: ["pipeline-job", jobId],
+    queryFn: async () => {
+      const res = await fetch(`${GRAPH_API_BASE}/pipeline/run/${jobId}`)
+      if (!res.ok) throw new Error("Failed to fetch job status")
+      return res.json() as Promise<PipelineJobStatusRecord>
+    },
+    enabled: jobId !== null,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      if (status === "succeeded" || status === "failed" || status === "cancelled") {
+        return false // stop polling
+      }
+      return 2000
+    },
+  })
 
   useEffect(() => {
-    let cancelled = false
+    if (jobData?.status === "succeeded") {
+      setJobId(null)
+      void queryClient.invalidateQueries({ queryKey: ["graph", initialUser] })
+    }
+  }, [jobData?.status, initialUser, queryClient])
 
-    async function load() {
-      try {
-        const data = await fetchGraph()
-        if (cancelled) return
+  const { data: metricsData } = useQuery({
+    queryKey: ["graph-metrics", initialUser, layout],
+    queryFn: async () => {
+      const res = await fetch(
+        `${GRAPH_API_BASE}/graph/metrics?user=${encodeURIComponent(initialUser)}&layout=${encodeURIComponent(layout)}`,
+      )
+      if (!res.ok) throw new Error("Failed to fetch metrics")
+      return res.json() as Promise<GraphMetricsResponse>
+    },
+    enabled: !!data,
+  })
 
-        const g = toGraphology(data)
-        setRaw(data)
-        setGraph(g)
-        setState("loaded")
-      } catch {
-        if (cancelled) return
-        setState("error")
-        setError("Could not reach graph API")
+  const nodeMetrics = metricsData?.metrics ?? null
+
+  function getNodeMetrics(id: string, forLayout: LayoutMode): NodeMetrics | null {
+    const metrics = nodeMetrics?.[id]
+    if (!metrics) return null
+    const field = forLayout === "pagerank" ? "pageRank"
+      : forLayout === "mds" ? "mdsScore"
+      : "weightedMdsScore" as const
+    if (metrics[field] == null) return null
+    return metrics
+  }
+
+  const graph = useMemo(() => {
+    if (!data) return null
+    return toGraphology(data, layout)
+  }, [data, layout])
+
+  const filteredPlayCounts = useMemo(() => {
+    if (!dateRange?.from || !graph) return null
+    const fromStr = dateRange.from.toISOString().slice(0, 10)
+    const toStr = (dateRange.to ?? dateRange.from).toISOString().slice(0, 10)
+    const counts = new Map<string, number>()
+    graph.forEachNode((key, attrs) => {
+      let count = 0
+      for (const d of attrs.playDates) {
+        const day = d.slice(0, 10)
+        if (day >= fromStr && day <= toStr) count++
       }
-    }
+      if (count > 0) counts.set(key, count)
+    })
+    return counts
+  }, [dateRange, graph])
 
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const artistMatchingNodes = useMemo(() => {
+    if (!artistFilter || !graph) return new Set<string>()
+    const matching = new Set<string>()
+    graph.forEachNode((id, attrs) => {
+      if (attrs.artists.some(a => artistFilter.has(a))) {
+        matching.add(id)
+      }
+    })
+    return matching
+  }, [artistFilter, graph])
+
+  const selectedNodes = useMemo(() => {
+    if (artistMatchingNodes.size === 0 && manualSelections.size === 0) return new Set<string>()
+    const combined = new Set(artistMatchingNodes)
+    for (const id of manualSelections) combined.add(id)
+    return combined
+  }, [artistMatchingNodes, manualSelections])
+
+  function toggleSelectedNode(nodeId: string) {
+    setManualSelections(prev => {
+      const next = new Set(prev)
+      if (next.has(nodeId)) next.delete(nodeId)
+      else next.add(nodeId)
+      return next
+    })
+  }
+
+  function addSelectedNode(nodeId: string) {
+    setManualSelections(prev => {
+      if (prev.has(nodeId)) return prev
+      return new Set([...prev, nodeId])
+    })
+  }
+
+  function clearSelection() {
+    setManualSelections(new Set())
+  }
+
+  const jobStatus = jobData?.status ?? null
+  const isBuilding = jobId !== null && jobStatus !== "failed" && jobStatus !== "cancelled"
+
+  const state: LoadState = isPending
+    ? "loading"
+    : isBuilding
+      ? "building"
+      : isError
+        ? "error"
+        : data === null
+          ? "loading"
+          : "loaded"
+
+  const value: GraphContextValue = useMemo(() => ({
+    graph,
+    raw: data ?? null,
+    state,
+    error: isError ? graphError.message : jobStatus === "failed" ? "Pipeline job failed" : null,
+    jobStatus,
+    dateRange,
+    setDateRange,
+    layout,
+    setLayout,
+    filteredPlayCounts,
+    getNodeMetrics,
+    selectedNodes,
+    toggleSelectedNode,
+    addSelectedNode,
+    clearSelection,
+    nextDepth,
+    setNextDepth,
+    prevDepth,
+    setPrevDepth,
+    artistFilter,
+    setArtistFilter,
+  }), [graph, data, state, isError, graphError, jobStatus, dateRange, layout, filteredPlayCounts, nodeMetrics, selectedNodes, nextDepth, prevDepth, artistFilter])
 
   return (
-    <GraphContext.Provider value={{ graph, raw, state, error }}>
+    <GraphContext.Provider value={value}>
       {children}
     </GraphContext.Provider>
   )
