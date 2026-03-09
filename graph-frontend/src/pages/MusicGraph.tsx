@@ -67,11 +67,13 @@ export function MusicGraph() {
 
   return (
     <main className="bg-white dark:bg-black text-black dark:text-white min-h-screen">
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
-        <DatePicker />
-        <SearchBar />
+      <div className="absolute top-4 left-4 z-10 flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <DatePicker />
+          <SearchBar />
+          <ArtistFilter />
+        </div>
         <DepthSliders />
-        <ArtistFilter />
       </div>
       <div className="absolute top-4 right-4 z-10 flex gap-2">
         <button

@@ -86,9 +86,11 @@ type GraphContextValue = {
   filteredPlayCounts: Map<string, number> | null
   getNodeMetrics: (id: string, layout: LayoutMode) => NodeMetrics | null
   selectedNodes: Set<string>
+  visibleNodes: Set<string> | null
   toggleSelectedNode: (nodeId: string) => void
   addSelectedNode: (nodeId: string) => void
   clearSelection: () => void
+  selectAllVisible: () => void
   nextDepth: number
   setNextDepth: (depth: number) => void
   prevDepth: number
@@ -240,6 +242,52 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
     setManualSelections(new Set())
   }
 
+  const visibleNodes = useMemo(() => {
+    if (selectedNodes.size === 0 || !graph) return null
+    const visible = new Set<string>(selectedNodes)
+
+    const forwardQueue: Array<{ node: string; depth: number }> =
+      [...selectedNodes].map(n => ({ node: n, depth: 0 }))
+    const visitedForward = new Set<string>(selectedNodes)
+    while (forwardQueue.length > 0) {
+      const { node, depth } = forwardQueue.shift()!
+      if (depth >= nextDepth) continue
+      graph.forEachOutEdge(node, (_edge, _attrs, _source, target) => {
+        if (!visitedForward.has(target)) {
+          visible.add(target)
+          visitedForward.add(target)
+          forwardQueue.push({ node: target, depth: depth + 1 })
+        }
+      })
+    }
+
+    const backwardQueue: Array<{ node: string; depth: number }> =
+      [...selectedNodes].map(n => ({ node: n, depth: 0 }))
+    const visitedBackward = new Set<string>(selectedNodes)
+    while (backwardQueue.length > 0) {
+      const { node, depth } = backwardQueue.shift()!
+      if (depth >= prevDepth) continue
+      graph.forEachInEdge(node, (_edge, _attrs, source) => {
+        if (!visitedBackward.has(source)) {
+          visible.add(source)
+          visitedBackward.add(source)
+          backwardQueue.push({ node: source, depth: depth + 1 })
+        }
+      })
+    }
+
+    return visible
+  }, [selectedNodes, graph, nextDepth, prevDepth])
+
+  function selectAllVisible() {
+    if (!visibleNodes) return
+    setManualSelections(prev => {
+      const next = new Set(prev)
+      for (const id of visibleNodes) next.add(id)
+      return next
+    })
+  }
+
   const jobStatus = jobData?.status ?? null
   const isBuilding = jobId !== null && jobStatus !== "failed" && jobStatus !== "cancelled"
 
@@ -266,9 +314,11 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
     filteredPlayCounts,
     getNodeMetrics,
     selectedNodes,
+    visibleNodes,
     toggleSelectedNode,
     addSelectedNode,
     clearSelection,
+    selectAllVisible,
     nextDepth,
     setNextDepth,
     prevDepth,
