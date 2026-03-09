@@ -95,7 +95,9 @@ CONFIG_BODY=$(jq -n '{
   config: {
     ingress: [
       { hostname: "everysong.fm", service: "http://localhost:3000", originRequest: { httpHostHeader: "localhost:3000" } },
+      { hostname: "www.everysong.fm", service: "http://localhost:3000", originRequest: { httpHostHeader: "localhost:3000" } },
       { hostname: "api.everysong.fm", service: "http://localhost:3001", originRequest: { httpHostHeader: "localhost:3001" } },
+      { hostname: "dev.everysong.fm", service: "http://localhost:3002", originRequest: { httpHostHeader: "localhost:3002" } },
       { service: "http_status:404" }
     ]
   }
@@ -134,14 +136,18 @@ create_dns_if_missing() {
 }
 
 create_dns_if_missing "$DOMAIN"
+create_dns_if_missing "www.$DOMAIN"
 create_dns_if_missing "api.$DOMAIN"
+create_dns_if_missing "dev.$DOMAIN"
 
 # ── 6. Run the tunnel ───────────────────────────────────────────────────────
 echo ""
 echo "═══════════════════════════════════════════════════════"
 echo "  Tunnel ready!"
 echo "  https://everysong.fm       → localhost:3000"
+echo "  https://www.everysong.fm   → localhost:3000"
 echo "  https://api.everysong.fm   → localhost:3001"
+echo "  https://dev.everysong.fm   → localhost:3002"
 echo "═══════════════════════════════════════════════════════"
 echo ""
 
