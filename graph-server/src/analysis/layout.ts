@@ -1,6 +1,6 @@
-import type { SongKey, ListeningGraph } from "../graph/types.js";
+import type { SongKey, LayoutMode, ListeningGraph } from "../graph/types.js";
 
-export type LayoutMode = "pagerank" | "mds" | "weighted-mds";
+export type { LayoutMode };
 
 export interface Position {
     x: number;

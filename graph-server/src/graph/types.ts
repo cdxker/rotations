@@ -30,6 +30,12 @@ export type TrackId = `track-${string}`;
 
 export type ListeningSource = "lastfm";
 
+/** Layout mode for node positioning. */
+export type LayoutMode = "pagerank" | "mds" | "weighted-mds";
+
+/** Pre-computed x/y positions keyed by layout mode. */
+export type LayoutPositions = Partial<Record<LayoutMode, { x: number; y: number }>>;
+
 /** A node in the listening graph representing a single song. */
 export interface GraphNode {
     name: string;
@@ -67,11 +73,7 @@ export interface GraphNode {
     /** ISO 8601 timestamps of every play across all sources, chronologically sorted. */
     playDates: string[];
     /** Pre-computed layout positions for each layout mode. */
-    positions?: {
-        pagerank?: { x: number; y: number };
-        mds?: { x: number; y: number };
-        "weighted-mds"?: { x: number; y: number };
-    };
+    positions?: LayoutPositions;
 }
 
 /** Per-node metric scores — only the field matching the requested layout is populated. */
@@ -111,11 +113,7 @@ export interface CompactGraphNode {
     pageRank?: number;
     clusterId?: number;
     playDates: string[];
-    positions?: {
-        pagerank?: { x: number; y: number };
-        mds?: { x: number; y: number };
-        "weighted-mds"?: { x: number; y: number };
-    };
+    positions?: LayoutPositions;
 }
 
 /** Compact graph for API responses — UUID-keyed nodes. */

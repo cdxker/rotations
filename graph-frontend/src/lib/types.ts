@@ -1,3 +1,9 @@
+/** Layout mode for node positioning. */
+export type LayoutMode = "pagerank" | "mds" | "weighted-mds"
+
+/** Pre-computed x/y positions keyed by layout mode. */
+export type LayoutPositions = Partial<Record<LayoutMode, { x: number; y: number }>>
+
 /** Canonical song identity: `lowercase(artist)::lowercase(track_name)`. */
 export type SongKey = `${string}::${string}`
 
@@ -20,11 +26,7 @@ export interface GraphNode {
   pageRank?: number
   clusterId?: number
   playDates: string[]
-  positions?: {
-    pagerank?: { x: number; y: number }
-    mds?: { x: number; y: number }
-    "weighted-mds"?: { x: number; y: number }
-  }
+  positions?: LayoutPositions
 }
 
 /** Metadata about the graph export. */
@@ -69,11 +71,7 @@ export interface NodeAttributes {
   sources: string[]
   pageRank: number
   playDates: string[]
-  positions?: {
-    pagerank?: { x: number; y: number }
-    mds?: { x: number; y: number }
-    "weighted-mds"?: { x: number; y: number }
-  }
+  positions?: LayoutPositions
   size: number
   color: string
   x: number

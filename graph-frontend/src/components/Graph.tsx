@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { useLoadGraph, useSigma } from '@react-sigma/core'
 import { useGraph } from '../contexts/graphContext'
-import type { LayoutMode } from '../graph-utils/setNodePositions'
+import type { LayoutMode } from '#/lib/types'
 
 export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean }) {
   const loadGraph = useLoadGraph()
@@ -12,7 +12,6 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
     layout === "pagerank" ? "pageRank"
     : layout === "mds" ? "mdsScore"
     : "weightedMdsScore" as const
-  const resolveMetric = (id: string) => getNodeMetrics(id)?.[metricKey] ?? 0
 
   const selectedNeighbors = useMemo(() => {
     if (!selectedNode || !graph) return null
@@ -51,19 +50,19 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
     let max = 1e-10
 
     if (filteredPlayCounts) {
-      for (const key of filteredPlayCounts.keys()) {
-        const val = resolveMetric(key)
-        if (val > max) max = val
+      for (const nodeId of filteredPlayCounts.keys()) {
+        const score = getNodeMetrics(nodeId, layout)?.[metricKey] ?? 0
+        if (score > max) max = score
       }
     } else {
-      graph.forEachNode((id) => {
-        const val = resolveMetric(id)
-        if (val > max) max = val
+      graph.forEachNode((nodeId) => {
+        const score = getNodeMetrics(nodeId, layout)?.[metricKey] ?? 0
+        if (score > max) max = score
       })
     }
 
     return max
-  }, [graph, filteredPlayCounts, getNodeMetrics, metricKey])
+  }, [graph, filteredPlayCounts, getNodeMetrics, layout, metricKey])
 
   useEffect(() => {
     const g = sigma.getGraph()
@@ -73,14 +72,14 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
 
     sigma.setSetting('labelColor', { color: isDark ? '#ffffff' : '#000000' })
 
-    sigma.setSetting('nodeReducer', (_node: string, data: Record<string, unknown>) => {
-      if (filteredPlayCounts && !filteredPlayCounts.has(_node)) {
+    sigma.setSetting('nodeReducer', (node: string, data: Record<string, unknown>) => {
+      if (filteredPlayCounts && !filteredPlayCounts.has(node)) {
         return { ...data, hidden: true }
       }
-      if (selectedNeighbors && !selectedNeighbors.has(_node)) {
+      if (selectedNeighbors && !selectedNeighbors.has(node)) {
         return { ...data, hidden: true }
       }
-      const metric = resolveMetric(_node)
+      const metric = getNodeMetrics(node, layout)?.[metricKey] ?? 0
       const size = metric > 0 && maxMetric > 0
         ? 4 + 16 * Math.log1p(metric) / Math.log1p(maxMetric)
         : 4
@@ -103,7 +102,7 @@ export function Graph({ layout, isDark }: { layout: LayoutMode; isDark: boolean 
       return { ...data, color: edgeBase(Math.min(0.6, 0.15 + w * 0.05)) }
     })
     sigma.refresh()
-  }, [filteredPlayCounts, selectedNeighbors, resolveMetric, maxMetric, sigma, isDark])
+  }, [filteredPlayCounts, selectedNeighbors, getNodeMetrics, layout, metricKey, maxMetric, sigma, isDark])
 
   return null
 }

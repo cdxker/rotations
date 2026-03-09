@@ -3,6 +3,7 @@ import { Pool, type PoolClient } from "pg";
 import type {
     SongKey,
     GraphNode,
+    LayoutMode,
     ListeningGraph,
     GraphMetadata,
     ListeningSource,
@@ -683,7 +684,7 @@ export class GraphDatabase {
     /** Return per-node metrics for a given layout mode. Only the requested metric field is populated. */
     async getNodeMetrics(
         userId: number,
-        layout: "pagerank" | "mds" | "weighted-mds",
+        layout: LayoutMode,
     ): Promise<Record<string, NodeMetrics>> {
         await this.ready();
 

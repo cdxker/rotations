@@ -9,9 +9,7 @@ import type {ReactNode} from "react";
 import type {DateRange} from "react-day-picker";
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Graph from "graphology"
-import type { EdgeAttributes, GraphMetricsResponse, ListeningGraph, NodeAttributes, NodeMetrics } from "#/lib/types"
-import setNodePositions from "../graph-utils/setNodePositions"
-import type { LayoutMode } from "../graph-utils/setNodePositions"
+import type { EdgeAttributes, GraphMetricsResponse, LayoutMode, ListeningGraph, NodeAttributes, NodeMetrics } from "#/lib/types"
 
 const GRAPH_API_BASE =
   import.meta.env.VITE_GRAPH_API_URL ?? "http://localhost:3001"
@@ -29,19 +27,15 @@ interface PipelineJobStatusRecord {
 
 function toGraphology(
   listeningGraph: ListeningGraph,
+  layout: LayoutMode,
 ): Graph<NodeAttributes, EdgeAttributes> {
   const graph = new Graph<NodeAttributes, EdgeAttributes>()
   const entries = Object.entries(listeningGraph.nodes)
 
   if (entries.length === 0) return graph
 
-  let maxPageRank = 1e-10
-  for (const [, n] of entries) {
-    const pr = n.pageRank ?? 0
-    if (pr > maxPageRank) maxPageRank = pr
-  }
-
   for (const [uuid, node] of entries) {
+    const position = node.positions?.[layout] ?? { x: 0, y: 0 }
     graph.addNode(uuid, {
       label: `${node.artists[0] ?? "Unknown"} — ${node.name}`,
       songKey: node.songKey,
@@ -56,8 +50,8 @@ function toGraphology(
       positions: node.positions,
       size: 4,
       color: "#ffffff",
-      x: 0,
-      y: 0,
+      x: position.x,
+      y: position.y,
     })
   }
 
@@ -90,7 +84,7 @@ type GraphContextValue = {
   layout: LayoutMode
   setLayout: (mode: LayoutMode) => void
   filteredPlayCounts: Map<string, number> | null
-  getNodeMetrics: (id: string) => NodeMetrics | null
+  getNodeMetrics: (id: string, layout: LayoutMode) => NodeMetrics | null
   selectedNode: string | null
   setSelectedNode: (node: string | null) => void
 };
@@ -165,13 +159,20 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
   })
 
   const nodeMetrics = metricsData?.metrics ?? null
-  const getNodeMetrics = (id: string): NodeMetrics | null => nodeMetrics?.[id] ?? null
+
+  function getNodeMetrics(id: string, forLayout: LayoutMode): NodeMetrics | null {
+    const metrics = nodeMetrics?.[id]
+    if (!metrics) return null
+    const field = forLayout === "pagerank" ? "pageRank"
+      : forLayout === "mds" ? "mdsScore"
+      : "weightedMdsScore" as const
+    if (metrics[field] == null) return null
+    return metrics
+  }
 
   const graph = useMemo(() => {
     if (!data) return null
-    const g = toGraphology(data)
-    setNodePositions(g, layout)
-    return g
+    return toGraphology(data, layout)
   }, [data, layout])
 
   const filteredPlayCounts = useMemo(() => {
@@ -217,7 +218,7 @@ export function GraphProvider({ children, initialUser }: { children: ReactNode, 
     getNodeMetrics,
     selectedNode,
     setSelectedNode,
-  }), [graph, data, state, isError, graphError, jobStatus, dateRange, layout, filteredPlayCounts, getNodeMetrics, selectedNode])
+  }), [graph, data, state, isError, graphError, jobStatus, dateRange, layout, filteredPlayCounts, nodeMetrics, selectedNode])
 
   return (
     <GraphContext.Provider value={value}>
