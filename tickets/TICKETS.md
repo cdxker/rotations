@@ -141,10 +141,8 @@
 ## Phase 14 — Cloudflare Production Cutover & CI
 
 - [ ] `00-DeployProdCommand.md` — Add `pnpm deploy:prod` script that deploys frontend (Pages) + API (Worker)
-- [ ] `00-UpdateTunnelAndDns.md` — Reconfigure tunnel for pipeline-only; swap DNS to CF Pages/Workers *(manual)*
 - [ ] `01-DeployGithubAction.md` — GitHub Action that deploys on push to main; needs `CLOUDFLARE_API_TOKEN` secret
 - [ ] `01-BranchPreviews.md` — Per-branch preview deploys via CF Pages + Worker preview environments
-- [ ] `02-TeardownStaging.md` — Remove staging DB, tunnel routes, Worker env, DNS records
 
 ## Phase 15 — Staging API on Cloudflare Containers
 
@@ -155,3 +153,5 @@
 - [ ] `02-ContainerWorkerEntry.md` — Create `container-worker.ts` CF Worker that manages the container
 - [ ] `02-UpdateWranglerToml.md` — Add containers + durable objects config to `wrangler.toml` staging env
 - [ ] `03-DeployAndVerify.md` — *(manual)* Deploy staging Worker+Container, set secrets, verify, configure custom domain
+- [ ] `04-UpdateTunnelAndDns.md` — Reconfigure tunnel for pipeline-only; swap DNS to CF Pages/Workers *(manual)*
+- [ ] `04-TeardownStaging.md` — Remove staging DB, tunnel routes, Worker env, DNS records
