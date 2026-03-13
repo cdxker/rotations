@@ -11,5 +11,20 @@ services:
     volumes:
       - graph-postgres-data:/var/lib/postgresql/data
 
+  postgres-staging:
+    image: postgres:16
+    container_name: graph-postgres-staging
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: everysong_staging
+      POSTGRES_PASSWORD: "kX9#mQ2$vL7nR4wB"
+      POSTGRES_DB: graph_staging
+    ports:
+      - "0.0.0.0:5433:5432"
+    command: ["postgres", "-c", "listen_addresses=*"]
+    volumes:
+      - graph-postgres-staging-data:/var/lib/postgresql/data
+
 volumes:
   graph-postgres-data:
+  graph-postgres-staging-data:
