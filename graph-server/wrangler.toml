@@ -1,0 +1,25 @@
+name = "everysong-api"
+main = "src/server/worker.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# ── Staging: Cloudflare Containers ──────────────────────────────────────────
+
+[env.staging]
+name = "everysong-api-staging"
+main = "src/server/container-worker.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[[env.staging.containers]]
+class_name = "GraphApiContainer"
+image = "./Dockerfile"
+instance_type = "basic"
+
+[[env.staging.durable_objects.bindings]]
+name = "GRAPH_API_CONTAINER"
+class_name = "GraphApiContainer"
+
+[[env.staging.migrations]]
+tag = "v1"
+new_classes = ["GraphApiContainer"]
