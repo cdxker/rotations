@@ -116,10 +116,10 @@
 
 ## Phase 11 — Search Bar
 
-- [ ] `00-HighlightNodeOnSearchSelect.md` — Lift selectedNode into graphContext so search result selection highlights the node with neighbor-dimming
-- [ ] `01-ExtractDarkModeToggle.md` — Lift isDark state and classList toggle out of MusicGraph into a shared context or hook
-- [ ] `02-DepthSliders.md` — Two sliders (next/previous) to control how many hops of songs are shown from the selected node
-- [ ] `02-ArtistFilter.md` — Multi-select artist filter to show only tracks by selected artists
+- [X] `00-HighlightNodeOnSearchSelect.md` — Closed (Already Done): search selection highlights node with neighbor-dimming
+- [X] `01-ExtractDarkModeToggle.md` — Closed (Already Done): dark mode toggle extracted
+- [X] `02-DepthSliders.md` — Closed (Already Done): depth sliders implemented
+- [X] `02-ArtistFilter.md` — Closed (Already Done): artist filter implemented
 
 ## Phase 12 — Cloudflare Code Splitting
 
@@ -146,12 +146,12 @@
 
 ## Phase 15 — Staging API on Cloudflare Containers
 
-- [ ] `00-ExposePostgresStaging.md` — Publish staging Postgres on `0.0.0.0:5433` for remote access
-- [ ] `00-InstallContainersDep.md` — Add `@cloudflare/containers` dev dependency to graph-server
-- [ ] `01-ContainerEntryPoint.md` — Create `container-entry.ts` Node.js entry point for the container image
-- [ ] `01-Dockerfile.md` — Create Dockerfile and .dockerignore for graph-server
-- [ ] `02-ContainerWorkerEntry.md` — Create `container-worker.ts` CF Worker that manages the container
-- [ ] `02-UpdateWranglerToml.md` — Add containers + durable objects config to `wrangler.toml` staging env
+- [X] `00-ExposePostgresStaging.md` — Publish staging Postgres on `0.0.0.0:5433` for remote access
+- [X] `00-InstallContainersDep.md` — Add `@cloudflare/containers` dev dependency to graph-server
+- [X] `01-ContainerEntryPoint.md` — Create `container-entry.ts` Node.js entry point for the container image
+- [X] `01-Dockerfile.md` — Create Dockerfile and .dockerignore for graph-server
+- [X] `02-ContainerWorkerEntry.md` — Create `container-worker.ts` CF Worker that manages the container
+- [X] `02-UpdateWranglerToml.md` — Add containers + durable objects config to `wrangler.toml` staging env
 - [ ] `03-DeployAndVerify.md` — *(manual)* Deploy staging Worker+Container, set secrets, verify, configure custom domain
 - [ ] `04-UpdateTunnelAndDns.md` — Reconfigure tunnel for pipeline-only; swap DNS to CF Pages/Workers *(manual)*
 - [ ] `04-TeardownStaging.md` — Remove staging DB, tunnel routes, Worker env, DNS records
