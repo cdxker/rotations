@@ -14,6 +14,8 @@ Rewrite `graph-server/wrangler.toml` to use Cloudflare Containers for staging, k
 
 Keep the existing production Hyperdrive config as-is. Production will migrate to containers later.
 
+> **Known issue:** Top-level `main` points to `src/server/worker.ts` which does not exist yet. Not a Phase 15 blocker (staging uses `container-worker.ts`), but must be resolved before any production deploy.
+
 ### Staging environment
 
 ```toml
@@ -35,6 +37,8 @@ class_name = "GraphApiContainer"
 [[env.staging.migrations]]
 tag = "v1"
 new_classes = ["GraphApiContainer"]
+# NOTE: Verify whether CF Containers require `new_sqlite_classes` instead of
+# `new_classes` — current docs are ambiguous. Test with `wrangler deploy --env staging --dry-run`.
 ```
 
 ### Secrets

@@ -13,8 +13,10 @@ Deploy the staging Worker + Container, set secrets, and verify the API is workin
 ### Set the DATABASE_URL secret
 
 ```bash
+# DATABASE_URL should be set in your environment or .env file (not committed)
+# Format: postgresql://everysong_staging:<password>@216.38.137.154:5433/graph_staging
 CLOUDFLARE_API_TOKEN=... npx wrangler secret put DATABASE_URL --env staging
-# paste: postgresql://postgres:postgres@216.38.137.154:5433/graph_staging
+# paste the value of $STAGING_DATABASE_URL from your .env
 ```
 
 ### Deploy
@@ -34,6 +36,10 @@ Should return valid JSON graph stats.
 ### Custom domain (manual)
 
 Once verified, configure `staging-api.everysong.fm` as a custom domain on the Worker and remove the tunnel route for `staging-api.everysong.fm`.
+
+### Non-atomic deploy caveat
+
+CF Containers deploys are non-atomic during beta: the Worker updates immediately but the container image rolls slowly. After deploying, expect a brief window where the Worker routes to the old container image. For staging this is acceptable — for production, plan a health-check gate or blue/green strategy.
 
 ### Verify frontend integration
 

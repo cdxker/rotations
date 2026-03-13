@@ -26,7 +26,8 @@ docker compose up -d postgres-staging
 ### Verify connectivity
 
 ```bash
-psql postgresql://postgres:postgres@216.38.137.154:5433/graph_staging -c "SELECT 1"
+# STAGING_DATABASE_URL should be set in your .env (not committed)
+psql "$STAGING_DATABASE_URL" -c "SELECT 1"
 ```
 
 ## Owner
