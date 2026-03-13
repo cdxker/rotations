@@ -13,7 +13,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [[env.staging.containers]]
 class_name = "GraphApiContainer"
-image = "./Dockerfile"
+image = "./graph-server/Dockerfile"
 instance_type = "basic"
 
 [[env.staging.durable_objects.bindings]]
