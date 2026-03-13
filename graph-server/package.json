@@ -16,6 +16,8 @@
         "pg": "8.20.0"
     },
     "devDependencies": {
+        "@cloudflare/containers": "^0.1.1",
+        "@cloudflare/workers-types": "^4.20260307.1",
         "@eslint/js": "^9.39.2",
         "@types/node": "^22.15.0",
         "@types/pg": "8.18.0",
