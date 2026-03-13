@@ -22,4 +22,4 @@ class_name = "GraphApiContainer"
 
 [[env.staging.migrations]]
 tag = "v1"
-new_classes = ["GraphApiContainer"]
+new_sqlite_classes = ["GraphApiContainer"]
