@@ -8,6 +8,8 @@ import {
 
 const ONE_HOUR_IN_SESCONDS = 60 * 60;
 
+something shere
+
 /** A single scrobble from Last.fm's user.getRecentTracks API. */
 export interface RawScrobble {
     artist: string;
@@ -118,6 +120,8 @@ function processLastfmScrobbles(
     for (let i = 0; i < keys.length - 1; i++) {
         if (timestamps[i + 1]! - timestamps[i]! <= ONE_HOUR_IN_SESCONDS) {
             addEdge(nodes, keys[i]!, keys[i + 1]!);
+
+            da
         }
     }
 

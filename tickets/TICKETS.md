@@ -155,3 +155,8 @@
 - [ ] `03-DeployAndVerify.md` — *(manual)* Deploy staging Worker+Container, set secrets, verify, configure custom domain
 - [ ] `04-UpdateTunnelAndDns.md` — Reconfigure tunnel for pipeline-only; swap DNS to CF Pages/Workers *(manual)*
 - [ ] `04-TeardownStaging.md` — Remove staging DB, tunnel routes, Worker env, DNS records
+
+## Phase 16 — PR #70 Bug Triage
+
+- [X] `01-Triage-HardcodedStagingCredentials.md` — Assess hardcoded staging DB password committed in docker-compose.yaml
+- [X] `01-Triage-DockerComposePasswordInterpolation.md` — Assess silent password truncation from unescaped $ in Docker Compose YAML

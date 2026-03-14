@@ -4,21 +4,16 @@ RUN npm install -g pnpm@10.28.0
 
 WORKDIR /app
 
-# Copy monorepo root files needed for install
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+# Copy graph-server files (build context is graph-server/)
+COPY package.json ./
+COPY src ./src
+COPY tsconfig.json ./
 
-# Copy graph-server package.json
-COPY graph-server/package.json graph-server/
-
-# Install dependencies
-RUN cd graph-server && pnpm install --frozen-lockfile
-
-# Copy source
-COPY graph-server/src graph-server/src
-COPY graph-server/tsconfig.json graph-server/
-
-WORKDIR /app/graph-server
+# Install dependencies (no lockfile since context is graph-server/ only)
+RUN pnpm install --no-frozen-lockfile
 
 EXPOSE 8080
 
 CMD ["node", "--import", "tsx", "src/server/container-entry.ts"]
+
+Something else here in a different area
