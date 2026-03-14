@@ -1,0 +1,4 @@
+const tsrStartManifest = () => ({ "routes": { "__root__": { "filePath": "/home/cdxker/work/cdxker/rotations/spotify-integration/graph-frontend/src/routes/__root.tsx", "children": ["/", "/user/$username"], "preloads": ["/assets/main-WOqfbknq.js"], "assets": [] }, "/": { "filePath": "/home/cdxker/work/cdxker/rotations/spotify-integration/graph-frontend/src/routes/index.tsx", "assets": [], "preloads": ["/assets/index-Zi7xv0Tc.js"] }, "/user/$username": { "filePath": "/home/cdxker/work/cdxker/rotations/spotify-integration/graph-frontend/src/routes/user.$username.tsx", "assets": [{ "tag": "link", "attrs": { "rel": "stylesheet", "href": "/assets/user-DEqMBSbC.css", "type": "text/css" } }], "preloads": ["/assets/user._username-BSoxVw1L.js"] } }, "clientEntry": "/assets/main-WOqfbknq.js" });
+export {
+  tsrStartManifest
+};
