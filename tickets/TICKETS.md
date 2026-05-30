@@ -160,5 +160,5 @@
 
 - [X] `00-PhoneRadioScaffold.md` — Create `phone-radio` workspace package with Express, TypeScript, env example, and one exported `phoneRadio` handler wired to `POST /vapi`
 - [X] `01-PhoneRadioSpotifyActions.md` — Implement Spotify token refresh, playlist playback, song search, radio playback, and queueing inside `phoneRadio`
-- [ ] `02-VapiAssistantConfig.md` — Document Vapi tools, prompt/menu behavior, 10s fallback, confirmation loop, and example webhook payloads
+- [X] `02-VapiAssistantConfig.md` — Document Vapi tools, prompt/menu behavior, 10s fallback, confirmation loop, and example webhook payloads
 - [ ] `03-PhoneRadioValidation.md` — Validate Vapi webhook payloads and Spotify actions with manual curl payloads and `pnpm --filter phone-radio build`
