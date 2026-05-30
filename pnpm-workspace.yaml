@@ -1,4 +1,5 @@
 packages:
   - graph-server
   - graph-frontend
+  - phone-radio
   - site
