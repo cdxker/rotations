@@ -56,6 +56,15 @@ export async function phoneRadio(req: Request, res: Response): Promise<void> {
                 args = rawArguments as Record<string, unknown>;
             }
 
+            if (name !== "play_playlist" && name !== "play_radio" && name !== "queue_song") {
+                throw new Error(`Unsupported phone-radio tool: ${name || "(missing)"}.`);
+            }
+
+            const songRef = typeof args.songRef === "string" ? args.songRef.trim() : "";
+            if (name !== "play_playlist" && !songRef) {
+                throw new Error("Missing songRef.");
+            }
+
             const clientId = process.env.SPOTIFY_CLIENT_ID;
             const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
             const refreshToken = process.env.SPOTIFY_PHONE_REFRESH_TOKEN;
@@ -70,10 +79,6 @@ export async function phoneRadio(req: Request, res: Response): Promise<void> {
 
             if (name === "play_playlist" && !playlistUri) {
                 throw new Error("Missing SPOTIFY_PHONE_DEFAULT_PLAYLIST_URI.");
-            }
-
-            if (name !== "play_playlist" && name !== "play_radio" && name !== "queue_song") {
-                throw new Error(`Unsupported phone-radio tool: ${name || "(missing)"}.`);
             }
 
             const tokenResponse = await fetch("https://accounts.spotify.com/api/token", {
@@ -123,11 +128,6 @@ export async function phoneRadio(req: Request, res: Response): Promise<void> {
                     },
                 });
                 continue;
-            }
-
-            const songRef = typeof args.songRef === "string" ? args.songRef.trim() : "";
-            if (!songRef) {
-                throw new Error("Missing songRef.");
             }
 
             const searchResponse = await fetch(
