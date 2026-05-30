@@ -27,6 +27,11 @@ app.use(pinoHttp());
 app.use(express.json());
 
 const tracks = [
+  "/home/cdxker/Music/Ricky/Fyri/imstilldead_.mp3",
+  "/home/cdxker/Music/Ricky/Fyri/_nightofthedead.mp3",
+  "/home/cdxker/Music/Ricky/Fyri/Backfromthe_dead.mp3",
+  "/home/cdxker/Music/Ricky/Loe Shimmy - You Decide (Official Music Video) [dSIGRRS8Zwk].mp3",
+  "/home/cdxker/Music/Ricky/Im Free (feat. PoohShiesty) [QtWPSXHd4ZQ].mp3",
   "/home/cdxker/Music/Drake/DRAKE  - JANICE STFU (LYRICS⧸LETRA) english-spanish [NlfyxSKrjA0].mp3"
 ];
 
@@ -72,7 +77,7 @@ app.post("/answer", (req: Request, res: Response) => {
     mode: "asynchronous",
   });
 
-  for (let index = 0; index < 4; index++) {
+  for (let index = 0; index < tracks.length; index++) {
     const trackUrl = new URL(`/track/${index}`, url);
     trackUrl.searchParams.set("secret", env.VONAGE_API_SECRET);
     ncco.addAction(new Stream(trackUrl.toString(), undefined, undefined, 1));
