@@ -1,173 +1,68 @@
 # Phone Radio
 
-Express webhook server for controlling Spotify from a Vapi phone number.
+Express webhook server for Vonage Voice API inbound calls.
+
+Vonage calls `/answer`, receives an NCCO, then streams the first few MP3 files from `~/Music` into the call.
+During playback, pressing `2` skips to the next track.
 
 ## Run
 
 ```sh
-pnpm --filter phone-radio dev
+pnpm phone-radio
 ```
 
-The server listens on `PHONE_RADIO_PORT`, defaulting to `3010`, and exposes:
-
-```txt
-POST /vapi
-```
+The server listens on `PHONE_RADIO_PORT`, defaulting to `3010`.
 
 ## Environment
 
 ```txt
 PHONE_RADIO_PORT=3010
-SPOTIFY_CLIENT_ID=
-SPOTIFY_CLIENT_SECRET=
-SPOTIFY_PHONE_REFRESH_TOKEN=
-SPOTIFY_PHONE_DEVICE_ID=
-SPOTIFY_PHONE_DEFAULT_PLAYLIST_URI=spotify:playlist:...
+VONAGE_API_SECRET=
+VONAGE_APPLICATION_ID=
+VONAGE_PRIVATE_KEY_PATH=./private.key
 ```
 
-`SPOTIFY_PHONE_REFRESH_TOKEN` must belong to the Spotify account that owns the target Spotify Connect device.
-
-## Vapi Assistant Prompt
-
-Use this behavior for the inbound phone assistant:
+`VONAGE_API_SECRET` is a shared secret. Add it to the Vonage answer URL as a query param:
 
 ```txt
-When the call starts, say:
-"Press 1 for radio, press 2 to play playlist, press 3 to queue a song."
-
-If the caller is silent or does not press a key for 10 seconds, call the play_playlist tool.
-
-If the caller presses 1:
-Ask "What song do you want to listen to?"
-Wait for the caller's spoken answer.
-Say "I got {songRef}. Press 1 to confirm, 2 to try again."
-If the caller presses 1, call play_radio with { songRef }.
-If the caller presses 2, ask for the song again.
-
-If the caller presses 2:
-Call play_playlist.
-
-If the caller presses 3:
-Ask "What song do you want to queue?"
-Wait for the caller's spoken answer.
-Say "I got {songRef}. Press 1 to confirm, 2 to try again."
-If the caller presses 1, call queue_song with { songRef }.
-If the caller presses 2, ask for the song again.
+https://YOUR_NGROK_URL/answer?secret=YOUR_SECRET
 ```
 
-## Vapi Tools
+## Vonage Setup
 
-Configure these custom tools against the server URL:
+Configure your Vonage Voice application:
 
 ```txt
-https://YOUR_PHONE_RADIO_HOST/vapi
+Answer URL: https://YOUR_NGROK_URL/answer?secret=YOUR_SECRET
+HTTP method: GET or POST
+Event URL: optional
 ```
 
-Tools:
+The answer webhook returns:
 
 ```json
 [
   {
-    "name": "play_playlist",
-    "description": "Start the default Spotify playlist.",
-    "parameters": { "type": "object", "properties": {} }
+    "action": "wait",
+    "length": 35
   },
   {
-    "name": "play_radio",
-    "description": "Start playback from a requested song.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "songRef": { "type": "string" }
-      },
-      "required": ["songRef"]
-    }
+    "action": "stream",
+    "streamUrl": ["https://YOUR_NGROK_URL/track/0?secret=YOUR_SECRET"],
+    "loop": 1
   },
   {
-    "name": "queue_song",
-    "description": "Queue a requested song on Spotify.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "songRef": { "type": "string" }
-      },
-      "required": ["songRef"]
-    }
+    "action": "stream",
+    "streamUrl": ["https://YOUR_NGROK_URL/track/1?secret=YOUR_SECRET"],
+    "loop": 1
   }
 ]
 ```
 
-## Example Payloads
+When `/answer` receives the call UUID from Vonage, the server waits 30 seconds and sends out-of-band DTMF digit `1` through the Vonage Voice API. The NCCO waits 35 seconds before starting music.
 
-Playlist:
+The NCCO also registers `/handleDigitPress` for DTMF input. Pressing `2` transfers the active call to a new NCCO starting at the next track.
 
-```json
-{
-  "message": {
-    "type": "tool-calls",
-    "toolCallList": [
-      {
-        "id": "call-playlist",
-        "function": {
-          "name": "play_playlist",
-          "arguments": {}
-        }
-      }
-    ]
-  }
-}
-```
+Put your Vonage private key at `phone-radio/private.key`. It is ignored by git.
 
-Radio:
-
-```json
-{
-  "message": {
-    "type": "tool-calls",
-    "toolCallList": [
-      {
-        "id": "call-radio",
-        "function": {
-          "name": "play_radio",
-          "arguments": { "songRef": "This Must Be the Place Talking Heads" }
-        }
-      }
-    ]
-  }
-}
-```
-
-Queue:
-
-```json
-{
-  "message": {
-    "type": "tool-calls",
-    "toolCallList": [
-      {
-        "id": "call-queue",
-        "function": {
-          "name": "queue_song",
-          "arguments": { "songRef": "Sweet Life Frank Ocean" }
-        }
-      }
-    ]
-  }
-}
-```
-
-Successful responses have this shape:
-
-```json
-{
-  "results": [
-    {
-      "toolCallId": "call-radio",
-      "result": {
-        "ok": true,
-        "message": "Started This Must Be the Place by Talking Heads."
-      }
-    }
-  ]
-}
-```
+Use `VONAGE_PRIVATE_KEY` instead of `VONAGE_PRIVATE_KEY_PATH` only if you want to store the private key directly in `.env`; escaped `\n` line breaks are supported.

@@ -16,6 +16,7 @@ pnpm-debug.log*
 # environment variables
 .env
 .env.production
+phone-radio/private.key
 
 # spotify token storage
 .spotify-tokens.json
