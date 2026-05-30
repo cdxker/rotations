@@ -1,0 +1,255 @@
+---
+title: "Architecture Overview"
+description: "Understand how Rotations is structured"
+---
+
+# Architecture Overview
+
+Rotations is built as a **client-first** music player with server-side API integration. Here's how the pieces fit together.
+
+## High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Browser Storage                       │
+├─────────────────────────────────────────────────────────────┤
+│  TinyBase Store        │       IndexedDB Cache               │
+│  (localStorage)        │    (Offline Audio Files)            │
+└─────────────────────────────────────────────────────────────┘
+             ▲                          ▲
+             │                          │
+┌────────────┴──────────────────────────┴─────────────────────┐
+│              React Context Hooks (State)                     │
+├─────────────────────────────────────────────────────────────┤
+│  PlayerContext → Playback controls, track selection          │
+│  SpotifyContext → Auth, device management                    │
+└─────────────────────────────────────────────────────────────┘
+             ▲                          ▲
+             │                          │
+┌────────────┴──────────────────────────┴─────────────────────┐
+│              React Components (UI Layer)                     │
+├─────────────────────────────────────────────────────────────┤
+│  PlayerView → Main player interface                          │
+│  SpotifyView → Spotify setup & management                    │
+│  TrackList → Queue and playlist display                      │
+└─────────────────────────────────────────────────────────────┘
+             ▲                          ▲
+             │                          │
+┌────────────┴──────────────────────────┴─────────────────────┐
+│              API Routes (Astro Server)                       │
+├─────────────────────────────────────────────────────────────┤
+│  /api/spotify/*  → OAuth, playback, playlists               │
+│  /api/bandcamp/* → Album/track scraping                     │
+│  /api/youtube/*  → Metadata & streaming                     │
+│  /api/audio/*    → Audio proxy & streaming                  │
+└─────────────────────────────────────────────────────────────┘
+             ▲
+             │
+┌────────────┴──────────────────────────────────────────────┐
+│           External Services (Third-party APIs)             │
+├──────────────────────────────────────────────────────────┤
+│  Spotify Web API        → Authorization, playback          │
+│  Bandcamp HTML          → Web scraping                     │
+│  YouTube Data API       → Metadata extraction              │
+│  Cloudinary/CDN         → Audio delivery                   │
+└──────────────────────────────────────────────────────────┘
+```
+
+## Layer Breakdown
+
+### 1. Storage Layer
+
+#### TinyBase (Structured Data)
+- **Location:** `site/src/lib/store.ts`
+- **Purpose:** Persistent storage for playlists, tracks, and user preferences
+- **Persistence:** localStorage
+- **Scope:** Survives browser restarts
+
+```typescript
+// Typical data stored
+{
+  playlists: [
+    { id, name, trackIds, createdAt, source }
+  ],
+  tracks: [
+    { id, title, artist, sourceUrl, duration, metadata }
+  ],
+  playerState: {
+    currentPlaylistId,
+    currentTrackIndex,
+    isPlaying,
+    volume
+  }
+}
+```
+
+#### IndexedDB (Audio Cache)
+- **Location:** `site/src/lib/musicCache.ts`
+- **Purpose:** Store audio blobs for offline playback
+- **Scope:** Large files, survives browser restarts
+- **Cleanup:** Automatic when quota exceeded
+
+### 2. State Management Layer
+
+#### PlayerContext
+- **File:** `site/src/hooks/PlayerContext.tsx`
+- **Responsibilities:**
+  - Current playback state (track, position, playing)
+  - Playback controls (play, pause, next, previous)
+  - Queue management
+  - Volume and playback settings
+
+#### SpotifyContext
+- **File:** `site/src/hooks/SpotifyContext.tsx`
+- **Responsibilities:**
+  - Spotify OAuth state (token, user info)
+  - Device selection for playback
+  - Playlist fetching and caching
+  - Authorization flow
+
+### 3. UI Component Layer
+
+#### Main Pages
+- **`/` and `/player`** → PlayerView (main interface)
+- **`/spotify`** → SpotifyView (authentication)
+- **`/spotify/add`** → SpotifyAddView (playlist selection)
+
+#### Key Components
+| Component | Purpose |
+|-----------|---------|
+| `PlayerView` | Main player UI, layout coordination |
+| `TrackList` | Displays queue/playlist tracks |
+| `TimeSlider` | Playback progress control |
+| `SideTrack` | Related/recommended tracks |
+| `SpotifyAddView` | Add playlists from Spotify |
+| `PlaylistsView` | Manage multiple playlists |
+
+### 4. API Layer
+
+#### Spotify Routes
+```
+GET  /api/spotify/authorize          → Redirect to Spotify login
+GET  /api/spotify/callback           → OAuth callback, store token
+GET  /api/spotify/me                 → Current user info
+POST /api/spotify/play               → Trigger playback on device
+GET  /api/spotify/playlists          → List user's playlists
+GET  /api/spotify/playlists/[id]/tracks → Fetch playlist tracks
+POST /api/spotify/scrape             → Extract playlist metadata
+```
+
+#### Bandcamp Routes
+```
+POST /api/bandcamp/scrape            → Extract album/track data
+```
+
+#### YouTube Routes
+```
+POST /api/youtube/scrape             → Get video metadata
+GET  /api/youtube/stream             → Stream audio from YouTube
+```
+
+#### Audio Routes
+```
+GET  /api/audio/proxy                → Proxy external audio files
+```
+
+## Data Flow
+
+### Loading a Playlist
+
+<Steps>
+  <Step title="User navigates to Spotify integration">
+    `SpotifyView` component loads, checks for stored auth token
+  </Step>
+  <Step title="If no token, OAuth flow begins">
+    Redirect to `/api/spotify/authorize` → Spotify login → `/api/spotify/callback`
+  </Step>
+  <Step title="Fetch playlists">
+    `SpotifyContext` calls `/api/spotify/playlists`
+  </Step>
+  <Step title="User selects playlists">
+    `SpotifyAddView` shows list, user clicks to add
+  </Step>
+  <Step title="Fetch tracks">
+    `/api/spotify/playlists/[id]/tracks` retrieves songs
+  </Step>
+  <Step title="Store in TinyBase">
+    Tracks saved to local store (survives refresh)
+  </Step>
+  <Step title="Display in PlayerView">
+    `TrackList` renders stored tracks, ready to play
+  </Step>
+</Steps>
+
+### Playing a Track
+
+<Steps>
+  <Step title="User clicks track in TrackList">
+    `PlayerContext.setCurrentTrack()` updates state
+  </Step>
+  <Step title="Determine source">
+    Check track.source (spotify, bandcamp, youtube, etc.)
+  </Step>
+  <Step title="Initialize playback">
+    For Spotify: POST `/api/spotify/play` to active device
+    For others: Load audio URL and play via HTML Audio API
+  </Step>
+  <Step title="Cache audio">
+    `musicCache.ts` downloads and stores in IndexedDB for offline
+  </Step>
+  <Step title="Update time slider">
+    `TimeSlider` tracks playback position
+  </Step>
+</Steps>
+
+## Key Technologies
+
+### Frontend
+- **Astro 5** - File-based routing, SSR with React
+- **React 19** - Component-based UI
+- **TypeScript** - Type safety
+- **Tailwind CSS** - Responsive styling
+- **shadcn/ui** - Pre-built components
+
+### Data Management
+- **TinyBase** - Client-side database
+- **IndexedDB** - Blob storage
+- **Context API** - State management
+
+### APIs & Integrations
+- **Spotify Web API** - Music streaming
+- **Web Scraping** - Bandcamp, YouTube metadata
+- **Service Worker** - Offline support
+
+## File Structure
+
+```
+site/src/
+├── components/        # React components
+├── hooks/             # Context hooks (PlayerContext, SpotifyContext)
+├── lib/               # Utilities (store, musicCache, associations)
+├── pages/             # Astro pages + API routes
+├── shared/            # Shared types (types.ts, spotify-sdk.d.ts)
+└── styles/            # Global CSS
+
+public/
+└── sw.js              # Service worker for offline
+```
+
+## Best Practices
+
+<Tip>
+  **Single Source of Truth:** PlayerContext and SpotifyContext are the source of truth for their domains. Always update context, not local component state, for shared data.
+</Tip>
+
+<Tip>
+  **Async Operations:** Use `useEffect` to handle API calls. Always clean up subscriptions to prevent memory leaks.
+</Tip>
+
+<Tip>
+  **Caching:** IndexedDB is used for large audio files. Always check cache before fetching from network.
+</Tip>
+
+<Warning>
+  **localStorage Limits:** TinyBase stores data in localStorage (~5MB limit). Monitor for quota exceeded errors.
+</Warning>

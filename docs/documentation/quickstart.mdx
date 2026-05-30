@@ -1,0 +1,123 @@
+---
+title: "Quickstart"
+description: "Get Rotations running locally in minutes"
+---
+
+# Quickstart
+
+Get up and running with Rotations in just a few steps.
+
+## Prerequisites
+
+- **Node.js** 18+ (or 20 LTS)
+- **Yarn** 1.22+
+- A **Spotify Developer** account (for API credentials)
+- Basic knowledge of **TypeScript** and **React**
+
+## Installation
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/yourusername/rotations.git
+    cd rotations/main
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    ```bash
+    yarn install
+    ```
+  </Step>
+
+  <Step title="Create environment file">
+    Copy the example environment file and add your credentials:
+
+    ```bash
+    cp .env.example .env.local
+    ```
+
+    Then update `.env.local` with:
+
+    ```env
+    PUBLIC_SPOTIFY_CLIENT_ID=your_client_id_here
+    SPOTIFY_CLIENT_SECRET=your_client_secret_here
+    SPOTIFY_REDIRECT_URI=http://localhost:3000/api/spotify/callback
+    ```
+
+    <Note>
+      Get your Spotify credentials from the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+    </Note>
+  </Step>
+
+  <Step title="Start the development server">
+    ```bash
+    yarn dev
+    ```
+
+    Open [http://localhost:3000](http://localhost:3000) in your browser.
+  </Step>
+</Steps>
+
+## Verify Installation
+
+You should see:
+
+1. The Rotations player interface loads
+2. Spotify login option is available
+3. Browser DevTools show no console errors
+4. Service worker is registered (offline support enabled)
+
+## Common Issues
+
+<Accordion title="Port 3000 already in use">
+  Change the port by running:
+  ```bash
+  yarn dev -- --port 3001
+  ```
+</Accordion>
+
+<Accordion title="Spotify login fails">
+  - Verify `SPOTIFY_CLIENT_ID` matches your Dashboard
+  - Check `SPOTIFY_REDIRECT_URI` is registered in Dashboard settings
+  - Ensure `.env.local` is in the project root
+</Accordion>
+
+<Accordion title="Service worker not registering">
+  - Clear browser cache (Cmd+Shift+Delete)
+  - Ensure you're on `http://localhost` (not `127.0.0.1`)
+  - Check browser console for HTTPS warnings
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Learn the Architecture"
+    href="/documentation/architecture"
+    icon="blueprint"
+  >
+    Understand how components and APIs work together
+  </Card>
+  <Card
+    title="Explore Components"
+    href="/documentation/development/components"
+    icon="boxes"
+  >
+    Deep dive into UI component structure
+  </Card>
+  <Card
+    title="Set Up Spotify"
+    href="/documentation/integrations/spotify"
+    icon="music"
+  >
+    Configure Spotify playlist integration
+  </Card>
+  <Card
+    title="Add a Music Source"
+    href="/documentation/integrations/adding-sources"
+    icon="plus"
+  >
+    Learn how to integrate new music services
+  </Card>
+</CardGroup>
