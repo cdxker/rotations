@@ -1,25 +1,6 @@
 import "dotenv/config";
+import { type } from "arktype";
 import express, { type Request, type Response } from "express";
-
-interface VapiToolCall {
-    id?: string;
-    toolCallId?: string;
-    name?: string;
-    arguments?: unknown;
-    parameters?: unknown;
-    function?: {
-        name?: string;
-        arguments?: unknown;
-    };
-}
-
-interface VapiWebhookBody {
-    message?: {
-        type?: string;
-        toolCallList?: VapiToolCall[];
-        toolCalls?: VapiToolCall[];
-    };
-}
 
 interface SpotifyTrack {
     id: string;
@@ -34,13 +15,36 @@ interface SpotifySearchResponse {
     };
 }
 
+const vapiToolCallSchema = type({
+    "id?": "string",
+    "toolCallId?": "string",
+    "name?": "string",
+    "arguments?": "unknown",
+    "parameters?": "unknown",
+    "function?": {
+        "name?": "string",
+        "arguments?": "unknown",
+    },
+});
+
+const vapiWebhookSchema = type({
+    message: type({
+        type: "string",
+        toolCallList: vapiToolCallSchema.array(),
+    }).or({
+        type: "string",
+        toolCalls: vapiToolCallSchema.array(),
+    }),
+});
+
 export async function phoneRadio(req: Request, res: Response): Promise<void> {
-    const body = req.body as VapiWebhookBody;
-    const toolCalls = Array.isArray(body.message?.toolCallList)
-        ? body.message.toolCallList
-        : Array.isArray(body.message?.toolCalls)
-          ? body.message.toolCalls
-          : [];
+    const body = vapiWebhookSchema(req.body);
+    if (body instanceof type.errors) {
+        res.status(400).json({ error: `Invalid Vapi webhook body: ${body.summary}` });
+        return;
+    }
+
+    const toolCalls = "toolCallList" in body.message ? body.message.toolCallList : body.message.toolCalls;
     const results: { toolCallId: string; result: unknown }[] = [];
 
     for (const toolCall of toolCalls) {
