@@ -27,13 +27,35 @@ app.use(pinoHttp());
 app.use(express.json());
 
 const tracks = [
+  "/home/cdxker/Music/Ricky/2MYGRAVE & LUCKI - Lost Time (prod. Plu2o Nash) [NGgtGPwo38A].mp3",
+  "/home/cdxker/Music/Ricky/LUCKI - Str8 Syrup (Official Visualizer) [_xC2eRwfg6E].mp3",
+  "/home/cdxker/Music/Ricky/MurdaGang PB - 5k 6k (Official Video) [sy0-yjWyOqg].mp3",
+  "/home/cdxker/Music/Ricky/YoungBoy Never Broke Again - Seeming Like It [Official Audio] [Ol6x1bbVn9g].mp3",
+  "/home/cdxker/Music/Ricky/6LACK - PRBLMS [Official Music Video] [fS9m0Ac8PCU].mp3",
+  "/home/cdxker/Music/Ricky/Lil Yachty - Child Boy (FREESTYLE) [lCco3xoy8cY].mp3",
+  "/home/cdxker/Music/Ricky/Z-RO - Lonely [H5srCqjVnw0].mp3",
+  "/home/cdxker/Music/Ricky/DeeBaby - Never Gon End ( Official Video ) [0Gv0avlPA4E].mp3",
+  "/home/cdxker/Music/Ricky/Drake - What Did I Miss？ (Official Music Video) with Lyrics [77P9wJGmAIE].mp3",
+  "/home/cdxker/Music/Ricky/Kevin Gates - Stop Lyin [Official Audio] [Z6BHYQ10a8Y].mp3",
+  "/home/cdxker/Music/Ricky/UGK (Underground Kingz) - Da Game Been Good To Me (Official Video) [6DivB-ih4Rw].mp3",
+  "/home/cdxker/Music/Ricky/Loe Shimmy - You Decide (Official Music Video) [dSIGRRS8Zwk].mp3",
+  "/home/cdxker/Music/Ricky/Kodak Black - Super Gremlin [Official Music Video] [kiB9qk4gnt4].mp3",
+  "/home/cdxker/Music/Ricky/Kodak Black - Cyber Truck [Official Video] [O9x1QBbB7QM].mp3",
+  // "/home/cdxker/Music/Ricky/Pooh Shiesty - FDO [Official Music Video] [MPuK06zUIhc].mp3",
+  "/home/cdxker/Music/Ricky/A.P.E [m0VUP8h5Dw0].mp3",
+  "/home/cdxker/Music/Ricky/Im Free (feat. PoohShiesty) [QtWPSXHd4ZQ].mp3",
+  // "/home/cdxker/Music/Ricky/Make Them Know [GmoK54ygg_I].mp3", // Drake
+  "/home/cdxker/Music/Ricky/kendrick lamar - bitch don't kill my vibe (slowed + reverb) [jmV0TOAtaHU].mp3",
+  "/home/cdxker/Music/Ricky/Think Its Over [-hOx0ct9Lkk].mp3",
+  "/home/cdxker/Music/Ricky/Jean Grey (produced by kyslingo & lammbeats) [l05j3Mz5wqQ].mp3",
+  "/home/cdxker/Music/Ricky/Dey Lying [7CePUgAQzPw].mp3",
   "/home/cdxker/Music/Ricky/Fyri/imstilldead_.mp3",
   "/home/cdxker/Music/Ricky/Fyri/_nightofthedead.mp3",
   "/home/cdxker/Music/Ricky/Fyri/Backfromthe_dead.mp3",
-  "/home/cdxker/Music/Ricky/Loe Shimmy - You Decide (Official Music Video) [dSIGRRS8Zwk].mp3",
-  "/home/cdxker/Music/Ricky/Im Free (feat. PoohShiesty) [QtWPSXHd4ZQ].mp3",
   "/home/cdxker/Music/Drake/DRAKE  - JANICE STFU (LYRICS⧸LETRA) english-spanish [NlfyxSKrjA0].mp3"
 ];
+
+
 
 // Answer phone 
 // 
@@ -71,7 +93,7 @@ app.post("/answer", (req: Request, res: Response) => {
     void voiceClient.playDTMF(uuid, "1");
   }, 5_000);
 
-  const ncco = new NCCOBuilder().addAction(new Wait(2)).addAction({
+  const callControl = new NCCOBuilder().addAction(new Wait(2)).addAction({
     action: "input",
     type: ["dtmf"],
     mode: "asynchronous",
@@ -80,10 +102,10 @@ app.post("/answer", (req: Request, res: Response) => {
   for (let index = 0; index < tracks.length; index++) {
     const trackUrl = new URL(`/track/${index}`, url);
     trackUrl.searchParams.set("secret", env.VONAGE_API_SECRET);
-    ncco.addAction(new Stream(trackUrl.toString(), undefined, undefined, 1));
+    callControl.addAction(new Stream(trackUrl.toString(), undefined, undefined, 1));
   }
 
-  res.json(ncco.build());
+  res.json(callControl.build());
 });
 
 
