@@ -155,3 +155,10 @@
 - [ ] `03-DeployAndVerify.md` — *(manual)* Deploy staging Worker+Container, set secrets, verify, configure custom domain
 - [ ] `04-UpdateTunnelAndDns.md` — Reconfigure tunnel for pipeline-only; swap DNS to CF Pages/Workers *(manual)*
 - [ ] `04-TeardownStaging.md` — Remove staging DB, tunnel routes, Worker env, DNS records
+
+## Phase 16 — Phone Radio
+
+- [X] `00-PhoneRadioScaffold.md` — Create `phone-radio` workspace package with Express, TypeScript, env example, and one exported `phoneRadio` handler wired to `POST /vapi`
+- [ ] `01-PhoneRadioSpotifyActions.md` — Implement Spotify token refresh, playlist playback, song search, radio playback, and queueing inside `phoneRadio`
+- [ ] `02-VapiAssistantConfig.md` — Document Vapi tools, prompt/menu behavior, 10s fallback, confirmation loop, and example webhook payloads
+- [ ] `03-PhoneRadioValidation.md` — Validate Vapi webhook payloads and Spotify actions with manual curl payloads and `pnpm --filter phone-radio build`
