@@ -1,0 +1,4 @@
+interface:
+  display_name: "Add Phone Radio Song"
+  short_description: "Download songs and update phone radio"
+  default_prompt: "Use $add-phone-radio-song to download a song and add it to phone radio."

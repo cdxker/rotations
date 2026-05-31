@@ -11,7 +11,19 @@ During playback, pressing `2` skips to the next track.
 pnpm phone-radio
 ```
 
-The server listens on `PHONE_RADIO_PORT`, defaulting to `3010`.
+This runs the compiled production entrypoint without hot reload. Build it first with:
+
+```sh
+pnpm --filter phone-radio build
+```
+
+For local development with hot reload:
+
+```sh
+pnpm phone-radio:dev
+```
+
+The production command listens on `PHONE_RADIO_PORT`, defaulting to `3010`. The root development command sets `PHONE_RADIO_PORT=3030`.
 
 ## Environment
 
