@@ -25,6 +25,7 @@ private.key.local
 
 # cloudflare tunnel credentials
 .tunnel-credentials
+.tunnel-radio-credentials
 
 # macOS-specific files
 .DS_Store
