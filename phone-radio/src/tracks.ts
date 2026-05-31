@@ -1,4 +1,6 @@
 export const tracks = [
+  // "/home/cdxker/Music/Ricky/Michael Earl Craig reads ＂Bluebirds＂ [JumOzP02wrQ].mp3",
+  // "/home/cdxker/Music/Ricky/Working it out [02NYWy8yNAM].mp3",
   "/home/cdxker/Music/Ricky/DestroyLonely- too many [zyELJlR2ucc].mp3",
   "/home/cdxker/Music/Ricky/6LACK - PRBLMS [Official Music Video] [fS9m0Ac8PCU].mp3",
   "/home/cdxker/Music/Ricky/LUCKI - Super Urus (Official Video) [fIrSkilUvHw].mp3",

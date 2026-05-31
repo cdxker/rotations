@@ -155,3 +155,7 @@
 - [ ] `02-ContainerWorkerEntry.md` — Create `container-worker.ts` CF Worker that manages the container
 - [ ] `02-UpdateWranglerToml.md` — Add containers + durable objects config to `wrangler.toml` staging env
 - [ ] `03-DeployAndVerify.md` — *(manual)* Deploy staging Worker+Container, set secrets, verify, configure custom domain
+
+## Phase 16 — Phone Radio
+
+- [X] `00-RedisSingleTrackQueue.md` — Store per-call track index in Redis and queue one song at a time for skip behavior
