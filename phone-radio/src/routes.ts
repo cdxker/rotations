@@ -12,11 +12,13 @@ const answerPhoneRequestParser = type({
   body: {
     uuid: "string",
   },
+  locals: {
+    baseUrl: "string",
+  },
 });
 
 routes.post("/answer", async (req, res) => {
   const request = answerPhoneRequestParser(req);
-  const url = req.locals.baseUrl;
 
   if (request instanceof type.errors) {
     res.status(400).json({
@@ -24,7 +26,11 @@ routes.post("/answer", async (req, res) => {
     });
     return;
   }
-  const { uuid } = request.body;
+  const {
+    body: { uuid },
+    locals: { baseUrl: url },
+  } = request;
+
   await redisClient.set(`listener:${uuid}:track`, "0");
 
   setTimeout(() => {
@@ -47,14 +53,7 @@ routes.post("/answer", async (req, res) => {
       eventUrl: [`${url}/input/digit?uuid=${uuid}`],
       eventMethod: "POST",
     })
-    .addAction(
-      new Stream(
-        `${url}/track/0?secret=${vonageApiSecret}`,
-        undefined,
-        undefined,
-        1,
-      ),
-    )
+    .addAction(new Stream(`${url}/track/0?secret=${vonageApiSecret}`))
     .addAction(new Notify({ uuid }, `${url}/track/finished/${uuid}`, "POST"));
 
   res.json(callControl.build());
@@ -63,6 +62,9 @@ routes.post("/answer", async (req, res) => {
 const finishedTrackRequestParser = type({
   params: {
     uuid: "string",
+  },
+  locals: {
+    baseUrl: "string",
   },
 });
 
@@ -75,7 +77,11 @@ routes.post("/track/finished/:uuid", async (req, res) => {
     return;
   }
 
-  const { uuid } = request.params;
+  const {
+    params: { uuid },
+    locals: { baseUrl: url },
+  } = request;
+
   const currentTrackIndex = parseInt(
     (await redisClient.get(`listener:${uuid}:track`)) ?? "",
   );
@@ -85,10 +91,8 @@ routes.post("/track/finished/:uuid", async (req, res) => {
       : 0;
 
   await redisClient.set(`listener:${uuid}:track`, nextTrackIndex.toString());
-  const url = req.locals.baseUrl;
 
   const callControl = new NCCOBuilder()
-    .addAction(new Wait(2))
     .addAction({
       action: "input",
       type: ["dtmf"],
@@ -97,14 +101,9 @@ routes.post("/track/finished/:uuid", async (req, res) => {
       eventMethod: "POST",
     })
     .addAction(
-      new Stream(
-        `${url}/track/${nextTrackIndex}?secret=${vonageApiSecret}`,
-        undefined,
-        undefined,
-        1,
-      ),
+      new Stream(`${url}/track/${nextTrackIndex}?secret=${vonageApiSecret}`),
     )
-    .addAction(new Notify({ uuid }, `${url}/track/finished/${uuid}`, "POST"));
+    .addAction(new Notify({}, `${url}/track/finished/${uuid}`, "POST"));
 
   res.json(callControl.build());
 });
@@ -119,6 +118,9 @@ const digitInputRequestParser = type({
       "digits?": "string",
     },
   },
+  locals: {
+    baseUrl: "string",
+  },
 });
 
 routes.post("/input/digit", async (req, res) => {
@@ -130,7 +132,11 @@ routes.post("/input/digit", async (req, res) => {
     return;
   }
 
-  const { uuid } = request.query;
+  const {
+    locals: { baseUrl: url },
+    query: { uuid },
+  } = request;
+
   const digit = request.body.digit ?? request.body.dtmf?.digits;
 
   if (digit === "2") {
@@ -142,7 +148,6 @@ routes.post("/input/digit", async (req, res) => {
         ? (currentTrackIndex + 1) % tracks.length
         : 0;
 
-    const url = req.locals.baseUrl;
     const nextCallControl = new NCCOBuilder()
       .addAction({
         action: "input",
