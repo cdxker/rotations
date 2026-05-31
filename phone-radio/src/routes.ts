@@ -54,7 +54,7 @@ routes.post("/answer", async (req, res) => {
       eventMethod: "POST",
     })
     .addAction(new Stream(`${url}/track/0?secret=${vonageApiSecret}`))
-    .addAction(new Notify({ uuid }, `${url}/track/finished/${uuid}`, "POST"));
+    .addAction(new Notify({ uuid }, `${url}/track/finished/${uuid}/0`, "POST"));
 
   res.json(callControl.build());
 });
@@ -62,13 +62,14 @@ routes.post("/answer", async (req, res) => {
 const finishedTrackRequestParser = type({
   params: {
     uuid: "string",
+    songIndex: "string",
   },
   locals: {
     baseUrl: "string",
   },
 });
 
-routes.post("/track/finished/:uuid", async (req, res) => {
+routes.post("/track/finished/:uuid/:songIndex", async (req, res) => {
   const request = finishedTrackRequestParser(req);
   if (request instanceof type.errors) {
     res.status(400).json({
@@ -78,13 +79,31 @@ routes.post("/track/finished/:uuid", async (req, res) => {
   }
 
   const {
-    params: { uuid },
+    params: { songIndex, uuid },
     locals: { baseUrl: url },
   } = request;
 
+  const finishedTrackIndex = parseInt(songIndex);
   const currentTrackIndex = parseInt(
     (await redisClient.get(`listener:${uuid}:track`)) ?? "",
   );
+
+  if (!Number.isInteger(finishedTrackIndex)) {
+    res.status(400).json({
+      error: "Invalid finished track index.",
+    });
+    return;
+  }
+
+  if (currentTrackIndex !== finishedTrackIndex) {
+    req.log.info(
+      { currentTrackIndex, finishedTrackIndex, uuid },
+      "Ignored duplicate finished track webhook",
+    );
+    res.status(204).send();
+    return;
+  }
+
   const nextTrackIndex =
     Number.isInteger(currentTrackIndex) && tracks.length > 0
       ? (currentTrackIndex + 1) % tracks.length
@@ -103,7 +122,9 @@ routes.post("/track/finished/:uuid", async (req, res) => {
     .addAction(
       new Stream(`${url}/track/${nextTrackIndex}?secret=${vonageApiSecret}`),
     )
-    .addAction(new Notify({}, `${url}/track/finished/${uuid}`, "POST"));
+    .addAction(
+      new Notify({}, `${url}/track/finished/${uuid}/${nextTrackIndex}`, "POST"),
+    );
 
   res.json(callControl.build());
 });
@@ -164,7 +185,13 @@ routes.post("/input/digit", async (req, res) => {
           1,
         ),
       )
-      .addAction(new Notify({ uuid }, `${url}/track/finished/${uuid}`, "POST"))
+      .addAction(
+        new Notify(
+          { uuid },
+          `${url}/track/finished/${uuid}/${nextTrackIndex}`,
+          "POST",
+        ),
+      )
       .build();
 
     try {
