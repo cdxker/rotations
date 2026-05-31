@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import { pino, destination } from "pino";
 import { pinoHttp } from "pino-http";
 import { routes } from "./routes.js";
 import { env } from "./env.js";
@@ -18,9 +19,40 @@ const app = express();
 
 app.use(
   pinoHttp({
+    logger: pino(
+      {
+        level: "info",
+        transport: {
+          target: "pino-pretty",
+          options: {
+            colorize: true,
+            translateTime: "HH:MM:ss.l",
+            ignore: "pid,hostname,reqId,req,res,responseTime",
+          },
+        },
+      },
+      destination(1),
+    ),
     quietReqLogger: true,
-    transport: {
-      target: "pino-pretty",
+    serializers: {
+      req(req) {
+        return {
+          method: req.method,
+          url: req.url,
+          userAgent: req.headers["user-agent"],
+        };
+      },
+      res(res) {
+        return {
+          statusCode: res.statusCode,
+        };
+      },
+    },
+    customSuccessMessage(req, res, responseTime) {
+      return `${res.statusCode} ${res.statusMessage} ${req.method} ${req.url} ${responseTime}ms`;
+    },
+    customErrorMessage(req, res, error) {
+      return `${res.statusCode} ${res.statusMessage} ${req.method} ${req.url}: ${error.message}`;
     },
   }),
 );
