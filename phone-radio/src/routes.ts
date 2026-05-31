@@ -2,7 +2,7 @@ import { stat } from "node:fs/promises";
 import { NCCOBuilder, Notify, Stream, Wait } from "@vonage/voice";
 import { type } from "arktype";
 import { Router } from "express";
-import type { Request, Router as ExpressRouter } from "express";
+import type { Router as ExpressRouter } from "express";
 import { redisClient, voiceClient, vonageApiSecret } from "./clients.js";
 import { tracks } from "./tracks.js";
 
@@ -16,7 +16,7 @@ const answerPhoneRequestParser = type({
 
 routes.post("/answer", async (req, res) => {
   const request = answerPhoneRequestParser(req);
-  const url = baseUrl(req);
+  const url = req.locals.baseUrl;
 
   if (request instanceof type.errors) {
     res.status(400).json({
@@ -76,14 +76,16 @@ routes.post("/track/finished/:uuid", async (req, res) => {
   }
 
   const { uuid } = request.params;
-  const currentTrackIndex = parseInt((await redisClient.get(`listener:${uuid}:track`)) ?? "0", 10);
+  const currentTrackIndex = parseInt(
+    (await redisClient.get(`listener:${uuid}:track`)) ?? "",
+  );
   const nextTrackIndex =
     Number.isInteger(currentTrackIndex) && tracks.length > 0
       ? (currentTrackIndex + 1) % tracks.length
       : 0;
 
   await redisClient.set(`listener:${uuid}:track`, nextTrackIndex.toString());
-  const url = baseUrl(req);
+  const url = req.locals.baseUrl;
 
   const callControl = new NCCOBuilder()
     .addAction(new Wait(2))
@@ -131,66 +133,58 @@ routes.post("/input/digit", async (req, res) => {
   const { uuid } = request.query;
   const digit = request.body.digit ?? request.body.dtmf?.digits;
 
-  req.log.info(
-    {
-      uuid,
-      digit,
-    },
-    "Parsed Vonage DTMF digit webhook",
-  );
-
-  if (digit !== "2") {
-    res.status(204).send();
-    return;
-  }
-
-  const currentTrackIndex = parseInt((await redisClient.get(`listener:${uuid}:track`)) ?? "0", 10);
-  const nextTrackIndex =
-    Number.isInteger(currentTrackIndex) && tracks.length > 0
-      ? (currentTrackIndex + 1) % tracks.length
-      : 0;
-
-  await redisClient.set(`listener:${uuid}:track`, nextTrackIndex.toString());
-  req.log.info(
-    { uuid, currentTrackIndex, nextTrackIndex },
-    "Skipping to next phone radio track",
-  );
-  const url = baseUrl(req);
-  const nextCallControl = new NCCOBuilder()
-    .addAction(new Wait(2))
-    .addAction({
-      action: "input",
-      type: ["dtmf"],
-      mode: "asynchronous",
-      eventUrl: [`${url}/input/digit?uuid=${uuid}`],
-      eventMethod: "POST",
-    })
-    .addAction(
-      new Stream(
-        `${url}/track/${nextTrackIndex}?secret=${vonageApiSecret}`,
-        undefined,
-        undefined,
-        1,
-      ),
-    )
-    .addAction(new Notify({ uuid }, `${url}/track/finished/${uuid}`, "POST"))
-    .build();
-
-  try {
-    await voiceClient.transferCallWithNCCO(uuid, nextCallControl);
-    req.log.info(
-      { uuid, nextTrackIndex },
-      "Transferred call to skipped phone radio track",
+  if (digit === "2") {
+    const currentTrackIndex = parseInt(
+      (await redisClient.get(`listener:${uuid}:track`)) ?? "",
     );
-    res.status(204).send();
-  } catch (error: unknown) {
-    req.log.error(
-      { error, uuid, nextTrackIndex },
-      "Failed to transfer call to skipped phone radio track",
-    );
-    res.status(502).json({
-      error: "Failed to transfer call to skipped track.",
-    });
+    const nextTrackIndex =
+      Number.isInteger(currentTrackIndex) && tracks.length > 0
+        ? (currentTrackIndex + 1) % tracks.length
+        : 0;
+
+    const url = req.locals.baseUrl;
+    const nextCallControl = new NCCOBuilder()
+      .addAction({
+        action: "input",
+        type: ["dtmf"],
+        mode: "asynchronous",
+        eventUrl: [`${url}/input/digit?uuid=${uuid}`],
+        eventMethod: "POST",
+      })
+      .addAction(
+        new Stream(
+          `${url}/track/${nextTrackIndex}?secret=${vonageApiSecret}`,
+          undefined,
+          undefined,
+          1,
+        ),
+      )
+      .addAction(new Notify({ uuid }, `${url}/track/finished/${uuid}`, "POST"))
+      .build();
+
+    try {
+      await voiceClient.transferCallWithNCCO(uuid, nextCallControl);
+
+      await redisClient.set(
+        `listener:${uuid}:track`,
+        nextTrackIndex.toString(),
+      );
+
+      req.log.info(
+        { uuid, nextTrackIndex },
+        "Transferred call to skipped phone radio track",
+      );
+
+      res.status(204).send();
+    } catch (error: unknown) {
+      req.log.error(
+        { error, uuid, nextTrackIndex },
+        "Failed to transfer call to skipped phone radio track",
+      );
+      res.status(502).json({
+        error: "Failed to transfer call to skipped track.",
+      });
+    }
   }
 });
 
@@ -226,9 +220,3 @@ routes.get("/track/:index", async (req, res) => {
     res.status(404).send("Track file not found.");
   }
 });
-
-function baseUrl(req: Request): string {
-  const proto = req.header("x-forwarded-proto") ?? req.protocol;
-  const host = req.header("x-forwarded-host") ?? req.header("host");
-  return `${proto}://${host}`;
-}
