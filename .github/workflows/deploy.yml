@@ -21,4 +21,4 @@ jobs:
           script: |
             tmux send-keys -t rotations C-c
             sleep 2
-            tmux send-keys -t rotations "git pull && yarn build && yarn preview" Enter
+            tmux send-keys -t rotations "git pull --rebase && yarn build && yarn preview" Enter
