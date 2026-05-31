@@ -6,7 +6,14 @@ import { env } from "./env.js";
 
 const app = express();
 
-app.use(pinoHttp());
+app.use(
+  pinoHttp({
+    quietReqLogger: true,
+    transport: {
+      target: "pino-pretty",
+    },
+  }),
+);
 app.use(express.json());
 app.use(routes);
 
