@@ -159,3 +159,4 @@
 ## Phase 16 — Phone Radio
 
 - [X] `00-RedisSingleTrackQueue.md` — Store per-call track index in Redis and queue one song at a time for skip behavior
+- [X] `01-SkipTrackIndexTts.md` — Announce the queued song index before streaming a skipped track

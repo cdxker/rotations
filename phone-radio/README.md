@@ -3,7 +3,7 @@
 Express webhook server for Vonage Voice API inbound calls.
 
 Vonage calls `/answer`, receives an NCCO, then streams MP3 files from `~/Music` into the call.
-During playback, pressing `2` skips to the next track.
+During playback, pressing `1` queues the previous track and pressing `2` skips to the next track.
 
 ## Run
 
@@ -84,7 +84,7 @@ The answer webhook returns:
 
 When `/answer` receives the call UUID from Vonage, the server stores `listener:{uuid}:track` in Redis and queues one track. The notify callback advances that Redis index and returns the next one-track NCCO.
 
-The NCCO also registers `/input/digit` for DTMF input. Pressing `2` advances the Redis index and transfers the active call to a new NCCO starting at the next track.
+The NCCO also registers `/input/digit` for DTMF input. Pressing `1` moves the Redis index backward and transfers the active call to a new NCCO that announces the queued song index before starting the previous track. Pressing `2` advances the Redis index and transfers the active call to a new NCCO that announces the queued song index before starting the next track.
 
 Put your Vonage private key at `phone-radio/private.key`. It is ignored by git.
 

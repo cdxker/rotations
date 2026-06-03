@@ -160,13 +160,15 @@ routes.post("/input/digit", async (req, res) => {
 
   const digit = request.body.digit ?? request.body.dtmf?.digits;
 
-  if (digit === "2") {
+  if (digit === "1" || digit === "2") {
     const currentTrackIndex = parseInt(
       (await redisClient.get(`listener:${uuid}:track`)) ?? "",
     );
     const nextTrackIndex =
       Number.isInteger(currentTrackIndex) && tracks.length > 0
-        ? (currentTrackIndex + 1) % tracks.length
+        ? digit === "1"
+          ? (currentTrackIndex - 1 + tracks.length) % tracks.length
+          : (currentTrackIndex + 1) % tracks.length
         : 0;
 
     const nextCallControl = new NCCOBuilder()
@@ -176,6 +178,10 @@ routes.post("/input/digit", async (req, res) => {
         mode: "asynchronous",
         eventUrl: [`${url}/input/digit?uuid=${uuid}`],
         eventMethod: "POST",
+      })
+      .addAction({
+        action: "talk",
+        text: `Song ${nextTrackIndex + 1}.`,
       })
       .addAction(
         new Stream(
@@ -203,18 +209,18 @@ routes.post("/input/digit", async (req, res) => {
       );
 
       req.log.info(
-        { uuid, nextTrackIndex },
-        "Transferred call to skipped phone radio track",
+        { digit, uuid, nextTrackIndex },
+        "Transferred call to queued phone radio track",
       );
 
       res.status(204).send();
     } catch (error: unknown) {
       req.log.error(
         { error, uuid, nextTrackIndex },
-        "Failed to transfer call to skipped phone radio track",
+        "Failed to transfer call to queued phone radio track",
       );
       res.status(502).json({
-        error: "Failed to transfer call to skipped track.",
+        error: "Failed to transfer call to queued track.",
       });
     }
   }
