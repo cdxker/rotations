@@ -1,4 +1,6 @@
 export const tracks = [
+  "/home/cdxker/Music/Ricky/2 Chainz - I'm Different (Explicit) [e2QKlmMT8II].mp3",
+  "/home/cdxker/Music/Ricky/2 Chainz - No Lie ft. Drake (Official Music Video) (Explicit Version) [uQZMaG1eO74].mp3",
   "/home/cdxker/Music/Ricky/Riley Green - Worst Way (Official Music Video) [OkktfeAR-Rk].mp3",
   "/home/cdxker/Music/Ricky/DestroyLonely- too many [zyELJlR2ucc].mp3",
   "/home/cdxker/Music/Ricky/6LACK - PRBLMS [Official Music Video] [fS9m0Ac8PCU].mp3",
