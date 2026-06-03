@@ -1,13 +1,10 @@
 export const tracks = [
-  // "/home/cdxker/Music/Ricky/Michael Earl Craig reads ＂Bluebirds＂ [JumOzP02wrQ].mp3",
-  // "/home/cdxker/Music/Ricky/Working it out [02NYWy8yNAM].mp3",
+  "/home/cdxker/Music/Ricky/Riley Green - Worst Way (Official Music Video) [OkktfeAR-Rk].mp3",
   "/home/cdxker/Music/Ricky/DestroyLonely- too many [zyELJlR2ucc].mp3",
   "/home/cdxker/Music/Ricky/6LACK - PRBLMS [Official Music Video] [fS9m0Ac8PCU].mp3",
   "/home/cdxker/Music/Ricky/LUCKI - Super Urus (Official Video) [fIrSkilUvHw].mp3",
-  // "/home/cdxker/Music/Ricky/lucki - super urus [slowed + reverb] [yiiw3BbXxfA].mp3",
   "/home/cdxker/Music/Ricky/Lucki Eck$ — Syrup Talk [HvhfEpJt6ow].mp3",
   "/home/cdxker/Music/Ricky/YoungBoy Never Broke Again - Seeming Like It [Official Audio] [Ol6x1bbVn9g].mp3",
-  "/home/cdxker/Music/Ricky/Loe Shimmy - You Decide (Official Music Video) [dSIGRRS8Zwk].mp3",
   "/home/cdxker/Music/Ricky/2MYGRAVE & LUCKI - Lost Time (prod. Plu2o Nash) [NGgtGPwo38A].mp3",
   "/home/cdxker/Music/Ricky/LUCKI - Str8 Syrup (Official Visualizer) [_xC2eRwfg6E].mp3",
   "/home/cdxker/Music/Ricky/MurdaGang PB - 5k 6k (Official Video) [sy0-yjWyOqg].mp3",
@@ -22,9 +19,7 @@ export const tracks = [
   "/home/cdxker/Music/Ricky/Pooh Shiesty - FDO [Official Music Video] [MPuK06zUIhc].mp3",
   "/home/cdxker/Music/Ricky/A.P.E [m0VUP8h5Dw0].mp3",
   "/home/cdxker/Music/Ricky/Im Free (feat. PoohShiesty) [QtWPSXHd4ZQ].mp3",
-  // "/home/cdxker/Music/Ricky/Make Them Know [GmoK54ygg_I].mp3", // Drake
   "/home/cdxker/Music/Ricky/Kendrick Lamar - Bitch, Don't Kill My Vibe (Explicit) [GF8aaTu2kg0].mp3",
-  // "/home/cdxker/Music/Ricky/kendrick lamar - bitch don't kill my vibe (slowed + reverb) [jmV0TOAtaHU].mp3",
   "/home/cdxker/Music/Ricky/Think Its Over [-hOx0ct9Lkk].mp3",
   "/home/cdxker/Music/Ricky/Jean Grey (produced by kyslingo & lammbeats) [l05j3Mz5wqQ].mp3",
   "/home/cdxker/Music/Ricky/Dey Lying [7CePUgAQzPw].mp3",
@@ -46,4 +41,15 @@ export const tracks = [
   "/home/cdxker/Music/Ricky/Lil Uzi Vert - Villain (prod. SRSLy) [Ls8itPVtz5M].mp3",
   "/home/cdxker/Music/Ricky/Dover street market ~ Destroy lonely (Extended intro) [0miuLxc10-k].mp3",
   "/home/cdxker/Music/Ricky/rain [osxJ5-_Ccp0].mp3",
+  "/home/cdxker/Music/Ricky/Loe Shimmy - You Decide (Official Music Video) [dSIGRRS8Zwk].mp3",
+  "/home/cdxker/Music/Ricky/Loe Shimmy - No Mileage (Official Music Video) [I98mWBXu5j0].mp3",
+  "/home/cdxker/Music/Ricky/Loe Shimmy - Murda Dance (Official Video) [ZRPRAcLZj54].mp3",
+  "/home/cdxker/Music/Ricky/Loe Shimmy - Where U Wanna Go (Official Music Video) [9XsmcGdwa88].mp3",
+  "/home/cdxker/Music/Ricky/Hurricane Wisdom ft. Loe Shimmy - Salute (Official Music Video) [Nr1n_Q0zJug].mp3",
 ];
+
+  // "/home/cdxker/Music/Ricky/Michael Earl Craig reads ＂Bluebirds＂ [JumOzP02wrQ].mp3",
+  // "/home/cdxker/Music/Ricky/Working it out [02NYWy8yNAM].mp3",
+  // "/home/cdxker/Music/Ricky/lucki - super urus [slowed + reverb] [yiiw3BbXxfA].mp3",
+  // "/home/cdxker/Music/Ricky/Make Them Know [GmoK54ygg_I].mp3", // Drake
+  // "/home/cdxker/Music/Ricky/kendrick lamar - bitch don't kill my vibe (slowed + reverb) [jmV0TOAtaHU].mp3",
