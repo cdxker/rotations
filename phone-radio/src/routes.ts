@@ -32,6 +32,8 @@ routes.post("/answer", async (req, res) => {
   } = request;
 
   await redisClient.set(`listener:${uuid}:track`, "0");
+  await redisClient.set(`listener:${uuid}:status`, "playing");
+  await redisClient.del(`listener:${uuid}:songNumber`);
 
   setTimeout(() => {
     const digitPressUrl = new URL("/input/digit", url);
@@ -83,6 +85,13 @@ routes.post("/track/finished/:uuid/:songIndex", async (req, res) => {
     locals: { baseUrl: url },
   } = request;
 
+  const status = await redisClient.get(`listener:${uuid}:status`);
+
+  if (status === "listening") {
+    res.status(204).send();
+    return;
+  }
+
   const finishedTrackIndex = parseInt(songIndex);
   const currentTrackIndex = parseInt(
     (await redisClient.get(`listener:${uuid}:track`)) ?? "",
@@ -110,6 +119,8 @@ routes.post("/track/finished/:uuid/:songIndex", async (req, res) => {
       : 0;
 
   await redisClient.set(`listener:${uuid}:track`, nextTrackIndex.toString());
+  await redisClient.set(`listener:${uuid}:status`, "playing");
+  await redisClient.del(`listener:${uuid}:songNumber`);
 
   const callControl = new NCCOBuilder()
     .addAction({
@@ -158,72 +169,168 @@ routes.post("/input/digit", async (req, res) => {
     query: { uuid },
   } = request;
 
-  const digit = request.body.digit ?? request.body.dtmf?.digits;
+  const digits = request.body.digit ?? request.body.dtmf?.digits;
 
-  if (digit === "1" || digit === "2") {
-    const currentTrackIndex = parseInt(
-      (await redisClient.get(`listener:${uuid}:track`)) ?? "",
-    );
-    const nextTrackIndex =
-      Number.isInteger(currentTrackIndex) && tracks.length > 0
-        ? digit === "1"
-          ? (currentTrackIndex - 1 + tracks.length) % tracks.length
-          : (currentTrackIndex + 1) % tracks.length
-        : 0;
+  if (!digits) {
+    res.status(204).send();
+    return;
+  }
 
-    const nextCallControl = new NCCOBuilder()
-      .addAction({
-        action: "input",
-        type: ["dtmf"],
-        mode: "asynchronous",
-        eventUrl: [`${url}/input/digit?uuid=${uuid}`],
-        eventMethod: "POST",
-      })
-      .addAction({
-        action: "talk",
-        text: `Song ${nextTrackIndex + 1}.`,
-      })
-      .addAction(
-        new Stream(
-          `${url}/track/${nextTrackIndex}?secret=${vonageApiSecret}`,
-          undefined,
-          undefined,
-          1,
-        ),
-      )
-      .addAction(
-        new Notify(
-          { uuid },
-          `${url}/track/finished/${uuid}/${nextTrackIndex}`,
-          "POST",
-        ),
-      )
-      .build();
+  for (const digit of digits) {
+    const status =
+      (await redisClient.get(`listener:${uuid}:status`)) ?? "playing";
 
-    try {
+    if (digit === "#") {
+      if (status === "listening") {
+        const songNumberText =
+          (await redisClient.get(`listener:${uuid}:songNumber`)) ?? "";
+        const songNumber = parseInt(songNumberText);
+        const selectedTrackIndex = songNumber - 1;
+
+        const currentTrackIndex = parseInt(
+          (await redisClient.get(`listener:${uuid}:track`)) ?? "",
+        );
+
+        const trackIndexToPlay =
+          Number.isInteger(selectedTrackIndex) &&
+          selectedTrackIndex >= 0 &&
+          selectedTrackIndex < tracks.length
+            ? selectedTrackIndex
+            : Number.isInteger(currentTrackIndex)
+              ? currentTrackIndex
+              : 0;
+
+        await redisClient.set(
+          `listener:${uuid}:track`,
+          trackIndexToPlay.toString(),
+        );
+        await redisClient.set(`listener:${uuid}:status`, "playing");
+        await redisClient.del(`listener:${uuid}:songNumber`);
+
+        const nextCallControl = new NCCOBuilder()
+          .addAction({
+            action: "input",
+            type: ["dtmf"],
+            mode: "asynchronous",
+            eventUrl: [`${url}/input/digit?uuid=${uuid}`],
+            eventMethod: "POST",
+          })
+          .addAction({
+            action: "talk",
+            text:
+              trackIndexToPlay === selectedTrackIndex
+                ? `Song ${trackIndexToPlay + 1}.`
+                : "Invalid song number.",
+          })
+          .addAction(
+            new Stream(
+              `${url}/track/${trackIndexToPlay}?secret=${vonageApiSecret}`,
+              undefined,
+              undefined,
+              1,
+            ),
+          )
+          .addAction(
+            new Notify(
+              { uuid },
+              `${url}/track/finished/${uuid}/${trackIndexToPlay}`,
+              "POST",
+            ),
+          )
+          .build();
+
+        await voiceClient.transferCallWithNCCO(uuid, nextCallControl);
+        continue;
+      }
+
+      await redisClient.set(`listener:${uuid}:status`, "listening");
+      await redisClient.set(`listener:${uuid}:songNumber`, "");
+
+      const nextCallControl = new NCCOBuilder()
+        .addAction({
+          action: "input",
+          type: ["dtmf"],
+          mode: "asynchronous",
+          eventUrl: [`${url}/input/digit?uuid=${uuid}`],
+          eventMethod: "POST",
+        })
+        .addAction({
+          action: "talk",
+          text: "Enter a song number, followed by the pound sign.",
+          bargeIn: true,
+        })
+        .addAction(new Wait(7200))
+        .build();
+
       await voiceClient.transferCallWithNCCO(uuid, nextCallControl);
+      continue;
+    }
 
+    if (status === "listening") {
+      if (/^[0-9]$/.test(digit)) {
+        const currentSongNumber =
+          (await redisClient.get(`listener:${uuid}:songNumber`)) ?? "";
+
+        await redisClient.set(
+          `listener:${uuid}:songNumber`,
+          `${currentSongNumber}${digit}`,
+        );
+      }
+
+      continue;
+    }
+
+    if (digit === "1" || digit === "2") {
+      const currentTrackIndex = parseInt(
+        (await redisClient.get(`listener:${uuid}:track`)) ?? "",
+      );
+      const nextTrackIndex =
+        Number.isInteger(currentTrackIndex) && tracks.length > 0
+          ? digit === "1"
+            ? (currentTrackIndex - 1 + tracks.length) % tracks.length
+            : (currentTrackIndex + 1) % tracks.length
+          : 0;
+
+      const nextCallControl = new NCCOBuilder()
+        .addAction({
+          action: "input",
+          type: ["dtmf"],
+          mode: "asynchronous",
+          eventUrl: [`${url}/input/digit?uuid=${uuid}`],
+          eventMethod: "POST",
+        })
+        .addAction({
+          action: "talk",
+          text: `Song ${nextTrackIndex + 1}.`,
+        })
+        .addAction(
+          new Stream(
+            `${url}/track/${nextTrackIndex}?secret=${vonageApiSecret}`,
+            undefined,
+            undefined,
+            1,
+          ),
+        )
+        .addAction(
+          new Notify(
+            { uuid },
+            `${url}/track/finished/${uuid}/${nextTrackIndex}`,
+            "POST",
+          ),
+        )
+        .build();
+
+      await voiceClient.transferCallWithNCCO(uuid, nextCallControl);
       await redisClient.set(
         `listener:${uuid}:track`,
         nextTrackIndex.toString(),
       );
-
-      req.log.info(
-        { digit, uuid, nextTrackIndex },
-        "Transferred call to queued phone radio track",
-      );
-
-      res.status(204).send();
-    } catch (error: unknown) {
-      req.log.error(
-        { error, uuid, nextTrackIndex },
-        "Failed to transfer call to queued phone radio track",
-      );
-      res.status(502).json({
-        error: "Failed to transfer call to queued track.",
-      });
+      await redisClient.set(`listener:${uuid}:status`, "playing");
+      await redisClient.del(`listener:${uuid}:songNumber`);
     }
   }
+
+  res.status(204).send();
 });
 
 const loadTrackRequestParser = type({
