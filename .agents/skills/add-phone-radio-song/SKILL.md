@@ -31,14 +31,15 @@ yt-dlp "ytsearch1:artist title" --print "%(webpage_url)s" --skip-download
    - Place it exactly where the user requested: top, second, bottom, after/before another song, or the most reasonable location if the user is explicit enough.
    - Do not reorder or remove unrelated tracks unless the user asked for that.
 
-4. Start or ensure the phone-radio dev server is running.
-   - Use the project script from `/home/cdxker/work/cdxker/rotations/main`:
+4. Rebuild and restart the phone-radio server.
+   - Use the project scripts from `/home/cdxker/work/cdxker/rotations/main`:
 
 ```bash
-pnpm --dir phone-radio dev
+pnpm phone-radio:build
+pnpm phone-radio
 ```
 
-   - If a dev server is already running for phone-radio, leave it running and report that it was already active.
+   - If a phone-radio server is already running, stop it first, then run the build and start command.
    - Use an ongoing shell/tmux session when appropriate so the server stays up after the turn.
 
 5. Verify and report.
