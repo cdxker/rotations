@@ -5,6 +5,7 @@
     "dev:all": "pnpm --parallel -r dev",
     "format": "pnpm -r format",
     "phone-radio": "pnpm --filter phone-radio start",
+    "phone-radio:loop": "while true; do pnpm phone-radio; rc=$?; echo \"phone-radio exited ($rc), restarting in 1s\"; sleep 1; done",
     "phone-radio:build": "pnpm --filter phone-radio build",
     "phone-radio:dev": "PORT=3030 pnpm --filter phone-radio dev",
     "tunnel": "./tunnel.sh"
