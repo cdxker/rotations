@@ -13,10 +13,8 @@ services:
 
   redis:
     image: redis:7
-    container_name: phone-radio-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    network_mode: host
 
 volumes:
   graph-postgres-data:
