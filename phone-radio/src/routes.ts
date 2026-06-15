@@ -3,6 +3,7 @@ import { Router } from "express";
 import type { Router as ExpressRouter } from "express";
 import { voiceClient } from "./clients.js";
 import { playlistService, type PlaylistTrack } from "./playlist.service.js";
+import { buildPlaylistSelectionNcco } from "./utils/buildPlaylistSelectionNcco.js";
 import { buildTrackNcco } from "./utils/buildTrackNcco.js";
 
 export const routes: ExpressRouter = Router();
@@ -31,6 +32,14 @@ routes.post("/answer", async (req, res) => {
   } = request;
 
   await playlistService.startPlaylist(uuid);
+  const currentTrack = await playlistService.getCurrentTrack(uuid);
+
+  if (!currentTrack) {
+    res.status(404).json({
+      error: "Default playlist track could not be found.",
+    });
+    return;
+  }
 
   setTimeout(() => {
     const digitPressUrl = new URL("/input/digit", url);
@@ -43,12 +52,21 @@ routes.post("/answer", async (req, res) => {
     void voiceClient.playDTMF(uuid, "1");
   }, 5_000);
 
-  res.json(buildTrackNcco({ url, uuid, trackIndex: 0, announceTrack: false }));
+  res.json(
+    buildTrackNcco({
+      url,
+      uuid,
+      playlistNumber: currentTrack.playlistNumber,
+      trackIndex: currentTrack.index,
+      announceTrack: false,
+    }),
+  );
 });
 
 const finishedTrackRequestParser = type({
   params: {
     uuid: "string",
+    playlistNumber: "string",
     songIndex: "string",
   },
   locals: {
@@ -56,51 +74,56 @@ const finishedTrackRequestParser = type({
   },
 });
 
-routes.post("/track/finished/:uuid/:songIndex", async (req, res) => {
-  const request = finishedTrackRequestParser(req);
-  if (request instanceof type.errors) {
-    res.status(400).json({
-      error: request.summary,
-    });
-    return;
-  }
+routes.post(
+  "/track/finished/:uuid/:playlistNumber/:songIndex",
+  async (req, res) => {
+    const request = finishedTrackRequestParser(req);
+    if (request instanceof type.errors) {
+      res.status(400).json({
+        error: request.summary,
+      });
+      return;
+    }
 
-  const {
-    params: { songIndex, uuid },
-    locals: { baseUrl: url },
-  } = request;
+    const {
+      params: { playlistNumber, songIndex, uuid },
+      locals: { baseUrl: url },
+    } = request;
 
-  const finishedTrackIndex = parseInt(songIndex);
-  if (!Number.isInteger(finishedTrackIndex)) {
-    res.status(400).json({
-      error: "Invalid finished track index.",
-    });
-    return;
-  }
+    const finishedTrackIndex = parseInt(songIndex);
+    if (!Number.isInteger(finishedTrackIndex)) {
+      res.status(400).json({
+        error: "Invalid finished track index.",
+      });
+      return;
+    }
 
-  const nextTrack = await playlistService.trackFinished(
-    uuid,
-    finishedTrackIndex,
-  );
-
-  if (nextTrack === null) {
-    req.log.info(
-      { finishedTrackIndex, uuid },
-      "Ignored duplicate finished track webhook",
-    );
-    res.status(204).send();
-    return;
-  }
-
-  res.json(
-    buildTrackNcco({
-      url,
+    const nextTrack = await playlistService.trackFinished(
       uuid,
-      trackIndex: nextTrack.index,
-      announceTrack: false,
-    }),
-  );
-});
+      playlistNumber,
+      finishedTrackIndex,
+    );
+
+    if (nextTrack === null) {
+      req.log.info(
+        { finishedPlaylistNumber: playlistNumber, finishedTrackIndex, uuid },
+        "Ignored duplicate finished track webhook",
+      );
+      res.status(204).send();
+      return;
+    }
+
+    res.json(
+      buildTrackNcco({
+        url,
+        uuid,
+        playlistNumber: nextTrack.playlistNumber,
+        trackIndex: nextTrack.index,
+        announceTrack: false,
+      }),
+    );
+  },
+);
 
 const digitInputRequestParser = type({
   query: {
@@ -135,19 +158,42 @@ routes.post("/input/digit", async (req, res) => {
 
   let nextTrack: PlaylistTrack | null = null;
 
-  if (digit !== "1" && digit !== "2") {
+  if (digit !== "1" && digit !== "2" && digit !== "9") {
     res.status(400).json({
       error: "Invalid digit.",
     });
     return;
   }
 
+  if (digit === "9") {
+    try {
+      await playlistService.startPlaylistSelection(uuid);
+      await voiceClient.transferCallWithNCCO(
+        uuid,
+        buildPlaylistSelectionNcco({ url, uuid }),
+      );
+
+      req.log.info({ digit, uuid }, "Transferred call to playlist selector");
+      res.status(204).send();
+    } catch (error: unknown) {
+      req.log.error(
+        { error, uuid },
+        "Failed to transfer call to playlist selector",
+      );
+      await playlistService.resumePlayback(uuid);
+      res.status(502).json({
+        error: "Failed to transfer call to playlist selector.",
+      });
+    }
+    return;
+  }
+
   if (digit === "1") {
-    nextTrack = await playlistService.toPreviousTrack(uuid);
+    nextTrack = await playlistService.getPreviousTrack(uuid);
   }
 
   if (digit === "2") {
-    nextTrack = await playlistService.toNextTrack(uuid);
+    nextTrack = await playlistService.getNextTrack(uuid);
   }
 
   if (nextTrack === null) {
@@ -163,20 +209,48 @@ routes.post("/input/digit", async (req, res) => {
       buildTrackNcco({
         url,
         uuid,
+        playlistNumber: nextTrack.playlistNumber,
         trackIndex: nextTrack.index,
         announceTrack: true,
       }),
     );
 
+    const committedTrack = await playlistService.commitTrack(
+      uuid,
+      nextTrack.playlistNumber,
+      nextTrack.index,
+    );
+
+    if (committedTrack === null) {
+      req.log.error(
+        { uuid, nextTrackIndex: nextTrack.index },
+        "Failed to commit queued phone radio track after transfer",
+      );
+      res.status(500).json({
+        error: "Failed to commit queued track.",
+      });
+      return;
+    }
+
     req.log.info(
-      { digit, uuid, nextTrackIndex: nextTrack.index },
+      {
+        digit,
+        nextPlaylistNumber: nextTrack.playlistNumber,
+        nextTrackIndex: nextTrack.index,
+        uuid,
+      },
       "Transferred call to queued phone radio track",
     );
 
     res.status(204).send();
   } catch (error: unknown) {
     req.log.error(
-      { error, uuid, nextTrackIndex: nextTrack.index },
+      {
+        error,
+        nextPlaylistNumber: nextTrack.playlistNumber,
+        nextTrackIndex: nextTrack.index,
+        uuid,
+      },
       "Failed to transfer call to queued phone radio track",
     );
     res.status(502).json({
@@ -185,13 +259,87 @@ routes.post("/input/digit", async (req, res) => {
   }
 });
 
+const playlistInputRequestParser = type({
+  query: {
+    uuid: "string",
+  },
+  body: {
+    "digits?": "string",
+    "dtmf?": {
+      "digits?": "string",
+    },
+  },
+  locals: {
+    baseUrl: "string",
+  },
+});
+
+routes.post("/input/playlist", async (req, res) => {
+  const request = playlistInputRequestParser(req);
+  if (request instanceof type.errors) {
+    res.status(400).json({
+      error: request.summary,
+    });
+    return;
+  }
+
+  const {
+    locals: { baseUrl: url },
+    query: { uuid },
+  } = request;
+
+  const digits = request.body.digits ?? request.body.dtmf?.digits;
+  const selectedTrack = await playlistService.switchPlaylistByNumber(
+    uuid,
+    digits,
+  );
+
+  if (selectedTrack) {
+    res.json(
+      buildTrackNcco({
+        url,
+        uuid,
+        playlistNumber: selectedTrack.playlistNumber,
+        trackIndex: selectedTrack.index,
+        announceTrack: true,
+        messages: [`Playlist ${selectedTrack.playlistName}.`],
+      }),
+    );
+    return;
+  }
+
+  const currentTrack = await playlistService.getCurrentTrack(uuid);
+
+  if (!currentTrack) {
+    await playlistService.resumePlayback(uuid);
+    res.status(404).json({
+      error: "Current track could not be found.",
+    });
+    return;
+  }
+
+  await playlistService.resumePlayback(uuid);
+
+  res.json(
+    buildTrackNcco({
+      url,
+      uuid,
+      playlistNumber: currentTrack.playlistNumber,
+      trackIndex: currentTrack.index,
+      announceTrack: false,
+      messages: ["Playlist not found."],
+    }),
+  );
+});
+
 const loadTrackRequestParser = type({
   params: {
+    playlistNumber: "string",
     index: "string",
   },
 });
 
-routes.get("/track/:index", async (req, res) => {
+routes.get("/track/:playlistNumber/:index", async (req, res) => {
   const request = loadTrackRequestParser(req);
   if (request instanceof type.errors) {
     res.status(400).json({
@@ -200,9 +348,12 @@ routes.get("/track/:index", async (req, res) => {
     return;
   }
 
-  const { index } = request.params;
+  const { index, playlistNumber } = request.params;
 
-  const track = await playlistService.getTrackPath(parseInt(index));
+  const track = await playlistService.getTrackPath(
+    playlistNumber,
+    parseInt(index),
+  );
 
   if (!track) {
     res.status(404).send("Track not found.");

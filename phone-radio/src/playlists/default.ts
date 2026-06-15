@@ -1,4 +1,4 @@
-export const tracks = [
+export const defaultTracks = [
   "/home/cdxker/Music/Ricky/DeeBaby - Marz (Exclusive By： @HalfpintFilmz) [Bmy2CPU4j0Y].mp3",
   "/home/cdxker/Music/Ricky/U.O.E.N.O. (Feat. Future, Rick Ross, A$AP Rocky & Wiz Khalifa) [6I6eGVyBhGU].mp3",
   "/home/cdxker/Music/Ricky/Finesse2Tymes - Overdose [Official Music Video] [xbGprczzCFw].mp3",
