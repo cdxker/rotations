@@ -132,9 +132,9 @@ async function invokeRoute(routePath: string, options: InvokeRouteOptions = {}) 
 }
 
 describe("POST /input/digit", () => {
-  it("transfers digit 9 to the playlist selector NCCO", async () => {
+  it("transfers pound sign to the playlist selector NCCO", async () => {
     const response = await invokeRoute("/input/digit", {
-      body: { digit: "9" },
+      body: { digit: "#" },
       query: { uuid: "call-1" },
     });
 
@@ -145,7 +145,7 @@ describe("POST /input/digit", () => {
     expect(voiceClient.transferCallWithNCCO).toHaveBeenCalledWith("call-1", [
       {
         action: "talk",
-        text: "Press any number followed by the pound sign.",
+        text: "Press the playlist number followed by the pound sign.",
       },
       {
         action: "input",
@@ -170,7 +170,7 @@ describe("POST /input/digit", () => {
     );
 
     const response = await invokeRoute("/input/digit", {
-      body: { digit: "9" },
+      body: { digit: "#" },
       query: { uuid: "call-1" },
     });
 
@@ -179,6 +179,17 @@ describe("POST /input/digit", () => {
       "call-1",
     );
     expect(playlistService.resumePlayback).toHaveBeenCalledWith("call-1");
+  });
+
+  it("does not use digit 9 for playlist selection", async () => {
+    const response = await invokeRoute("/input/digit", {
+      body: { digit: "9" },
+      query: { uuid: "call-1" },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(playlistService.startPlaylistSelection).not.toHaveBeenCalled();
+    expect(voiceClient.transferCallWithNCCO).not.toHaveBeenCalled();
   });
 
   it("transfers skip targets before committing the Redis track state", async () => {
