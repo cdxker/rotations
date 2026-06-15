@@ -1,9 +1,9 @@
-import { NCCOBuilder, Notify, Stream, Wait } from "@vonage/voice";
 import { type } from "arktype";
 import { Router } from "express";
 import type { Router as ExpressRouter } from "express";
-import { voiceClient, vonageApiSecret } from "./clients.js";
+import { voiceClient } from "./clients.js";
 import { playlistService, type PlaylistTrack } from "./playlist.service.js";
+import { buildTrackNcco } from "./utils/buildTrackNcco.js";
 
 export const routes: ExpressRouter = Router();
 
@@ -43,19 +43,7 @@ routes.post("/answer", async (req, res) => {
     void voiceClient.playDTMF(uuid, "1");
   }, 5_000);
 
-  const callControl = new NCCOBuilder()
-    .addAction(new Wait(2))
-    .addAction({
-      action: "input",
-      type: ["dtmf"],
-      mode: "asynchronous",
-      eventUrl: [`${url}/input/digit?uuid=${uuid}`],
-      eventMethod: "POST",
-    })
-    .addAction(new Stream(`${url}/track/0?secret=${vonageApiSecret}`))
-    .addAction(new Notify({ uuid }, `${url}/track/finished/${uuid}/0`, "POST"));
-
-  res.json(callControl.build());
+  res.json(buildTrackNcco({ url, uuid, trackIndex: 0, announceTrack: false }));
 });
 
 const finishedTrackRequestParser = type({
@@ -90,7 +78,10 @@ routes.post("/track/finished/:uuid/:songIndex", async (req, res) => {
     return;
   }
 
-  const nextTrack = await playlistService.trackFinished(uuid, finishedTrackIndex);
+  const nextTrack = await playlistService.trackFinished(
+    uuid,
+    finishedTrackIndex,
+  );
 
   if (nextTrack === null) {
     req.log.info(
@@ -101,22 +92,14 @@ routes.post("/track/finished/:uuid/:songIndex", async (req, res) => {
     return;
   }
 
-  const callControl = new NCCOBuilder()
-    .addAction({
-      action: "input",
-      type: ["dtmf"],
-      mode: "asynchronous",
-      eventUrl: [`${url}/input/digit?uuid=${uuid}`],
-      eventMethod: "POST",
-    })
-    .addAction(
-      new Stream(`${url}/track/${nextTrack.index}?secret=${vonageApiSecret}`),
-    )
-    .addAction(
-      new Notify({}, `${url}/track/finished/${uuid}/${nextTrack.index}`, "POST"),
-    );
-
-  res.json(callControl.build());
+  res.json(
+    buildTrackNcco({
+      url,
+      uuid,
+      trackIndex: nextTrack.index,
+      announceTrack: false,
+    }),
+  );
 });
 
 const digitInputRequestParser = type({
@@ -174,32 +157,16 @@ routes.post("/input/digit", async (req, res) => {
     return;
   }
 
-  const nextCallControl = new NCCOBuilder()
-    .addAction({
-      action: "talk",
-      text: `Song ${nextTrack.index + 1}.`,
-    })
-    .addAction({
-      action: "input",
-      type: ["dtmf"],
-      mode: "asynchronous",
-      eventUrl: [`${url}/input/digit?uuid=${uuid}`],
-      eventMethod: "POST",
-    })
-    .addAction(
-      new Stream(`${url}/track/${nextTrack.index}?secret=${vonageApiSecret}`),
-    )
-    .addAction(
-      new Notify(
-        { uuid },
-        `${url}/track/finished/${uuid}/${nextTrack.index}`,
-        "POST",
-      ),
-    )
-    .build();
-
   try {
-    await voiceClient.transferCallWithNCCO(uuid, nextCallControl);
+    await voiceClient.transferCallWithNCCO(
+      uuid,
+      buildTrackNcco({
+        url,
+        uuid,
+        trackIndex: nextTrack.index,
+        announceTrack: true,
+      }),
+    );
 
     req.log.info(
       { digit, uuid, nextTrackIndex: nextTrack.index },
