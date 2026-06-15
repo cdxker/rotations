@@ -70,15 +70,25 @@ class PlaylistService {
     return this.setToTrack(uuid, nextTrackIndex);
   }
 
-  private async setToTrack(uuid: string, index: number): Promise<PlaylistTrack | null> {
-    await this.redisClient.set(`listener:${uuid}:track`, index);
+  private async setToTrack(
+    uuid: string,
+    index: number,
+  ): Promise<PlaylistTrack | null> {
+    const filePath = tracks[index];
 
-    return {
-      filePath: tracks[index],
-      fileSize: (await stat(tracks[index])).size,
-      index
-    };
-    
+    try {
+      const fileSize = (await stat(filePath)).size;
+
+      await this.redisClient.set(`listener:${uuid}:track`, index);
+
+      return {
+        filePath,
+        fileSize,
+        index,
+      };
+    } catch {
+      return null;
+    }
   }
 
   public async toNextTrack(uuid: string): Promise<PlaylistTrack | null> {
