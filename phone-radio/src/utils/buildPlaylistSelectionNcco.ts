@@ -13,7 +13,7 @@ export function buildPlaylistSelectionNcco({
   return [
     {
       action: "talk",
-      text: "Press tbe playlist number followed by the pound sign.",
+      text: "Press the playlist number followed by the pound sign.",
     },
     {
       action: "input",
