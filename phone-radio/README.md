@@ -3,7 +3,7 @@
 Express webhook server for Vonage Voice API inbound calls.
 
 Vonage calls `/answer`, receives an NCCO, then streams MP3 files from `~/Music` into the call.
-During playback, pressing `1` queues the previous track and pressing `2` skips to the next track.
+During playback, pressing `1` queues the previous track, pressing `2` skips to the next track, and pressing `9` opens playlist selection.
 
 ## Run
 
@@ -68,7 +68,7 @@ The answer webhook returns:
   },
   {
     "action": "stream",
-    "streamUrl": ["https://YOUR_NGROK_URL/track/0?secret=YOUR_SECRET"],
+    "streamUrl": ["https://YOUR_NGROK_URL/track/1/0?secret=YOUR_SECRET"],
     "loop": 1
   },
   {
@@ -76,15 +76,15 @@ The answer webhook returns:
     "payload": {
       "uuid": "CALL_UUID"
     },
-    "eventUrl": ["https://YOUR_NGROK_URL/track/finished/CALL_UUID"],
+    "eventUrl": ["https://YOUR_NGROK_URL/track/finished/CALL_UUID/1/0"],
     "eventMethod": "POST"
   }
 ]
 ```
 
-When `/answer` receives the call UUID from Vonage, the server stores `listener:{uuid}:track` in Redis and queues one track. The notify callback advances that Redis index and returns the next one-track NCCO.
+When `/answer` receives the call UUID from Vonage, the server stores `listener:{uuid}:playlist` and `listener:{uuid}:track` in Redis and queues one track from playlist `1`. The notify callback includes the playlist number, advances matching current playback, and returns the next one-track NCCO.
 
-The NCCO also registers `/input/digit` for DTMF input. Pressing `1` moves the Redis index backward and transfers the active call to a new NCCO that announces the queued song index before starting the previous track. Pressing `2` advances the Redis index and transfers the active call to a new NCCO that announces the queued song index before starting the next track.
+The NCCO also registers `/input/digit` for DTMF input. Pressing `1` moves backward and pressing `2` advances within the active playlist. Pressing `9` transfers the call to a selector prompt that says "Press any number followed by the pound sign." The selector uses Vonage DTMF `submitOnHash` and posts to `/input/playlist`; valid playlist numbers switch the caller to that playlist at track `0`, while invalid input returns to current playback.
 
 Put your Vonage private key at `phone-radio/private.key`. It is ignored by git.
 

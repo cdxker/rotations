@@ -2,17 +2,37 @@ import { stat } from "node:fs/promises";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { redisClient } from "../src/clients.js";
 import { playlistService } from "../src/playlist.service.js";
-import { tracks } from "../src/tracks.js";
+
+const playlistFixtures = vi.hoisted(() => ({
+  playlists: [
+    {
+      number: "1",
+      name: "Default",
+      tracks: ["default-0.mp3", "default-1.mp3", "default-2.mp3"],
+    },
+    {
+      number: "22",
+      name: "Workout",
+      tracks: ["workout-0.mp3", "workout-1.mp3"],
+    },
+  ],
+}));
+const redisPipeline = vi.hoisted(() => ({
+  exec: vi.fn(),
+  set: vi.fn(),
+}));
 
 vi.mock("../src/clients.js", () => ({
   redisClient: {
     get: vi.fn(),
+    pipeline: vi.fn(() => redisPipeline),
     set: vi.fn(),
   },
 }));
 
-vi.mock("../src/tracks.js", () => ({
-  tracks: ["track-0.mp3", "track-1.mp3", "track-2.mp3"],
+vi.mock("../src/playlists/index.js", () => ({
+  DEFAULT_PLAYLIST_NUMBER: "1",
+  playlists: playlistFixtures.playlists,
 }));
 
 vi.mock("node:fs/promises", () => ({
@@ -21,21 +41,21 @@ vi.mock("node:fs/promises", () => ({
 
 beforeEach(() => {
   vi.mocked(redisClient.get).mockReset();
+  vi.mocked(redisClient.pipeline).mockClear();
   vi.mocked(redisClient.set).mockReset();
   vi.mocked(redisClient.set).mockResolvedValue("OK");
+  redisPipeline.exec.mockReset();
+  redisPipeline.exec.mockResolvedValue([]);
+  redisPipeline.set.mockReset();
+  redisPipeline.set.mockReturnValue(redisPipeline);
   vi.mocked(stat).mockReset();
-  tracks.splice(
-    0,
-    tracks.length,
-    "track-0.mp3",
-    "track-1.mp3",
-    "track-2.mp3",
-  );
   vi.mocked(stat).mockImplementation(async (filePath) => {
     const fileSizesByPath: Record<string, number> = {
-      "track-0.mp3": 100,
-      "track-1.mp3": 200,
-      "track-2.mp3": 300,
+      "default-0.mp3": 100,
+      "default-1.mp3": 200,
+      "default-2.mp3": 300,
+      "workout-0.mp3": 400,
+      "workout-1.mp3": 500,
     };
     const size = fileSizesByPath[String(filePath)];
 
@@ -47,223 +67,311 @@ beforeEach(() => {
   });
 });
 
+function mockCurrentState({
+  mode = "playing",
+  playlistNumber = "1",
+  trackIndex = "0",
+}: {
+  mode?: string | null;
+  playlistNumber?: string | null;
+  trackIndex?: string | null;
+}) {
+  vi.mocked(redisClient.get).mockImplementation(async (key) => {
+    if (String(key).endsWith(":mode")) {
+      return mode;
+    }
+
+    if (String(key).endsWith(":playlist")) {
+      return playlistNumber;
+    }
+
+    if (String(key).endsWith(":track")) {
+      return trackIndex;
+    }
+
+    return null;
+  });
+}
+
 describe("startPlaylist", () => {
-  it("stores the listener at the first track", async () => {
+  it("stores the listener on the default playlist at the first track in one pipeline", async () => {
     await playlistService.startPlaylist("call-1");
 
-    expect(redisClient.set).toHaveBeenCalledWith("listener:call-1:track", "0");
+    expect(redisClient.pipeline).toHaveBeenCalledTimes(1);
+    expect(redisPipeline.set).toHaveBeenCalledWith(
+      "listener:call-1:playlist",
+      "1",
+    );
+    expect(redisPipeline.set).toHaveBeenCalledWith(
+      "listener:call-1:track",
+      "0",
+    );
+    expect(redisPipeline.set).toHaveBeenCalledWith(
+      "listener:call-1:mode",
+      "playing",
+    );
+    expect(redisPipeline.exec).toHaveBeenCalledTimes(1);
+    expect(redisClient.set).not.toHaveBeenCalled();
   });
 
-  it("overwrites without reading the previous listener index", async () => {
+  it("overwrites without reading the previous listener state", async () => {
     await playlistService.startPlaylist("call-1");
 
     expect(redisClient.get).not.toHaveBeenCalled();
-    expect(redisClient.set).toHaveBeenCalledWith("listener:call-1:track", "0");
+  });
+});
+
+describe("playlist selection mode", () => {
+  it("marks a listener as selecting a playlist", async () => {
+    await playlistService.startPlaylistSelection("call-1");
+
+    expect(redisClient.set).toHaveBeenCalledWith(
+      "listener:call-1:mode",
+      "selecting-playlist",
+    );
+  });
+
+  it("marks a listener as playing again", async () => {
+    await playlistService.resumePlayback("call-1");
+
+    expect(redisClient.set).toHaveBeenCalledWith(
+      "listener:call-1:mode",
+      "playing",
+    );
   });
 });
 
 describe("getCurrentTrack", () => {
-  it("returns the current track with file metadata", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce("1");
+  it("returns the current playlist track with file metadata", async () => {
+    mockCurrentState({ playlistNumber: "22", trackIndex: "1" });
 
     await expect(playlistService.getCurrentTrack("call-1")).resolves.toEqual({
-      filePath: "track-1.mp3",
-      fileSize: 200,
+      filePath: "workout-1.mp3",
+      fileSize: 500,
       index: 1,
+      playlistNumber: "22",
+      playlistName: "Workout",
     });
-    expect(redisClient.get).toHaveBeenCalledWith("listener:call-1:track");
-    expect(stat).toHaveBeenCalledWith("track-1.mp3");
+    expect(stat).toHaveBeenCalledWith("workout-1.mp3");
+  });
+
+  it("defaults old listener state to the default playlist when no playlist key exists", async () => {
+    mockCurrentState({ playlistNumber: null, trackIndex: "2" });
+
+    await expect(playlistService.getCurrentTrack("call-1")).resolves.toEqual({
+      filePath: "default-2.mp3",
+      fileSize: 300,
+      index: 2,
+      playlistNumber: "1",
+      playlistName: "Default",
+    });
   });
 
   it("returns null when Redis has no index for the listener", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce(null);
+    mockCurrentState({ trackIndex: null });
 
     await expect(playlistService.getCurrentTrack("call-1")).resolves.toBeNull();
     expect(stat).not.toHaveBeenCalled();
   });
 
+  it("returns null when the stored playlist number is invalid", async () => {
+    mockCurrentState({ playlistNumber: "missing", trackIndex: "1" });
+
+    await expect(playlistService.getCurrentTrack("call-1")).resolves.toBeNull();
+  });
+
   it("returns null when the stored index is invalid", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce("not-a-number");
+    mockCurrentState({ trackIndex: "not-a-number" });
 
     await expect(playlistService.getCurrentTrack("call-1")).resolves.toBeNull();
   });
 
-  it("returns null when the stored index is outside the track list", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce("99");
-
-    await expect(playlistService.getCurrentTrack("call-1")).resolves.toBeNull();
-  });
-
-  it("returns null when stat fails for the current track", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce("1");
-    vi.mocked(stat).mockRejectedValueOnce(new Error("missing file"));
-
-    await expect(playlistService.getCurrentTrack("call-1")).resolves.toBeNull();
-  });
-
-  it("returns null when Redis get fails", async () => {
-    vi.mocked(redisClient.get).mockRejectedValueOnce(
-      new Error("redis unavailable"),
-    );
+  it("returns null when the stored index is outside the active playlist", async () => {
+    mockCurrentState({ playlistNumber: "22", trackIndex: "99" });
 
     await expect(playlistService.getCurrentTrack("call-1")).resolves.toBeNull();
   });
 });
 
 describe("getTrackPath", () => {
-  it("returns the requested track with file metadata", async () => {
-    await expect(playlistService.getTrackPath(2)).resolves.toEqual({
-      filePath: "track-2.mp3",
-      fileSize: 300,
+  it("returns a requested track by playlist number and index", async () => {
+    await expect(playlistService.getTrackPath("22", 1)).resolves.toEqual({
+      filePath: "workout-1.mp3",
+      fileSize: 500,
     });
-    expect(stat).toHaveBeenCalledWith("track-2.mp3");
+    expect(stat).toHaveBeenCalledWith("workout-1.mp3");
   });
 
-  it("returns null when the index is outside the track list", async () => {
-    await expect(playlistService.getTrackPath(3)).resolves.toBeNull();
+  it("returns null when the playlist number is unknown", async () => {
+    await expect(playlistService.getTrackPath("missing", 0)).resolves.toBeNull();
   });
 
-  it("returns null when stat fails", async () => {
-    vi.mocked(stat).mockRejectedValueOnce(new Error("missing file"));
-
-    await expect(playlistService.getTrackPath(0)).resolves.toBeNull();
+  it("returns null when the index is outside the playlist", async () => {
+    await expect(playlistService.getTrackPath("22", 3)).resolves.toBeNull();
   });
 });
 
 describe("trackFinished", () => {
-  it("advances to the next track when the completed index matches Redis", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce("1");
+  it("advances within the active playlist when the callback matches Redis", async () => {
+    mockCurrentState({ playlistNumber: "22", trackIndex: "0" });
 
-    await expect(playlistService.trackFinished("call-1", 1)).resolves.toEqual({
-      filePath: "track-2.mp3",
-      fileSize: 300,
-      index: 2,
+    await expect(
+      playlistService.trackFinished("call-1", "22", 0),
+    ).resolves.toEqual({
+      filePath: "workout-1.mp3",
+      fileSize: 500,
+      index: 1,
+      playlistNumber: "22",
+      playlistName: "Workout",
     });
-    expect(redisClient.set).toHaveBeenCalledWith("listener:call-1:track", 2);
+    expect(redisClient.set).toHaveBeenCalledWith(
+      "listener:call-1:playlist",
+      "22",
+    );
+    expect(redisClient.set).toHaveBeenCalledWith("listener:call-1:track", "1");
   });
 
-  it("wraps to the first track after the last track finishes", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce("2");
+  it("wraps to the first track after the last active playlist track finishes", async () => {
+    mockCurrentState({ playlistNumber: "22", trackIndex: "1" });
 
-    await expect(playlistService.trackFinished("call-1", 2)).resolves.toEqual({
-      filePath: "track-0.mp3",
-      fileSize: 100,
+    await expect(
+      playlistService.trackFinished("call-1", "22", 1),
+    ).resolves.toMatchObject({
+      filePath: "workout-0.mp3",
       index: 0,
+      playlistNumber: "22",
     });
-    expect(redisClient.set).toHaveBeenCalledWith("listener:call-1:track", 0);
   });
 
-  it("returns null and leaves Redis unchanged when the completed index is stale", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce("2");
+  it("ignores stale finished callbacks from a previous playlist", async () => {
+    mockCurrentState({ playlistNumber: "22", trackIndex: "0" });
 
-    await expect(playlistService.trackFinished("call-1", 1)).resolves.toBeNull();
+    await expect(
+      playlistService.trackFinished("call-1", "1", 0),
+    ).resolves.toBeNull();
     expect(redisClient.set).not.toHaveBeenCalled();
   });
 
-  it("returns null when there is no current track", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce(null);
+  it("ignores finished callbacks while the listener is selecting a playlist", async () => {
+    mockCurrentState({
+      mode: "selecting-playlist",
+      playlistNumber: "22",
+      trackIndex: "0",
+    });
 
-    await expect(playlistService.trackFinished("call-1", 0)).resolves.toBeNull();
+    await expect(
+      playlistService.trackFinished("call-1", "22", 0),
+    ).resolves.toBeNull();
     expect(redisClient.set).not.toHaveBeenCalled();
   });
 
-  it("does not reread Redis after validating the completed track", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce("0");
+  it("ignores stale finished callbacks from a previous track index", async () => {
+    mockCurrentState({ playlistNumber: "22", trackIndex: "1" });
 
-    await playlistService.trackFinished("call-1", 0);
-
-    expect(redisClient.get).toHaveBeenCalledTimes(1);
-  });
-
-  it("returns null and leaves Redis unchanged when the next track stat fails", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce("0");
-    vi.mocked(stat)
-      .mockResolvedValueOnce({ size: 100 } as Awaited<ReturnType<typeof stat>>)
-      .mockRejectedValueOnce(new Error("missing next file"));
-
-    await expect(playlistService.trackFinished("call-1", 0)).resolves.toBeNull();
+    await expect(
+      playlistService.trackFinished("call-1", "22", 0),
+    ).resolves.toBeNull();
     expect(redisClient.set).not.toHaveBeenCalled();
   });
 });
 
-describe("toNextTrack", () => {
-  it("advances from the current track to the next track", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce("0");
+describe("next and previous track previews", () => {
+  it("previews the next track without committing Redis state", async () => {
+    mockCurrentState({ playlistNumber: "1", trackIndex: "0" });
 
-    await expect(playlistService.toNextTrack("call-1")).resolves.toEqual({
-      filePath: "track-1.mp3",
-      fileSize: 200,
+    await expect(playlistService.getNextTrack("call-1")).resolves.toMatchObject(
+      {
+        filePath: "default-1.mp3",
+        index: 1,
+        playlistNumber: "1",
+      },
+    );
+    expect(redisClient.set).not.toHaveBeenCalled();
+  });
+
+  it("previews the previous track without committing Redis state", async () => {
+    mockCurrentState({ playlistNumber: "1", trackIndex: "0" });
+
+    await expect(
+      playlistService.getPreviousTrack("call-1"),
+    ).resolves.toMatchObject({
+      filePath: "default-2.mp3",
+      index: 2,
+      playlistNumber: "1",
+    });
+    expect(redisClient.set).not.toHaveBeenCalled();
+  });
+
+  it("keeps the next-track wrapper for non-transfer callers", async () => {
+    mockCurrentState({ playlistNumber: "1", trackIndex: "0" });
+
+    await expect(playlistService.toNextTrack("call-1")).resolves.toMatchObject({
+      filePath: "default-1.mp3",
       index: 1,
+      playlistNumber: "1",
     });
-    expect(redisClient.set).toHaveBeenCalledWith("listener:call-1:track", 1);
+    expect(redisClient.set).toHaveBeenCalledWith(
+      "listener:call-1:playlist",
+      "1",
+    );
+    expect(redisClient.set).toHaveBeenCalledWith("listener:call-1:track", "1");
   });
 
-  it("wraps from the last track to the first track", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce("2");
+  it("keeps the previous-track wrapper for non-transfer callers", async () => {
+    mockCurrentState({ playlistNumber: "1", trackIndex: "0" });
 
-    await expect(playlistService.toNextTrack("call-1")).resolves.toEqual({
-      filePath: "track-0.mp3",
-      fileSize: 100,
-      index: 0,
+    await expect(
+      playlistService.toPreviousTrack("call-1"),
+    ).resolves.toMatchObject({
+      filePath: "default-2.mp3",
+      index: 2,
+      playlistNumber: "1",
     });
-    expect(redisClient.set).toHaveBeenCalledWith("listener:call-1:track", 0);
+    expect(redisClient.set).toHaveBeenCalledWith(
+      "listener:call-1:playlist",
+      "1",
+    );
+    expect(redisClient.set).toHaveBeenCalledWith("listener:call-1:track", "2");
   });
 
-  it("returns null when there is no current track", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce(null);
-
-    await expect(playlistService.toNextTrack("call-1")).resolves.toBeNull();
-    expect(redisClient.set).not.toHaveBeenCalled();
-  });
-
-  it("returns null and leaves Redis unchanged when the next track stat fails", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce("0");
-    vi.mocked(stat)
-      .mockResolvedValueOnce({ size: 100 } as Awaited<ReturnType<typeof stat>>)
-      .mockRejectedValueOnce(new Error("missing next file"));
-
-    await expect(playlistService.toNextTrack("call-1")).resolves.toBeNull();
-    expect(redisClient.set).not.toHaveBeenCalled();
+  it("commits a validated target track", async () => {
+    await expect(
+      playlistService.commitTrack("call-1", "22", 1),
+    ).resolves.toMatchObject({
+      filePath: "workout-1.mp3",
+      index: 1,
+      playlistNumber: "22",
+    });
+    expect(redisClient.set).toHaveBeenCalledWith(
+      "listener:call-1:playlist",
+      "22",
+    );
+    expect(redisClient.set).toHaveBeenCalledWith("listener:call-1:track", "1");
   });
 });
 
-describe("toPreviousTrack", () => {
-  it("rewinds from the current track to the previous track", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce("2");
-
-    await expect(playlistService.toPreviousTrack("call-1")).resolves.toEqual({
-      filePath: "track-1.mp3",
-      fileSize: 200,
-      index: 1,
+describe("switchPlaylistByNumber", () => {
+  it("switches to the selected playlist and starts at track zero", async () => {
+    await expect(
+      playlistService.switchPlaylistByNumber("call-1", "22#"),
+    ).resolves.toEqual({
+      filePath: "workout-0.mp3",
+      fileSize: 400,
+      index: 0,
+      playlistNumber: "22",
+      playlistName: "Workout",
     });
-    expect(redisClient.set).toHaveBeenCalledWith("listener:call-1:track", 1);
+    expect(redisClient.set).toHaveBeenCalledWith(
+      "listener:call-1:playlist",
+      "22",
+    );
+    expect(redisClient.set).toHaveBeenCalledWith("listener:call-1:track", "0");
   });
 
-  it("wraps from the first track to the last track", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce("0");
-
-    await expect(playlistService.toPreviousTrack("call-1")).resolves.toEqual({
-      filePath: "track-2.mp3",
-      fileSize: 300,
-      index: 2,
-    });
-    expect(redisClient.set).toHaveBeenCalledWith("listener:call-1:track", 2);
-  });
-
-  it("returns null when there is no current track", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce(null);
-
-    await expect(playlistService.toPreviousTrack("call-1")).resolves.toBeNull();
-    expect(redisClient.set).not.toHaveBeenCalled();
-  });
-
-  it("returns null and leaves Redis unchanged when the previous track stat fails", async () => {
-    vi.mocked(redisClient.get).mockResolvedValueOnce("0");
-    vi.mocked(stat)
-      .mockResolvedValueOnce({ size: 100 } as Awaited<ReturnType<typeof stat>>)
-      .mockRejectedValueOnce(new Error("missing previous file"));
-
-    await expect(playlistService.toPreviousTrack("call-1")).resolves.toBeNull();
+  it("returns null and leaves Redis unchanged for an unknown playlist number", async () => {
+    await expect(
+      playlistService.switchPlaylistByNumber("call-1", "99"),
+    ).resolves.toBeNull();
     expect(redisClient.set).not.toHaveBeenCalled();
   });
 });

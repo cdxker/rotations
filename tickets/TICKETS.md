@@ -162,3 +162,4 @@
 - [X] `01-SkipTrackIndexTts.md` — Announce the queued song index before streaming a skipped track
 - [ ] `02-FixDigitTransferCommitOrdering.md` — Defer Redis skip index commits until after Vonage transfer succeeds
 - [ ] `02-FixSetToTrackStatOrdering.md` — Validate target track files before committing Redis index changes
+- [X] `02-PlaylistSelectionRefactor.md` — Add Redis-backed playlist selection by pressing 9 during playback
