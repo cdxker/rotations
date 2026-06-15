@@ -1,10 +1,9 @@
-import { stat } from "node:fs/promises";
 import { NCCOBuilder, Notify, Stream, Wait } from "@vonage/voice";
 import { type } from "arktype";
 import { Router } from "express";
 import type { Router as ExpressRouter } from "express";
-import { redisClient, voiceClient, vonageApiSecret } from "./clients.js";
-import { tracks } from "./tracks.js";
+import { voiceClient, vonageApiSecret } from "./clients.js";
+import { playlistService, type PlaylistTrack } from "./playlist.service.js";
 
 export const routes: ExpressRouter = Router();
 
@@ -31,7 +30,7 @@ routes.post("/answer", async (req, res) => {
     locals: { baseUrl: url },
   } = request;
 
-  await redisClient.set(`listener:${uuid}:track`, "0");
+  await playlistService.startPlaylist(uuid);
 
   setTimeout(() => {
     const digitPressUrl = new URL("/input/digit", url);
@@ -84,10 +83,6 @@ routes.post("/track/finished/:uuid/:songIndex", async (req, res) => {
   } = request;
 
   const finishedTrackIndex = parseInt(songIndex);
-  const currentTrackIndex = parseInt(
-    (await redisClient.get(`listener:${uuid}:track`)) ?? "",
-  );
-
   if (!Number.isInteger(finishedTrackIndex)) {
     res.status(400).json({
       error: "Invalid finished track index.",
@@ -95,21 +90,16 @@ routes.post("/track/finished/:uuid/:songIndex", async (req, res) => {
     return;
   }
 
-  if (currentTrackIndex !== finishedTrackIndex) {
+  const nextTrack = await playlistService.trackFinished(uuid, finishedTrackIndex);
+
+  if (nextTrack === null) {
     req.log.info(
-      { currentTrackIndex, finishedTrackIndex, uuid },
+      { finishedTrackIndex, uuid },
       "Ignored duplicate finished track webhook",
     );
     res.status(204).send();
     return;
   }
-
-  const nextTrackIndex =
-    Number.isInteger(currentTrackIndex) && tracks.length > 0
-      ? (currentTrackIndex + 1) % tracks.length
-      : 0;
-
-  await redisClient.set(`listener:${uuid}:track`, nextTrackIndex.toString());
 
   const callControl = new NCCOBuilder()
     .addAction({
@@ -120,10 +110,10 @@ routes.post("/track/finished/:uuid/:songIndex", async (req, res) => {
       eventMethod: "POST",
     })
     .addAction(
-      new Stream(`${url}/track/${nextTrackIndex}?secret=${vonageApiSecret}`),
+      new Stream(`${url}/track/${nextTrack.index}?secret=${vonageApiSecret}`),
     )
     .addAction(
-      new Notify({}, `${url}/track/finished/${uuid}/${nextTrackIndex}`, "POST"),
+      new Notify({}, `${url}/track/finished/${uuid}/${nextTrack.index}`, "POST"),
     );
 
   res.json(callControl.build());
@@ -160,69 +150,64 @@ routes.post("/input/digit", async (req, res) => {
 
   const digit = request.body.digit ?? request.body.dtmf?.digits;
 
-  if (digit === "1" || digit === "2") {
-    const currentTrackIndex = parseInt(
-      (await redisClient.get(`listener:${uuid}:track`)) ?? "",
+  let nextTrack: PlaylistTrack | null = null;
+
+  if (digit === "1") {
+    nextTrack = await playlistService.toPreviousTrack(uuid);
+  }
+
+  if (digit === "2") {
+    nextTrack = await playlistService.toNextTrack(uuid);
+  }
+
+  if (nextTrack === null) {
+    res.status(404).json({
+      error: "Current track could not be found.",
+    });
+    return;
+  }
+
+  const nextCallControl = new NCCOBuilder()
+    .addAction({
+      action: "talk",
+      text: `Song ${nextTrack.index + 1}.`,
+    })
+    .addAction({
+      action: "input",
+      type: ["dtmf"],
+      mode: "asynchronous",
+      eventUrl: [`${url}/input/digit?uuid=${uuid}`],
+      eventMethod: "POST",
+    })
+    .addAction(
+      new Stream(`${url}/track/${nextTrack.index}?secret=${vonageApiSecret}`),
+    )
+    .addAction(
+      new Notify(
+        { uuid },
+        `${url}/track/finished/${uuid}/${nextTrack.index}`,
+        "POST",
+      ),
+    )
+    .build();
+
+  try {
+    await voiceClient.transferCallWithNCCO(uuid, nextCallControl);
+
+    req.log.info(
+      { digit, uuid, nextTrackIndex: nextTrack.index },
+      "Transferred call to queued phone radio track",
     );
-    const nextTrackIndex =
-      Number.isInteger(currentTrackIndex) && tracks.length > 0
-        ? digit === "1"
-          ? (currentTrackIndex - 1 + tracks.length) % tracks.length
-          : (currentTrackIndex + 1) % tracks.length
-        : 0;
 
-    const nextCallControl = new NCCOBuilder()
-      .addAction({
-        action: "input",
-        type: ["dtmf"],
-        mode: "asynchronous",
-        eventUrl: [`${url}/input/digit?uuid=${uuid}`],
-        eventMethod: "POST",
-      })
-      .addAction({
-        action: "talk",
-        text: `Song ${nextTrackIndex + 1}.`,
-      })
-      .addAction(
-        new Stream(
-          `${url}/track/${nextTrackIndex}?secret=${vonageApiSecret}`,
-          undefined,
-          undefined,
-          1,
-        ),
-      )
-      .addAction(
-        new Notify(
-          { uuid },
-          `${url}/track/finished/${uuid}/${nextTrackIndex}`,
-          "POST",
-        ),
-      )
-      .build();
-
-    try {
-      await voiceClient.transferCallWithNCCO(uuid, nextCallControl);
-
-      await redisClient.set(
-        `listener:${uuid}:track`,
-        nextTrackIndex.toString(),
-      );
-
-      req.log.info(
-        { digit, uuid, nextTrackIndex },
-        "Transferred call to queued phone radio track",
-      );
-
-      res.status(204).send();
-    } catch (error: unknown) {
-      req.log.error(
-        { error, uuid, nextTrackIndex },
-        "Failed to transfer call to queued phone radio track",
-      );
-      res.status(502).json({
-        error: "Failed to transfer call to queued track.",
-      });
-    }
+    res.status(204).send();
+  } catch (error: unknown) {
+    req.log.error(
+      { error, uuid, nextTrackIndex: nextTrack.index },
+      "Failed to transfer call to queued phone radio track",
+    );
+    res.status(502).json({
+      error: "Failed to transfer call to queued track.",
+    });
   }
 });
 
@@ -242,18 +227,18 @@ routes.get("/track/:index", async (req, res) => {
   }
 
   const { index } = request.params;
-  const trackPath = tracks[parseInt(index)];
 
-  if (!trackPath) {
+  const track = await playlistService.getTrackPath(parseInt(index));
+
+  if (!track) {
     res.status(404).send("Track not found.");
     return;
   }
 
   try {
-    const trackStat = await stat(trackPath);
     res.setHeader("Content-Type", "audio/mpeg");
-    res.setHeader("Content-Length", trackStat.size.toString());
-    res.sendFile(trackPath);
+    res.setHeader("Content-Length", track.fileSize.toString());
+    res.sendFile(track.filePath);
   } catch {
     res.status(404).send("Track file not found.");
   }
