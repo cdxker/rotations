@@ -152,6 +152,13 @@ routes.post("/input/digit", async (req, res) => {
 
   let nextTrack: PlaylistTrack | null = null;
 
+  if (digit !== "1" && digit !== "2") {
+    res.status(400).json({
+      error: "Invalid digit.",
+    });
+    return;
+  }
+
   if (digit === "1") {
     nextTrack = await playlistService.toPreviousTrack(uuid);
   }
