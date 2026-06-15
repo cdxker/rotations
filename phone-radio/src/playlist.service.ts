@@ -53,7 +53,7 @@ class PlaylistService {
 
   public async trackFinished(
     uuid: string,
-    songIndex: number,
+    completedSongIndex: number,
   ): Promise<PlaylistTrack | null> {
     const currentTrack = await this.getCurrentTrack(uuid);
 
@@ -61,11 +61,24 @@ class PlaylistService {
       return null;
     }
 
-    if (currentTrack.index !== songIndex) {
+    if (currentTrack.index !== completedSongIndex) {
       return null;
     }
 
-    return this.toNextTrack(uuid);
+    const nextTrackIndex = (completedSongIndex + 1) % tracks.length;
+
+    return this.setToTrack(uuid, nextTrackIndex);
+  }
+
+  private async setToTrack(uuid: string, index: number): Promise<PlaylistTrack | null> {
+    await this.redisClient.set(`listener:${uuid}:track`, index);
+
+    return {
+      filePath: tracks[index],
+      fileSize: (await stat(tracks[index])).size,
+      index
+    };
+    
   }
 
   public async toNextTrack(uuid: string): Promise<PlaylistTrack | null> {
@@ -76,13 +89,7 @@ class PlaylistService {
     const nextTrackIndex =
       (currentTrack.index + 1 + tracks.length) % tracks.length;
 
-    await this.redisClient.set(`listener:${uuid}:track`, nextTrackIndex);
-
-    return {
-      filePath: tracks[nextTrackIndex],
-      fileSize: (await stat(tracks[nextTrackIndex])).size,
-      index: nextTrackIndex,
-    };
+    return this.setToTrack(uuid, nextTrackIndex);
   }
 
   public async toPreviousTrack(uuid: string): Promise<PlaylistTrack | null> {
@@ -93,13 +100,7 @@ class PlaylistService {
     const nextTrackIndex =
       (currentTrack.index - 1 + tracks.length) % tracks.length;
 
-    await this.redisClient.set(`listener:${uuid}:track`, nextTrackIndex);
-
-    return {
-      filePath: tracks[nextTrackIndex],
-      fileSize: (await stat(tracks[nextTrackIndex])).size,
-      index: nextTrackIndex,
-    };
+    return this.setToTrack(uuid, nextTrackIndex);
   }
 }
 
