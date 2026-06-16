@@ -288,10 +288,10 @@ routes.post("/input/playlist", async (req, res) => {
     query: { uuid },
   } = request;
 
-  const digits = request.body.digits ?? request.body.dtmf?.digits;
+  const playlistNumber = request.body.digits ?? request.body.dtmf?.digits;
   const selectedTrack = await playlistService.switchPlaylistByNumber(
     uuid,
-    digits,
+    playlistNumber,
   );
 
   if (selectedTrack) {
@@ -327,7 +327,7 @@ routes.post("/input/playlist", async (req, res) => {
       playlistNumber: currentTrack.playlistNumber,
       trackIndex: currentTrack.index,
       announceTrack: false,
-      messages: ["Playlist not found."],
+      messages: [`Playlist ${playlistNumber} not found.`],
     }),
   );
 });

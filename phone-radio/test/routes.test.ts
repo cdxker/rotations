@@ -289,7 +289,7 @@ describe("POST /input/playlist", () => {
       expect.arrayContaining([
         expect.objectContaining({
           action: "talk",
-          text: "Playlist not found.",
+          text: "Playlist 99 not found.",
         }),
         expect.objectContaining({
           action: "stream",
