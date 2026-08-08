@@ -24,11 +24,11 @@ Dev
 
 ## Acceptance Criteria
 
-- [ ] If `transferCallWithNCCO` throws during `/input/digit`, Redis remains at the track index matching the currently playing audio.
-- [ ] Successful digit transfers still advance Redis and stream the requested previous/next track.
-- [ ] Finished-track webhook behavior remains compatible with the committed Redis index.
-- [ ] `pnpm --filter phone-radio test` passes.
-- [ ] `pnpm --filter phone-radio build` passes.
+- [X] If `transferCallWithNCCO` throws during `/input/digit`, Redis remains at the track index matching the currently playing audio.
+- [X] Successful digit transfers still advance Redis and stream the requested previous/next track.
+- [X] Finished-track webhook behavior remains compatible with the committed Redis index.
+- [X] `pnpm --filter phone-radio test` passes.
+- [X] `pnpm --filter phone-radio build` passes.
 
 ## Files
 
