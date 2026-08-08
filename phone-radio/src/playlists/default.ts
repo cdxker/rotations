@@ -1,6 +1,11 @@
 import type { Playlist } from "./index.js";
 
 const defaultTracks = [
+  "/home/cdxker/Music/Ricky/Yo Gotti - I Know (Official Video) ft. Rich Homie Quan [lHHM2YosO4A].mp3",
+  "/home/cdxker/Music/Ricky/Type of Way [7ddbZPsg09w].mp3",
+  "/home/cdxker/Music/Ricky/DeeBaby - Diamond Skin ( official music video ) [E9Rbhqmi31I].mp3",
+  "/home/cdxker/Music/Ricky/Dead Fresh [mdcjkQvYsgc].mp3",
+  "/home/cdxker/Music/Ricky/I.M.Y (Miss You) [_uKl3JEceH0].mp3",
   "/home/cdxker/Music/Ricky/Loe Shimmy - You Decide (Official Music Video) [dSIGRRS8Zwk].mp3",
   "/home/cdxker/Music/Ricky/Loe Shimmy - No Mileage (Official Music Video) [I98mWBXu5j0].mp3",
   "/home/cdxker/Music/Ricky/Loe Shimmy - Where U Wanna Go (Official Music Video) [9XsmcGdwa88].mp3",
