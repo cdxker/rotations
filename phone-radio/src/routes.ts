@@ -158,14 +158,14 @@ routes.post("/input/digit", async (req, res) => {
 
   let nextTrack: PlaylistTrack | null = null;
 
-  if (digit !== "1" && digit !== "2" && digit !== "#") {
+  if (digit !== "1" && digit !== "2" && digit !== "9") {
     res.status(400).json({
       error: "Invalid digit.",
     });
     return;
   }
 
-  if (digit === "#") {
+  if (digit === "9") {
     try {
       await playlistService.startPlaylistSelection(uuid);
       await voiceClient.transferCallWithNCCO(
