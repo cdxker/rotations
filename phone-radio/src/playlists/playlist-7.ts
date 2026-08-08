@@ -1,0 +1,43 @@
+import type { Playlist } from "./index.js";
+
+const playlist = {
+  number: "7",
+  name: "Playlist 7",
+  tracks: [
+    "/home/cdxker/Music/Ricky/LATELY [IKZ-fhRdGNI].mp3",
+    "/home/cdxker/Music/Ricky/Emo and shy (prod by tweak) [1cJXAq1B8_4].mp3",
+    "/home/cdxker/Music/Ricky/Why Would You Lie (kyslingo & Stafa)             shot by Bobby Lee Palmer [Jq58rN2WDHA].mp3",
+    "/home/cdxker/Music/Ricky/KYSLINGO - Das wassup (produced by osyrisisrael) dir by lingo shot By. LonelyySouls [tYcgZjyU0S0].mp3",
+    "/home/cdxker/Music/Ricky/KYSLINGO EARTH IS NOT A HEAVEN (OFFICIAL MUSIC VIDEO) SHOT BY @flossavellifilms  dir by @SleemLu [FRmWKRXMWgA].mp3",
+    "/home/cdxker/Music/Ricky/KYS LINGO Cherry Popperz shot by @sleemlu [WB1UXb-Xya0].mp3",
+    "/home/cdxker/Music/Ricky/KYSLINGO(LINGO) - BLUE ⧸ U4L JUDO - DOME (PROD . KYSLINGO) ＊SHOT BY USELESS FILMS＊ [7FTuM00viYU].mp3",
+    "/home/cdxker/Music/Ricky/THE LOVE I STARTED (feat. Osyris Israel) [MG33YMkMvhU].mp3",
+    "/home/cdxker/Music/Ricky/IM ALIVE (feat. stafa) [NlkQPbruhkg].mp3",
+    "/home/cdxker/Music/Ricky/IM ALIVE II [65yyOmqiqnI].mp3",
+    "/home/cdxker/Music/Ricky/Das wassup (feat. Osyris Israel) [YjoFnD2x93w].mp3",
+    "/home/cdxker/Music/Ricky/Hear you calling. . [YYWx9iTH48Y].mp3",
+    "/home/cdxker/Music/Ricky/IM STILL [7zWlFMWPsa8].mp3",
+    "/home/cdxker/Music/Ricky/kyslingo (lingo) - For what it's worth (produced by Evilgiane & Harrison) Shot⧸edit by willsam [nWoPIk5OaSo].mp3",
+    "/home/cdxker/Music/Ricky/Nothing but you [kY-XI5f9wZA].mp3",
+    "/home/cdxker/Music/Ricky/When my eyes close [fSjgM3SlEvc].mp3",
+    "/home/cdxker/Music/Ricky/Migraine (feat. lerado khalil) [gsnyWCyC1y8].mp3",
+    "/home/cdxker/Music/Ricky/I'll whip ya head boy (feat. Osyris Israel) [HAv5cWvaarE].mp3",
+    "/home/cdxker/Music/Ricky/Cut marks and burn holes i understand why [RQ4qFh3_p-I].mp3",
+    "/home/cdxker/Music/Ricky/Jean Grey (produced by kyslingo & lammbeats) [l05j3Mz5wqQ].mp3",
+    "/home/cdxker/Music/Ricky/Burning mp3 [CjuSmf0NGo0].mp3",
+    "/home/cdxker/Music/Ricky/curser (feat. U4L Scoovy & U4L Judo) [HdNOHtNuAxc].mp3",
+    "/home/cdxker/Music/Ricky/sum real freestyle [9Nu3n4cv8UU].mp3",
+    "/home/cdxker/Music/Ricky/What do i know [L0BxkVwUDoU].mp3",
+    "/home/cdxker/Music/Ricky/I try to stay away from you you're no good for me. [qHWzZnXrHaE].mp3",
+    "/home/cdxker/Music/Ricky/Atleast [aP_AkWI3Nj8].mp3",
+    "/home/cdxker/Music/Ricky/The love i started II [m3pCsiwE0wY].mp3",
+    "/home/cdxker/Music/Ricky/Why would you lie [vB192WFdJxA].mp3",
+    "/home/cdxker/Music/Ricky/Alone 1 [yNaMUSXDh3g].mp3",
+    "/home/cdxker/Music/Ricky/Lava girl [0BFP9kxJse8].mp3",
+    "/home/cdxker/Music/Ricky/About we [gQ0IRZRsxSg].mp3",
+    "/home/cdxker/Music/Ricky/BOOSIE (feat. Lil $horty) [bDa-3TyNLx4].mp3",
+    "/home/cdxker/Music/Ricky/End of the world mp3 [-130Mw56s4s].mp3",
+  ],
+} satisfies Playlist;
+
+export default playlist;

@@ -132,9 +132,9 @@ async function invokeRoute(routePath: string, options: InvokeRouteOptions = {}) 
 }
 
 describe("POST /input/digit", () => {
-  it("transfers pound sign to the playlist selector NCCO", async () => {
+  it("transfers digit 9 to the playlist selector NCCO", async () => {
     const response = await invokeRoute("/input/digit", {
-      body: { digit: "#" },
+      body: { digit: "9" },
       query: { uuid: "call-1" },
     });
 
@@ -170,7 +170,7 @@ describe("POST /input/digit", () => {
     );
 
     const response = await invokeRoute("/input/digit", {
-      body: { digit: "#" },
+      body: { digit: "9" },
       query: { uuid: "call-1" },
     });
 
@@ -181,9 +181,9 @@ describe("POST /input/digit", () => {
     expect(playlistService.resumePlayback).toHaveBeenCalledWith("call-1");
   });
 
-  it("does not use digit 9 for playlist selection", async () => {
+  it("does not use digit 0 for playlist selection", async () => {
     const response = await invokeRoute("/input/digit", {
-      body: { digit: "9" },
+      body: { digit: "0" },
       query: { uuid: "call-1" },
     });
 
@@ -289,7 +289,7 @@ describe("POST /input/playlist", () => {
       expect.arrayContaining([
         expect.objectContaining({
           action: "talk",
-          text: "Playlist not found.",
+          text: "Playlist 99 not found.",
         }),
         expect.objectContaining({
           action: "stream",

@@ -24,11 +24,11 @@ Dev
 
 ## Acceptance Criteria
 
-- [ ] `setToTrack` does not change Redis when the target track cannot be validated.
-- [ ] Callers receive `null` or another handled failure result when target track resolution fails.
-- [ ] Next, previous, and finished-track advancement still work for valid target tracks.
-- [ ] `pnpm --filter phone-radio test` passes.
-- [ ] `pnpm --filter phone-radio build` passes.
+- [X] `setToTrack` does not change Redis when the target track cannot be validated.
+- [X] Callers receive `null` or another handled failure result when target track resolution fails.
+- [X] Next, previous, and finished-track advancement still work for valid target tracks.
+- [X] `pnpm --filter phone-radio test` passes.
+- [X] `pnpm --filter phone-radio build` passes.
 
 ## Files
 
