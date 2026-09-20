@@ -22,6 +22,18 @@ const configuredEnvironment = {
 };
 
 describe("parseDiscordBridgeConfig", () => {
+  it("allows an AI-only websocket secret without enabling Discord", () => {
+    expect(parseDiscordBridgeConfig({ VONAGE_WEBSOCKET_SECRET: "agent-secret" }, musicCodes).enabled).toBe(false);
+  });
+
+  it("reserves code 99 for the AI agent", () => {
+    expect(() => parseDiscordBridgeConfig({
+      ...configuredEnvironment,
+      DISCORD_VOICE_DESTINATIONS: JSON.stringify([
+        { code: "99", name: "Office", guildId: "g", channelId: "c" },
+      ]),
+    }, musicCodes)).toThrow("reserved for the live AI agent");
+  });
   it("leaves Discord disabled when no Discord configuration is supplied", () => {
     expect(parseDiscordBridgeConfig({}, musicCodes)).toEqual({
       enabled: false,

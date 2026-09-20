@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { type } from "arktype";
 import { Router } from "express";
 import type { Router as ExpressRouter } from "express";
@@ -6,7 +7,9 @@ import {
   discordRuntime,
   voiceClient,
 } from "./clients.js";
-import { discordBridgeConfig, discordDestinationRegistry } from "./env.js";
+import { agentConfig, discordBridgeConfig, discordDestinationRegistry } from "./env.js";
+import { finishAgent, reserveAgent } from "./agent/runtime.js";
+import { buildAgentNcco } from "./utils/buildAgentNcco.js";
 import { playlistService, type PlaylistTrack } from "./playlist.service.js";
 import { buildPlaylistSelectionNcco } from "./utils/buildPlaylistSelectionNcco.js";
 import { buildTrackNcco } from "./utils/buildTrackNcco.js";
@@ -167,7 +170,13 @@ routes.post("/input/digit", async (req, res) => {
 
   const digit = request.body.digit ?? request.body.dtmf?.digits;
 
-  if (await playlistService.getListenerMode(uuid) === "discord") {
+  const mode = await playlistService.getListenerMode(uuid);
+  if (mode === "selecting-playlist" || mode === "agent") {
+    res.status(204).send();
+    return;
+  }
+
+  if (mode === "discord") {
     if (digit === "9") {
       if (playlistSelectorTransfers.has(uuid)) {
         res.status(204).send();
@@ -175,11 +184,11 @@ routes.post("/input/digit", async (req, res) => {
       }
       playlistSelectorTransfers.add(uuid);
       try {
+        const selectorId = await playlistService.startPlaylistSelection(uuid);
         await discordBridgeManager.detach(uuid);
-        await playlistService.startPlaylistSelection(uuid);
         await voiceClient.transferCallWithNCCO(
           uuid,
-          buildPlaylistSelectionNcco({ url, uuid }),
+          buildPlaylistSelectionNcco({ url, uuid, selectorId }),
         );
       } finally {
         playlistSelectorTransfers.delete(uuid);
@@ -206,10 +215,10 @@ routes.post("/input/digit", async (req, res) => {
     }
     playlistSelectorTransfers.add(uuid);
     try {
-      await playlistService.startPlaylistSelection(uuid);
+      const selectorId = await playlistService.startPlaylistSelection(uuid);
       await voiceClient.transferCallWithNCCO(
         uuid,
-        buildPlaylistSelectionNcco({ url, uuid }),
+        buildPlaylistSelectionNcco({ url, uuid, selectorId }),
       );
 
       req.log.info({ digit, uuid }, "Transferred call to playlist selector");
@@ -303,6 +312,7 @@ routes.post("/input/digit", async (req, res) => {
 const playlistInputRequestParser = type({
   query: {
     uuid: "string",
+    "selectorId?": "string",
   },
   body: {
     "digits?": "string",
@@ -329,11 +339,35 @@ routes.post("/input/playlist", async (req, res) => {
     query: { uuid },
   } = request;
 
+  const selectorId = request.query.selectorId;
+  if (!selectorId || !(await playlistService.claimPlaylistSelection(uuid, selectorId))) {
+    res.status(204).send();
+    return;
+  }
+
   const playlistNumber = request.body.digits ?? request.body.dtmf?.digits;
+  if (playlistNumber === "99") {
+    if (!agentConfig.enabled) {
+      await playlistService.resumePlayback(uuid);
+      await returnToCurrentTrack(res, uuid, url, "The AI agent is unavailable. Returning to music.");
+      return;
+    }
+    const sessionId = randomUUID();
+    try {
+      await playlistService.beginAgent(uuid, sessionId);
+      reserveAgent(uuid, sessionId, url);
+      res.json(buildAgentNcco({ url, uuid, sessionId, websocketSecret: agentConfig.websocketSecret }));
+    } catch {
+      await finishAgent(uuid, sessionId);
+      await returnToCurrentTrack(res, uuid, url, "The AI agent is unavailable. Returning to music.");
+    }
+    return;
+  }
   const destination = discordDestinationRegistry.getByCode(playlistNumber);
 
   if (destination) {
     if (!discordBridgeConfig.enabled || !discordRuntime.isDestinationAvailable(destination.code)) {
+      await playlistService.resumePlayback(uuid);
       await returnToCurrentTrack(res, uuid, url, `Discord ${destination.name} is unavailable.`);
       return;
     }
@@ -399,9 +433,37 @@ routes.post("/input/playlist", async (req, res) => {
       playlistNumber: currentTrack.playlistNumber,
       trackIndex: currentTrack.index,
       announceTrack: false,
-      messages: [`Playlist ${playlistNumber} not found.`],
+      messages: [playlistNumber ? `Playlist ${playlistNumber} not found.` : "Returning to music."],
     }),
   );
+});
+
+const agentEventRequestParser = type({
+  query: { uuid: "string", sessionId: "string" },
+  body: { "status?": "string" },
+  locals: { baseUrl: "string" },
+});
+
+routes.post("/agent/event", async (req, res) => {
+  const request = agentEventRequestParser(req);
+  if (request instanceof type.errors) {
+    res.status(400).json({ error: request.summary });
+    return;
+  }
+  const status = request.body.status?.toLowerCase();
+  const terminal = ["failed", "unanswered", "disconnected", "timeout", "cancelled", "completed"];
+  if (!status || !terminal.includes(status)) {
+    res.json([]);
+    return;
+  }
+  const { uuid, sessionId } = request.query;
+  const changed = await finishAgent(uuid, sessionId);
+  if (!changed || status === "completed" || status === "cancelled") {
+    res.json([]);
+    return;
+  }
+  await returnToCurrentTrack(res, uuid, request.locals.baseUrl,
+    "The AI connection ended. Returning to music.");
 });
 
 const discordEventRequestParser = type({

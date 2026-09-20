@@ -2,6 +2,7 @@ import { cleanEnv, num, str } from "envalid";
 import { parseDiscordBridgeConfig } from "./discord/config.js";
 import { DiscordDestinationRegistry } from "./discord/destination-registry.js";
 import { playlists } from "./playlists/index.js";
+import { parseAgentConfig } from "./agent/config.js";
 
 export const env = cleanEnv(process.env, {
   VONAGE_API_SECRET: str(),
@@ -19,3 +20,5 @@ export const discordBridgeConfig = parseDiscordBridgeConfig(
 export const discordDestinationRegistry = new DiscordDestinationRegistry(
   discordBridgeConfig.destinations,
 );
+
+export const agentConfig = parseAgentConfig(process.env);

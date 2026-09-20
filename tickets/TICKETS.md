@@ -166,3 +166,4 @@
 - [X] `02-PlaylistSelectionRefactor.md` — Add Redis-backed playlist selection by pressing 9 during playback
 - [X] `03-FixDiscordBridgeDigitNineExit.md` — Keep digit 9 subscribed while Discord audio is connected so callers can reopen playlist selection
 - [X] `04-AnnounceDiscordVoiceMemberCount.md` — Announce the selected Discord voice channel's member count before starting the audio bridge
+- [X] `05-LiveAiAgent99.md` — Live AI voice on 99; user verified conversation and digit-9 return to menu

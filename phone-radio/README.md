@@ -86,6 +86,48 @@ participant and two phone callers can converse, self-echo is absent, a
 same-guild conflicting channel falls back to music, and `9`, hangup, and a
 Discord disconnect release the session.
 
+### Live AI agent (optional)
+
+From music or Discord, press `9` to open the menu, then enter `99#` to talk
+privately to the AI. Press `9` during the conversation to reopen the menu.
+Playlist `9#` remains available. Code `99` is reserved and cannot be a Discord
+voice destination.
+
+Set `OPENAI_API_KEY` and `VONAGE_WEBSOCKET_SECRET` in the phone-radio server
+environment. The OpenAI project must have access to `gpt-live-1` and
+`gpt-5.6-luna`. Inherited environment values take precedence over `.env`.
+If replacing a stale inherited key with the value in `phone-radio/.env`, launch
+from the repository root with `env -u OPENAI_API_KEY pnpm phone-radio:loop`.
+
+This works without Discord; leave both `DISCORD_BOT_TOKEN` and
+`DISCORD_VOICE_DESTINATIONS` empty for an AI-only setup. A missing AI key leaves
+this option unavailable and sends callers back to music.
+
+The server connects to OpenAI's Live WebSocket API using Marin and mono 16 kHz
+PCM. Each caller gets a separate conversation. GPT-Live handles continuous
+speech and interruptions; harder questions use a managed Responses backend
+with tools disabled. The agent answers questions and chats. It cannot change
+music, download tracks, browse the web, or transfer calls to a person.
+
+The server authenticates `/agent/audio` using the WebSocket secret and a
+single-use, per-call reservation. Connection setup times out after 15 seconds.
+It bounds audio queues and returns a failed session to the saved music track,
+restarting that song. The application does not record or log audio/transcripts;
+Live session storage is disabled. On exit it closes the provider session and
+waits up to 15 seconds for finalization before terminating the connection.
+
+Every newly opened selector has a unique callback ID. Callbacks from a selector
+opened before this version are ignored; callers should reopen the menu after a
+restart. Individual DTMF callbacks during selection/AI are ignored so delayed
+`99` digits cannot interrupt the new conversation. AI exit uses DTMF from its
+own active audio socket.
+
+Before enabling this on the public phone number, run the tests, lint, and build,
+then check `9 → 99# → conversation → 9 → menu` on a real phone. Interrupt the AI,
+try two concurrent callers, hang up during connection, and verify a provider
+failure returns to music. Provider credentials and an inbound test call are
+required to validate real audio quality and interruption timing.
+
 ## Vonage Setup
 
 Configure your Vonage Voice application:
@@ -123,7 +165,7 @@ The answer webhook returns:
 
 When `/answer` receives the call UUID from Vonage, the server stores `listener:{uuid}:playlist` and `listener:{uuid}:track` in Redis and queues one track from playlist `1`. The notify callback includes the playlist number, advances matching current playback, and returns the next one-track NCCO.
 
-The NCCO also registers `/input/digit` for DTMF input. Pressing `1` moves backward and pressing `2` advances within the active playlist. Pressing `9` transfers the call to a selector prompt that says "Press the playlist number followed by the pound sign." The selector uses Vonage DTMF `submitOnHash` and posts to `/input/playlist`; valid playlist numbers switch the caller to that playlist at track `0`, while invalid input returns to current playback.
+The NCCO also registers `/input/digit` for DTMF input. Pressing `1` moves backward and pressing `2` advances within the active playlist. Pressing `9` transfers the call to a selector prompt that offers playlist numbers and `99#` for the AI agent The selector uses Vonage DTMF `submitOnHash` and posts to `/input/playlist`; valid playlist numbers switch the caller to that playlist at track `0`, while invalid input returns to current playback.
 
 Put your Vonage private key at `phone-radio/private.key`. It is ignored by git.
 

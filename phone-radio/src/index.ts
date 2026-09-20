@@ -1,15 +1,16 @@
 import "dotenv/config";
 import { timingSafeEqual } from "node:crypto";
-import { createServer, type IncomingMessage } from "node:http";
+import { createServer, type IncomingMessage, type Server } from "node:http";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import { pino, destination } from "pino";
 import { pinoHttp } from "pino-http";
 import { WebSocketServer, type RawData, type WebSocket } from "ws";
-import { discordBridgeManager, discordRuntime, voiceClient } from "./clients.js";
+import { discordBridgeManager, discordRuntime, redisClient, voiceClient } from "./clients.js";
 import { routes } from "./routes.js";
-import { discordBridgeConfig, env } from "./env.js";
+import { agentConfig, discordBridgeConfig, env } from "./env.js";
+import { agentBridgeManager } from "./agent/runtime.js";
 import { playlistService } from "./playlist.service.js";
 import { buildTrackNcco } from "./utils/buildTrackNcco.js";
 
@@ -75,17 +76,12 @@ app.use((req, _res, next) => {
 });
 app.use(routes);
 
-function authorizationMatches(request: IncomingMessage): boolean {
-  if (!discordBridgeConfig.enabled) return false;
+function authorizationMatches(request: IncomingMessage, secret: string): boolean {
   const authorization = request.headers.authorization;
-  const expected = `Bearer ${discordBridgeConfig.websocketSecret}`;
-  if (
-    typeof authorization !== "string" ||
-    authorization.length !== expected.length
-  ) {
-    return false;
-  }
-  return timingSafeEqual(Buffer.from(authorization), Buffer.from(expected));
+  if (typeof authorization !== "string") return false;
+  const actual = Buffer.from(authorization);
+  const expected = Buffer.from(`Bearer ${secret}`);
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 function rawDataToBuffer(data: RawData): Buffer {
@@ -98,17 +94,44 @@ function rawDataToBuffer(data: RawData): Buffer {
   return Buffer.from(data);
 }
 
+const serverShutdowns = new WeakMap<Server, () => Promise<void>>();
+
+export function stopPhoneRadioServer(server: Server): Promise<void> {
+  const shutdown = serverShutdowns.get(server);
+  if (!shutdown) return Promise.reject(new Error("Unknown phone-radio server."));
+  return shutdown();
+}
+
 export function createPhoneRadioServer() {
   const server = createServer(app);
   const websocketServer = new WebSocketServer({ noServer: true });
 
+  const agentWebsocketServer = new WebSocketServer({ noServer: true });
+
   server.on("upgrade", (request, socket, head) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     const uuid = url.searchParams.get("uuid");
+    if (url.pathname === "/agent/audio") {
+      const sessionId = url.searchParams.get("sessionId");
+      if (!agentConfig.enabled || !uuid || !sessionId ||
+          !authorizationMatches(request, agentConfig.websocketSecret) ||
+          !agentBridgeManager.hasReservation(uuid, sessionId)) {
+        socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+      agentWebsocketServer.handleUpgrade(request, socket, head, (websocket) => {
+        void agentBridgeManager.attach(uuid, sessionId, websocket).catch(() => {
+          websocket.close(1011, "Agent connection failed");
+        });
+      });
+      return;
+    }
     if (
       url.pathname !== "/discord/audio" ||
       !uuid ||
-      !authorizationMatches(request) ||
+      !discordBridgeConfig.enabled ||
+      !authorizationMatches(request, discordBridgeConfig.websocketSecret) ||
       !discordBridgeManager.hasReservation(uuid)
     ) {
       socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
@@ -163,7 +186,29 @@ export function createPhoneRadioServer() {
     }
     },
   );
+  let shutdownPromise: Promise<void> | undefined;
+  serverShutdowns.set(server, () => {
+    if (shutdownPromise) return shutdownPromise;
+    shutdownPromise = (async () => {
+      // Stop accepting calls first, but close upgraded sockets before waiting
+      // for the HTTP close event, which otherwise waits on those sockets.
+      const httpClosed = new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error && (error as NodeJS.ErrnoException).code !== "ERR_SERVER_NOT_RUNNING") reject(error);
+          else resolve();
+        });
+      });
+      const agentClosed = agentBridgeManager.close();
+      const discordClosed = discordBridgeManager.close();
+      for (const client of [...agentWebsocketServer.clients, ...websocketServer.clients]) client.terminate();
+      await Promise.all([agentClosed, discordClosed, httpClosed]);
+    })();
+    return shutdownPromise;
+  });
   server.once("close", () => {
+    void agentBridgeManager.close();
+    agentWebsocketServer.close();
+    websocketServer.close();
     void discordBridgeManager.close();
     discordRuntime.stop();
   });
@@ -197,6 +242,18 @@ async function returnToMusic(
 
 export function startPhoneRadioServer(port = env.PORT) {
   const server = createPhoneRadioServer();
+  const shutdown = () => {
+    void stopPhoneRadioServer(server).catch(() => {
+      console.error("Phone radio shutdown failed.");
+      process.exitCode = 1;
+    }).finally(() => redisClient.disconnect());
+  };
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
+  server.once("close", () => {
+    process.off("SIGTERM", shutdown);
+    process.off("SIGINT", shutdown);
+  });
   server.listen(port, () => {
     console.log(`Phone radio server listening on http://localhost:${port}`);
     if (discordBridgeConfig.enabled) {

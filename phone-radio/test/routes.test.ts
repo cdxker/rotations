@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { discordBridgeManager, discordRuntime, voiceClient } from "../src/clients.js";
-import { discordBridgeConfig, discordDestinationRegistry } from "../src/env.js";
+import { agentConfig, discordBridgeConfig, discordDestinationRegistry } from "../src/env.js";
+import { finishAgent, reserveAgent } from "../src/agent/runtime.js";
 import { playlistService, type PlaylistTrack } from "../src/playlist.service.js";
 import { routes } from "../src/routes.js";
 
@@ -22,7 +23,10 @@ vi.mock("../src/clients.js", () => ({
   },
 }));
 
+vi.mock("../src/agent/runtime.js", () => ({ finishAgent: vi.fn(), reserveAgent: vi.fn() }));
+
 vi.mock("../src/env.js", () => ({
+  agentConfig: { enabled: false, apiKey: "test", websocketSecret: "agent-secret" },
   discordBridgeConfig: {
     enabled: false,
     websocketSecret: "discord-websocket-secret",
@@ -32,6 +36,8 @@ vi.mock("../src/env.js", () => ({
 
 vi.mock("../src/playlist.service.js", () => ({
   playlistService: {
+    beginAgent: vi.fn(),
+    claimPlaylistSelection: vi.fn(),
     commitTrack: vi.fn(),
     beginDiscordBridge: vi.fn(),
     getListenerMode: vi.fn(),
@@ -65,6 +71,11 @@ const workoutTrack: PlaylistTrack = {
 };
 
 beforeEach(() => {
+  Object.assign(agentConfig, { enabled: false });
+  vi.mocked(finishAgent).mockReset().mockResolvedValue(true);
+  vi.mocked(reserveAgent).mockReset();
+  vi.mocked(playlistService.beginAgent).mockReset().mockResolvedValue();
+  vi.mocked(playlistService.claimPlaylistSelection).mockReset().mockResolvedValue(true);
   vi.mocked(discordBridgeManager.cancelReservation).mockReset();
   vi.mocked(discordBridgeManager.detach).mockReset();
   vi.mocked(discordBridgeManager.reserve).mockReset();
@@ -99,7 +110,7 @@ beforeEach(() => {
   vi.mocked(playlistService.resumePlayback).mockResolvedValue();
   vi.mocked(playlistService.getListenerMode).mockResolvedValue("playing");
   vi.mocked(playlistService.returnToPlaybackIfDiscord).mockResolvedValue(true);
-  vi.mocked(playlistService.startPlaylistSelection).mockResolvedValue();
+  vi.mocked(playlistService.startPlaylistSelection).mockResolvedValue("selector-1");
 });
 
 type InvokeRouteOptions = {
@@ -229,7 +240,7 @@ describe("POST /input/digit", () => {
     expect(voiceClient.transferCallWithNCCO).toHaveBeenCalledWith("call-1", [
       {
         action: "talk",
-        text: "Press the playlist number followed by the pound sign.",
+        text: "Enter a playlist number followed by pound, or enter 99 followed by pound to talk to our AI agent.",
       },
       {
         action: "input",
@@ -240,7 +251,7 @@ describe("POST /input/digit", () => {
           timeOut: 10,
         },
         eventUrl: [
-          "https://radio.example.test/input/playlist?uuid=call-1",
+          "https://radio.example.test/input/playlist?uuid=call-1&selectorId=selector-1",
         ],
         eventMethod: "POST",
         mode: "synchronous",
@@ -327,6 +338,78 @@ describe("POST /input/digit", () => {
 });
 
 describe("POST /input/playlist", () => {
+  it("connects code 99 to a private AI session before checking destinations", async () => {
+    Object.assign(agentConfig, { enabled: true });
+    const response = await invokeRoute("/input/playlist", {
+      body: { dtmf: { digits: "99" } }, query: { uuid: "call-1", selectorId: "selector-1" },
+    });
+    const sessionId = vi.mocked(playlistService.beginAgent).mock.calls[0][1];
+    expect(reserveAgent).toHaveBeenCalledWith("call-1", sessionId, "https://radio.example.test");
+    expect(discordDestinationRegistry.getByCode).not.toHaveBeenCalled();
+    expect(playlistService.switchPlaylistByNumber).not.toHaveBeenCalled();
+    expect(response.body).toEqual([
+      expect.objectContaining({ action: "talk", text: expect.stringContaining("live AI agent") }),
+      expect.objectContaining({
+        action: "connect", eventType: "synchronous",
+        eventUrl: [`https://radio.example.test/agent/event?uuid=call-1&sessionId=${sessionId}`],
+        endpoint: [{ type: "websocket", uri: `wss://radio.example.test/agent/audio?uuid=call-1&sessionId=${sessionId}`,
+          "content-type": "audio/l16;rate=16000", authorization: { type: "custom", value: "Bearer agent-secret" } }],
+      }),
+    ]);
+  });
+
+  it("keeps code 9 available as a playlist", async () => {
+    vi.mocked(playlistService.switchPlaylistByNumber).mockResolvedValue(defaultTrack);
+    await invokeRoute("/input/playlist", {
+      body: { digits: "9" }, query: { uuid: "call-1", selectorId: "selector-1" },
+    });
+    expect(playlistService.switchPlaylistByNumber).toHaveBeenCalledWith("call-1", "9");
+    expect(reserveAgent).not.toHaveBeenCalled();
+  });
+
+  it("returns to saved music when AI is disabled", async () => {
+    vi.mocked(playlistService.getCurrentTrack).mockResolvedValue(defaultTrack);
+    const response = await invokeRoute("/input/playlist", {
+      body: { digits: "99" }, query: { uuid: "call-1", selectorId: "selector-1" },
+    });
+    expect(playlistService.resumePlayback).toHaveBeenCalledWith("call-1");
+    expect(response.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "talk", text: "The AI agent is unavailable. Returning to music." }),
+      expect.objectContaining({ action: "stream" }),
+    ]));
+    expect(reserveAgent).not.toHaveBeenCalled();
+  });
+
+  it("recovers when AI reservation fails", async () => {
+    Object.assign(agentConfig, { enabled: true });
+    vi.mocked(reserveAgent).mockImplementation(() => { throw new Error("busy"); });
+    vi.mocked(playlistService.getCurrentTrack).mockResolvedValue(defaultTrack);
+    const response = await invokeRoute("/input/playlist", {
+      body: { digits: "99" }, query: { uuid: "call-1", selectorId: "selector-1" },
+    });
+    expect(finishAgent).toHaveBeenCalledWith("call-1", expect.any(String));
+    expect(response.body).toEqual(expect.arrayContaining([expect.objectContaining({ action: "stream" })]));
+  });
+
+  it.each([undefined, "stale-selector"])("ignores missing or stale selector IDs: %s", async (selectorId) => {
+    vi.mocked(playlistService.claimPlaylistSelection).mockResolvedValue(false);
+    const response = await invokeRoute("/input/playlist", {
+      body: { digits: "99" }, query: { uuid: "call-1", ...(selectorId ? { selectorId } : {}) },
+    });
+    expect(response.statusCode).toBe(204);
+    expect(playlistService.beginAgent).not.toHaveBeenCalled();
+    expect(playlistService.switchPlaylistByNumber).not.toHaveBeenCalled();
+  });
+
+  it("returns an empty selection to music without speaking undefined", async () => {
+    vi.mocked(playlistService.getCurrentTrack).mockResolvedValue(defaultTrack);
+    const response = await invokeRoute("/input/playlist", {
+      body: { dtmf: { digits: "" } }, query: { uuid: "call-1", selectorId: "selector-1" },
+    });
+    expect(response.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "talk", text: "Returning to music." }),
+    ]));
+  });
   it("returns a custom-authorized WebSocket NCCO for an available Discord destination", async () => {
     vi.mocked(discordDestinationRegistry.getByCode).mockReturnValue({
       channelId: "channel-1",
@@ -344,7 +427,7 @@ describe("POST /input/playlist", () => {
 
     const response = await invokeRoute("/input/playlist", {
       body: { digits: "33" },
-      query: { uuid: "call-1" },
+      query: { uuid: "call-1", selectorId: "selector-1" },
     });
 
     expect(response.statusCode).toBe(200);
@@ -370,7 +453,7 @@ describe("POST /input/playlist", () => {
   it("falls back to the current music track when a configured destination is unavailable", async () => {
     vi.mocked(discordDestinationRegistry.getByCode).mockReturnValue({
       channelId: "channel-1",
-      code: "99",
+      code: "98",
       guildId: "guild-1",
       name: "Radio friends",
     });
@@ -382,8 +465,8 @@ describe("POST /input/playlist", () => {
     vi.mocked(playlistService.getCurrentTrack).mockResolvedValue(defaultTrack);
 
     const response = await invokeRoute("/input/playlist", {
-      body: { digits: "99" },
-      query: { uuid: "call-1" },
+      body: { digits: "98" },
+      query: { uuid: "call-1", selectorId: "selector-1" },
     });
 
     expect(response.statusCode).toBe(200);
@@ -400,7 +483,7 @@ describe("POST /input/playlist", () => {
 
     const response = await invokeRoute("/input/playlist", {
       body: { dtmf: { digits: "22" } },
-      query: { uuid: "call-1" },
+      query: { uuid: "call-1", selectorId: "selector-1" },
     });
 
     expect(response.statusCode).toBe(200);
@@ -429,8 +512,8 @@ describe("POST /input/playlist", () => {
     vi.mocked(playlistService.getCurrentTrack).mockResolvedValue(defaultTrack);
 
     const response = await invokeRoute("/input/playlist", {
-      body: { dtmf: { digits: "99" } },
-      query: { uuid: "call-1" },
+      body: { dtmf: { digits: "98" } },
+      query: { uuid: "call-1", selectorId: "selector-1" },
     });
 
     expect(response.statusCode).toBe(200);
@@ -439,7 +522,7 @@ describe("POST /input/playlist", () => {
       expect.arrayContaining([
         expect.objectContaining({
           action: "talk",
-          text: "Playlist 99 not found.",
+          text: "Playlist 98 not found.",
         }),
         expect.objectContaining({
           action: "stream",
@@ -456,8 +539,8 @@ describe("POST /input/playlist", () => {
     vi.mocked(playlistService.getCurrentTrack).mockResolvedValue(null);
 
     const response = await invokeRoute("/input/playlist", {
-      body: { dtmf: { digits: "99" } },
-      query: { uuid: "call-1" },
+      body: { dtmf: { digits: "98" } },
+      query: { uuid: "call-1", selectorId: "selector-1" },
     });
 
     expect(response.statusCode).toBe(404);
@@ -507,5 +590,43 @@ describe("POST /track/finished/:uuid/:playlistNumber/:songIndex", () => {
       "1",
       2,
     );
+  });
+});
+
+describe("AI callback isolation", () => {
+  it.each(["agent", "selecting-playlist"] as const)("ignores individual menu digits in %s mode", async (mode) => {
+    vi.mocked(playlistService.getListenerMode).mockResolvedValue(mode);
+    for (const digit of ["9", "9", "#", "1", "2"]) {
+      expect((await invokeRoute("/input/digit", { body: { digit }, query: { uuid: "call-1" } })).statusCode).toBe(204);
+    }
+    expect(voiceClient.transferCallWithNCCO).not.toHaveBeenCalled();
+    expect(playlistService.startPlaylistSelection).not.toHaveBeenCalled();
+  });
+
+  it("returns failed AI connections to saved music", async () => {
+    vi.mocked(playlistService.getCurrentTrack).mockResolvedValue(defaultTrack);
+    const response = await invokeRoute("/agent/event", {
+      body: { status: "disconnected" }, query: { uuid: "call-1", sessionId: "agent-1" },
+    });
+    expect(finishAgent).toHaveBeenCalledWith("call-1", "agent-1");
+    expect(response.body).toEqual(expect.arrayContaining([expect.objectContaining({ action: "stream" })]));
+  });
+
+  it("ignores an old AI connection event after leaving the agent", async () => {
+    vi.mocked(finishAgent).mockResolvedValue(false);
+    const response = await invokeRoute("/agent/event", {
+      body: { status: "failed" }, query: { uuid: "call-1", sessionId: "old-agent" },
+    });
+    expect(response.body).toEqual([]);
+    expect(playlistService.getCurrentTrack).not.toHaveBeenCalled();
+  });
+
+  it("cleans completed calls without trying to restart music", async () => {
+    const response = await invokeRoute("/agent/event", {
+      body: { status: "completed" }, query: { uuid: "call-1", sessionId: "agent-1" },
+    });
+    expect(finishAgent).toHaveBeenCalledWith("call-1", "agent-1");
+    expect(response.body).toEqual([]);
+    expect(playlistService.getCurrentTrack).not.toHaveBeenCalled();
   });
 });

@@ -115,6 +115,12 @@ function parseDestinations(
         );
       }
 
+      if (code === "99") {
+        throw new DiscordBridgeConfigError(
+          "Discord destination code 99 is reserved for the live AI agent.",
+        );
+      }
+
       if (destinationCodes.has(code)) {
         throw new DiscordBridgeConfigError(
           `Discord destination code ${code} is duplicated.`,
@@ -142,7 +148,7 @@ export function parseDiscordBridgeConfig(
   const websocketSecret = optionalValue(source.VONAGE_WEBSOCKET_SECRET);
   const idleMs = parseIdleMs(optionalValue(source.DISCORD_BRIDGE_IDLE_MS));
 
-  if (!botToken && !rawDestinations && !websocketSecret) {
+  if (!botToken && !rawDestinations) {
     return Object.freeze({
       enabled: false,
       destinations: Object.freeze([]),
