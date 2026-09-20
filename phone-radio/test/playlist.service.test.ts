@@ -18,6 +18,7 @@ const playlistFixtures = vi.hoisted(() => ({
   ],
 }));
 const redisPipeline = vi.hoisted(() => ({
+  del: vi.fn(),
   exec: vi.fn(),
   set: vi.fn(),
 }));
@@ -25,6 +26,8 @@ const redisPipeline = vi.hoisted(() => ({
 vi.mock("../src/clients.js", () => ({
   redisClient: {
     get: vi.fn(),
+    del: vi.fn(),
+    eval: vi.fn(),
     pipeline: vi.fn(() => redisPipeline),
     set: vi.fn(),
   },
@@ -41,6 +44,8 @@ vi.mock("node:fs/promises", () => ({
 
 beforeEach(() => {
   vi.mocked(redisClient.get).mockReset();
+  vi.mocked(redisClient.del).mockReset();
+  vi.mocked(redisClient.eval).mockReset();
   vi.mocked(redisClient.pipeline).mockClear();
   vi.mocked(redisClient.set).mockReset();
   vi.mocked(redisClient.set).mockResolvedValue("OK");
@@ -48,6 +53,8 @@ beforeEach(() => {
   redisPipeline.exec.mockResolvedValue([]);
   redisPipeline.set.mockReset();
   redisPipeline.set.mockReturnValue(redisPipeline);
+  redisPipeline.del.mockReset();
+  redisPipeline.del.mockReturnValue(redisPipeline);
   vi.mocked(stat).mockReset();
   vi.mocked(stat).mockImplementation(async (filePath) => {
     const fileSizesByPath: Record<string, number> = {
@@ -110,6 +117,9 @@ describe("startPlaylist", () => {
       "listener:call-1:mode",
       "playing",
     );
+    expect(redisPipeline.del).toHaveBeenCalledWith(
+      "listener:call-1:discord-destination",
+    );
     expect(redisPipeline.exec).toHaveBeenCalledTimes(1);
     expect(redisClient.set).not.toHaveBeenCalled();
   });
@@ -125,19 +135,87 @@ describe("playlist selection mode", () => {
   it("marks a listener as selecting a playlist", async () => {
     await playlistService.startPlaylistSelection("call-1");
 
-    expect(redisClient.set).toHaveBeenCalledWith(
+    expect(redisPipeline.set).toHaveBeenCalledWith(
       "listener:call-1:mode",
       "selecting-playlist",
+    );
+    expect(redisPipeline.del).toHaveBeenCalledWith(
+      "listener:call-1:discord-destination",
     );
   });
 
   it("marks a listener as playing again", async () => {
     await playlistService.resumePlayback("call-1");
 
-    expect(redisClient.set).toHaveBeenCalledWith(
+    expect(redisPipeline.set).toHaveBeenCalledWith(
       "listener:call-1:mode",
       "playing",
     );
+    expect(redisPipeline.del).toHaveBeenCalledWith(
+      "listener:call-1:discord-destination",
+    );
+  });
+});
+
+describe("Discord bridge listener state", () => {
+  it("stores a selected Discord destination before setting Discord mode", async () => {
+    await playlistService.beginDiscordBridge("call-1", "80");
+
+    expect(redisPipeline.set).toHaveBeenNthCalledWith(
+      1,
+      "listener:call-1:discord-destination",
+      "80",
+    );
+    expect(redisPipeline.set).toHaveBeenNthCalledWith(
+      2,
+      "listener:call-1:mode",
+      "discord",
+    );
+    expect(redisPipeline.exec).toHaveBeenCalledTimes(1);
+  });
+
+  it("recognizes Discord mode and preserves the legacy playing default", async () => {
+    vi.mocked(redisClient.get).mockResolvedValueOnce("discord");
+    await expect(playlistService.getListenerMode("call-1")).resolves.toBe(
+      "discord",
+    );
+
+    vi.mocked(redisClient.get).mockResolvedValueOnce(null);
+    await expect(playlistService.getListenerMode("call-2")).resolves.toBe(
+      "playing",
+    );
+  });
+
+  it("reads the selected Discord destination code", async () => {
+    vi.mocked(redisClient.get).mockResolvedValueOnce("80");
+
+    await expect(
+      playlistService.getDiscordDestinationCode("call-1"),
+    ).resolves.toBe("80");
+    expect(redisClient.get).toHaveBeenCalledWith(
+      "listener:call-1:discord-destination",
+    );
+  });
+
+  it("returns to music only when the listener is still in Discord mode", async () => {
+    vi.mocked(redisClient.eval).mockResolvedValueOnce(1);
+    await expect(
+      playlistService.returnToPlaybackIfDiscord("call-1"),
+    ).resolves.toBe(true);
+
+    expect(redisClient.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("DEL", KEYS[2])'),
+      2,
+      "listener:call-1:mode",
+      "listener:call-1:discord-destination",
+      "discord",
+      "playing",
+    );
+
+    vi.mocked(redisClient.eval).mockResolvedValueOnce(0);
+    await expect(
+      playlistService.returnToPlaybackIfDiscord("call-1"),
+    ).resolves.toBe(false);
   });
 });
 

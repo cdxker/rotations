@@ -120,6 +120,27 @@ export class DiscordRuntime {
     );
   }
 
+  public async getDestinationMemberCount(
+    destination: DiscordVoiceDestination,
+  ): Promise<number> {
+    if (!this.isDestinationAvailable(destination.code)) {
+      throw new Error("Discord voice destination is unavailable.");
+    }
+
+    const client = this.getClient();
+    if (!client) {
+      throw new Error("Discord voice bridge is unavailable.");
+    }
+
+    const guild = await client.guilds.fetch(destination.guildId);
+    const channel = await guild.channels.fetch(destination.channelId);
+    if (channel?.type !== ChannelType.GuildVoice) {
+      throw new Error("Configured Discord destination is not a voice channel.");
+    }
+
+    return channel.members.filter(({ id }) => id !== client.user?.id).size;
+  }
+
   public async start(): Promise<boolean> {
     if (!this.#config.enabled) {
       return false;

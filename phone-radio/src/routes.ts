@@ -1,12 +1,19 @@
 import { type } from "arktype";
 import { Router } from "express";
 import type { Router as ExpressRouter } from "express";
-import { voiceClient } from "./clients.js";
+import {
+  discordBridgeManager,
+  discordRuntime,
+  voiceClient,
+} from "./clients.js";
+import { discordBridgeConfig, discordDestinationRegistry } from "./env.js";
 import { playlistService, type PlaylistTrack } from "./playlist.service.js";
 import { buildPlaylistSelectionNcco } from "./utils/buildPlaylistSelectionNcco.js";
 import { buildTrackNcco } from "./utils/buildTrackNcco.js";
+import { buildDiscordBridgeNcco } from "./utils/buildDiscordBridgeNcco.js";
 
 export const routes: ExpressRouter = Router();
+const playlistSelectorTransfers = new Set<string>();
 
 const answerPhoneRequestParser = type({
   body: {
@@ -45,11 +52,15 @@ routes.post("/answer", async (req, res) => {
     const digitPressUrl = new URL("/input/digit", url);
     digitPressUrl.searchParams.set("uuid", uuid);
 
-    void voiceClient.subscribeDTMF(uuid, digitPressUrl.toString());
+    void voiceClient.subscribeDTMF(uuid, digitPressUrl.toString()).catch(() => {
+      req.log.warn({ uuid }, "Failed to subscribe to DTMF input");
+    });
   }, 1_000);
 
   setTimeout(() => {
-    void voiceClient.playDTMF(uuid, "1");
+    void voiceClient.playDTMF(uuid, "1").catch(() => {
+      req.log.warn({ uuid }, "Failed to play initial DTMF signal");
+    });
   }, 5_000);
 
   res.json(
@@ -156,6 +167,29 @@ routes.post("/input/digit", async (req, res) => {
 
   const digit = request.body.digit ?? request.body.dtmf?.digits;
 
+  if (await playlistService.getListenerMode(uuid) === "discord") {
+    if (digit === "9") {
+      if (playlistSelectorTransfers.has(uuid)) {
+        res.status(204).send();
+        return;
+      }
+      playlistSelectorTransfers.add(uuid);
+      try {
+        await discordBridgeManager.detach(uuid);
+        await playlistService.startPlaylistSelection(uuid);
+        await voiceClient.transferCallWithNCCO(
+          uuid,
+          buildPlaylistSelectionNcco({ url, uuid }),
+        );
+      } finally {
+        playlistSelectorTransfers.delete(uuid);
+      }
+    }
+    // Music navigation is deliberately inert while phone media is bridged.
+    res.status(204).send();
+    return;
+  }
+
   let nextTrack: PlaylistTrack | null = null;
 
   if (digit !== "1" && digit !== "2" && digit !== "9") {
@@ -166,6 +200,11 @@ routes.post("/input/digit", async (req, res) => {
   }
 
   if (digit === "9") {
+    if (playlistSelectorTransfers.has(uuid)) {
+      res.status(204).send();
+      return;
+    }
+    playlistSelectorTransfers.add(uuid);
     try {
       await playlistService.startPlaylistSelection(uuid);
       await voiceClient.transferCallWithNCCO(
@@ -184,6 +223,8 @@ routes.post("/input/digit", async (req, res) => {
       res.status(502).json({
         error: "Failed to transfer call to playlist selector.",
       });
+    } finally {
+      playlistSelectorTransfers.delete(uuid);
     }
     return;
   }
@@ -289,6 +330,37 @@ routes.post("/input/playlist", async (req, res) => {
   } = request;
 
   const playlistNumber = request.body.digits ?? request.body.dtmf?.digits;
+  const destination = discordDestinationRegistry.getByCode(playlistNumber);
+
+  if (destination) {
+    if (!discordBridgeConfig.enabled || !discordRuntime.isDestinationAvailable(destination.code)) {
+      await returnToCurrentTrack(res, uuid, url, `Discord ${destination.name} is unavailable.`);
+      return;
+    }
+
+    try {
+      const memberCount = await discordRuntime.getDestinationMemberCount(
+        destination,
+      );
+      await playlistService.beginDiscordBridge(uuid, destination.code);
+      discordBridgeManager.reserve(uuid, destination);
+      res.json(
+        buildDiscordBridgeNcco({
+          destinationName: destination.name,
+          memberCount,
+          url,
+          uuid,
+          websocketSecret: discordBridgeConfig.websocketSecret,
+        }),
+      );
+    } catch (error: unknown) {
+      discordBridgeManager.cancelReservation(uuid);
+      await playlistService.returnToPlaybackIfDiscord(uuid);
+      req.log.error({ error, uuid }, "Failed to reserve Discord bridge");
+      await returnToCurrentTrack(res, uuid, url, "Discord connection failed. Returning to music.");
+    }
+    return;
+  }
   const selectedTrack = await playlistService.switchPlaylistByNumber(
     uuid,
     playlistNumber,
@@ -331,6 +403,66 @@ routes.post("/input/playlist", async (req, res) => {
     }),
   );
 });
+
+const discordEventRequestParser = type({
+  query: { uuid: "string" },
+  body: { "status?": "string" },
+  locals: { baseUrl: "string" },
+});
+
+routes.post("/discord/event", async (req, res) => {
+  const request = discordEventRequestParser(req);
+  if (request instanceof type.errors) {
+    res.status(400).json({ error: request.summary });
+    return;
+  }
+  const { uuid } = request.query;
+  const status = request.body.status?.toLowerCase();
+  const failedStatuses = new Set(["failed", "unanswered", "disconnected", "timeout"]);
+  if (!status || !failedStatuses.has(status)) {
+    res.json([]);
+    return;
+  }
+  req.log.warn(
+    { status, uuid },
+    "Discord bridge transport ended; returning call to music",
+  );
+  discordBridgeManager.cancelReservation(uuid);
+  await discordBridgeManager.detach(uuid);
+  if (!(await playlistService.returnToPlaybackIfDiscord(uuid))) {
+    res.json([]);
+    return;
+  }
+  await returnToCurrentTrack(
+    res,
+    uuid,
+    request.locals.baseUrl,
+    "Discord connection ended. Returning to music.",
+  );
+});
+
+async function returnToCurrentTrack(
+  res: { json(payload: unknown): unknown; status(statusCode: number): { json(payload: unknown): unknown } },
+  uuid: string,
+  url: string,
+  message: string,
+): Promise<void> {
+  const currentTrack = await playlistService.getCurrentTrack(uuid);
+  if (!currentTrack) {
+    res.status(404).json({ error: "Current track could not be found." });
+    return;
+  }
+  res.json(
+    buildTrackNcco({
+      url,
+      uuid,
+      playlistNumber: currentTrack.playlistNumber,
+      trackIndex: currentTrack.index,
+      announceTrack: false,
+      messages: [message],
+    }),
+  );
+}
 
 const loadTrackRequestParser = type({
   params: {

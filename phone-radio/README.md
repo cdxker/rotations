@@ -47,6 +47,45 @@ REDIS_URL=redis://127.0.0.1:6379
 https://YOUR_NGROK_URL/answer?secret=YOUR_SECRET
 ```
 
+### Discord voice bridge (optional)
+
+The bridge is intentionally disabled unless all three of these values are set:
+
+```txt
+DISCORD_BOT_TOKEN=your-discord-bot-token
+DISCORD_VOICE_DESTINATIONS=[{"code":"90","name":"Friends","guildId":"...","channelId":"..."}]
+VONAGE_WEBSOCKET_SECRET=a-long-random-secret
+```
+
+Use a dedicated Discord bot token—never a user/account token. Create the bot in
+the Discord Developer Portal and install it in every configured guild with only
+**View Channel**, **Connect**, and **Speak** permissions. Enable Developer Mode
+in Discord, then copy the guild ID and the standard voice-channel ID into each
+destination. Each `code` must be digits only, unique, and must not collide with
+a second Discord destination. If a code also names a music playlist, the
+Discord destination takes precedence. `DISCORD_BRIDGE_IDLE_MS` defaults to 30
+seconds.
+
+In the playlist selector, entering a configured bridge code followed by `#`
+connects the caller to the mapped Discord voice channel. Phone audio and Discord
+participants are mixed live; callers do not hear their own phone audio. Multiple
+phone callers may share a channel. A second channel in the same guild is refused
+and sent back to music. Press `9` to leave the bridge; `1` and `2` are ignored
+while bridged. No audio is recorded or persisted.
+
+The Vonage WebSocket is authorized with `VONAGE_WEBSOCKET_SECRET`; generate it
+independently, for example with `openssl rand -hex 32`. Reservations expire
+after 15 seconds, idle Discord sessions close after the configured timeout, and
+stalled phone WebSockets are closed rather than buffered indefinitely. If Discord
+login, channel access, or voice setup fails, the call returns to its saved music
+track. Keep the bot token and both Vonage secrets out of git and logs.
+
+Before a live check, run `pnpm --filter phone-radio test`, `pnpm --filter
+phone-radio lint`, and `pnpm --filter phone-radio build`. Then verify a Discord
+participant and two phone callers can converse, self-echo is absent, a
+same-guild conflicting channel falls back to music, and `9`, hangup, and a
+Discord disconnect release the session.
+
 ## Vonage Setup
 
 Configure your Vonage Voice application:

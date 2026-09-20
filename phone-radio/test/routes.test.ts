@@ -1,9 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { voiceClient } from "../src/clients.js";
+import { discordBridgeManager, discordRuntime, voiceClient } from "../src/clients.js";
+import { discordBridgeConfig, discordDestinationRegistry } from "../src/env.js";
 import { playlistService, type PlaylistTrack } from "../src/playlist.service.js";
 import { routes } from "../src/routes.js";
 
 vi.mock("../src/clients.js", () => ({
+  discordBridgeManager: {
+    cancelReservation: vi.fn(),
+    detach: vi.fn(),
+    reserve: vi.fn(),
+  },
+  discordRuntime: {
+    getDestinationMemberCount: vi.fn(),
+    isDestinationAvailable: vi.fn(),
+  },
   vonageApiSecret: "test-secret",
   voiceClient: {
     playDTMF: vi.fn(),
@@ -12,9 +22,20 @@ vi.mock("../src/clients.js", () => ({
   },
 }));
 
+vi.mock("../src/env.js", () => ({
+  discordBridgeConfig: {
+    enabled: false,
+    websocketSecret: "discord-websocket-secret",
+  },
+  discordDestinationRegistry: { getByCode: vi.fn() },
+}));
+
 vi.mock("../src/playlist.service.js", () => ({
   playlistService: {
     commitTrack: vi.fn(),
+    beginDiscordBridge: vi.fn(),
+    getListenerMode: vi.fn(),
+    returnToPlaybackIfDiscord: vi.fn(),
     getCurrentTrack: vi.fn(),
     getNextTrack: vi.fn(),
     getPreviousTrack: vi.fn(),
@@ -44,12 +65,28 @@ const workoutTrack: PlaylistTrack = {
 };
 
 beforeEach(() => {
+  vi.mocked(discordBridgeManager.cancelReservation).mockReset();
+  vi.mocked(discordBridgeManager.detach).mockReset();
+  vi.mocked(discordBridgeManager.reserve).mockReset();
+  vi.mocked(discordDestinationRegistry.getByCode).mockReset();
+  vi.mocked(discordRuntime.getDestinationMemberCount).mockReset();
+  vi.mocked(discordRuntime.isDestinationAvailable).mockReset();
+  vi.mocked(discordRuntime.getDestinationMemberCount).mockResolvedValue(0);
+  Object.assign(discordBridgeConfig, {
+    enabled: false,
+    websocketSecret: "discord-websocket-secret",
+  });
   vi.mocked(voiceClient.playDTMF).mockReset();
   vi.mocked(voiceClient.subscribeDTMF).mockReset();
   vi.mocked(voiceClient.transferCallWithNCCO).mockReset();
+  vi.mocked(voiceClient.playDTMF).mockResolvedValue({});
+  vi.mocked(voiceClient.subscribeDTMF).mockResolvedValue({});
   vi.mocked(voiceClient.transferCallWithNCCO).mockResolvedValue({});
 
   vi.mocked(playlistService.commitTrack).mockReset();
+  vi.mocked(playlistService.beginDiscordBridge).mockReset();
+  vi.mocked(playlistService.getListenerMode).mockReset();
+  vi.mocked(playlistService.returnToPlaybackIfDiscord).mockReset();
   vi.mocked(playlistService.getCurrentTrack).mockReset();
   vi.mocked(playlistService.getNextTrack).mockReset();
   vi.mocked(playlistService.getPreviousTrack).mockReset();
@@ -60,6 +97,8 @@ beforeEach(() => {
   vi.mocked(playlistService.switchPlaylistByNumber).mockReset();
   vi.mocked(playlistService.trackFinished).mockReset();
   vi.mocked(playlistService.resumePlayback).mockResolvedValue();
+  vi.mocked(playlistService.getListenerMode).mockResolvedValue("playing");
+  vi.mocked(playlistService.returnToPlaybackIfDiscord).mockResolvedValue(true);
   vi.mocked(playlistService.startPlaylistSelection).mockResolvedValue();
 });
 
@@ -115,6 +154,7 @@ async function invokeRoute(routePath: string, options: InvokeRouteOptions = {}) 
     log: {
       error: vi.fn(),
       info: vi.fn(),
+      warn: vi.fn(),
     },
     params: options.params ?? {},
     query: options.query ?? {},
@@ -132,6 +172,50 @@ async function invokeRoute(routePath: string, options: InvokeRouteOptions = {}) 
 }
 
 describe("POST /input/digit", () => {
+  it("deduplicates simultaneous digit-9 playlist-selector transfers", async () => {
+    let completeTransfer: (() => void) | undefined;
+    vi.mocked(voiceClient.transferCallWithNCCO).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          completeTransfer = resolve;
+        }),
+    );
+
+    const first = invokeRoute("/input/digit", {
+      body: { digit: "9" },
+      query: { uuid: "call-1" },
+    });
+    await Promise.resolve();
+    const second = await invokeRoute("/input/digit", {
+      body: { digit: "9" },
+      query: { uuid: "call-1" },
+    });
+
+    expect(second.statusCode).toBe(204);
+    expect(voiceClient.transferCallWithNCCO).toHaveBeenCalledTimes(1);
+    completeTransfer?.();
+    expect((await first).statusCode).toBe(204);
+  });
+
+  it("ignores music navigation but lets digit 9 leave Discord mode", async () => {
+    vi.mocked(playlistService.getListenerMode).mockResolvedValue("discord");
+    const skipped = await invokeRoute("/input/digit", {
+      body: { digit: "1" },
+      query: { uuid: "call-1" },
+    });
+    expect(skipped.statusCode).toBe(204);
+    expect(voiceClient.transferCallWithNCCO).not.toHaveBeenCalled();
+
+    const exited = await invokeRoute("/input/digit", {
+      body: { digit: "9" },
+      query: { uuid: "call-1" },
+    });
+    expect(exited.statusCode).toBe(204);
+    expect(discordBridgeManager.detach).toHaveBeenCalledWith("call-1");
+    expect(playlistService.startPlaylistSelection).toHaveBeenCalledWith("call-1");
+    expect(voiceClient.transferCallWithNCCO).toHaveBeenCalledTimes(1);
+  });
+
   it("transfers digit 9 to the playlist selector NCCO", async () => {
     const response = await invokeRoute("/input/digit", {
       body: { digit: "9" },
@@ -151,7 +235,7 @@ describe("POST /input/digit", () => {
         action: "input",
         type: ["dtmf"],
         dtmf: {
-          maxDigits: 20,
+          maxDigits: 2,
           submitOnHash: true,
           timeOut: 10,
         },
@@ -243,6 +327,72 @@ describe("POST /input/digit", () => {
 });
 
 describe("POST /input/playlist", () => {
+  it("returns a custom-authorized WebSocket NCCO for an available Discord destination", async () => {
+    vi.mocked(discordDestinationRegistry.getByCode).mockReturnValue({
+      channelId: "channel-1",
+      code: "33",
+      guildId: "guild-1",
+      name: "Voice Chat 33",
+    });
+    vi.mocked(discordRuntime.isDestinationAvailable).mockReturnValue(true);
+    vi.mocked(discordRuntime.getDestinationMemberCount).mockResolvedValue(2);
+    Object.assign(discordBridgeConfig as object, {
+      enabled: true,
+      websocketSecret: "discord-websocket-secret",
+    });
+    vi.mocked(playlistService.beginDiscordBridge).mockResolvedValue();
+
+    const response = await invokeRoute("/input/playlist", {
+      body: { digits: "33" },
+      query: { uuid: "call-1" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(discordRuntime.getDestinationMemberCount).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "33" }),
+    );
+    expect(playlistService.beginDiscordBridge).toHaveBeenCalledWith("call-1", "33");
+    expect(discordBridgeManager.reserve).toHaveBeenCalledWith(
+      "call-1",
+      expect.objectContaining({ code: "33" }),
+    );
+    expect(response.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        action: "talk",
+        text: "There are 2 members in Voice Chat 33. Connecting now.",
+      }),
+      expect.objectContaining({ action: "connect", endpoint: [expect.objectContaining({
+        authorization: { type: "custom", value: "Bearer discord-websocket-secret" },
+      })] }),
+    ]));
+  });
+
+  it("falls back to the current music track when a configured destination is unavailable", async () => {
+    vi.mocked(discordDestinationRegistry.getByCode).mockReturnValue({
+      channelId: "channel-1",
+      code: "99",
+      guildId: "guild-1",
+      name: "Radio friends",
+    });
+    Object.assign(discordBridgeConfig as object, {
+      enabled: true,
+      websocketSecret: "discord-websocket-secret",
+    });
+    vi.mocked(discordRuntime.isDestinationAvailable).mockReturnValue(false);
+    vi.mocked(playlistService.getCurrentTrack).mockResolvedValue(defaultTrack);
+
+    const response = await invokeRoute("/input/playlist", {
+      body: { digits: "99" },
+      query: { uuid: "call-1" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(playlistService.beginDiscordBridge).not.toHaveBeenCalled();
+    expect(response.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "talk", text: "Discord Radio friends is unavailable." }),
+    ]));
+  });
+
   it("switches to a valid playlist number and returns playback NCCO", async () => {
     vi.mocked(playlistService.switchPlaylistByNumber).mockResolvedValue(
       workoutTrack,
@@ -315,6 +465,24 @@ describe("POST /input/playlist", () => {
     expect(response.body).toEqual({
       error: "Current track could not be found.",
     });
+  });
+});
+
+describe("POST /discord/event", () => {
+  it("returns the saved music NCCO after a failed bridge connection", async () => {
+    vi.mocked(playlistService.getCurrentTrack).mockResolvedValue(defaultTrack);
+    const response = await invokeRoute("/discord/event", {
+      body: { status: "failed" },
+      query: { uuid: "call-1" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(discordBridgeManager.cancelReservation).toHaveBeenCalledWith("call-1");
+    expect(discordBridgeManager.detach).toHaveBeenCalledWith("call-1");
+    expect(playlistService.returnToPlaybackIfDiscord).toHaveBeenCalledWith("call-1");
+    expect(response.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "talk", text: "Discord connection ended. Returning to music." }),
+    ]));
   });
 });
 

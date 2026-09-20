@@ -19,7 +19,7 @@ export function buildPlaylistSelectionNcco({
       action: "input",
       type: ["dtmf"],
       dtmf: {
-        maxDigits: 20,
+        maxDigits: 2,
         submitOnHash: true,
         timeOut: 10,
       },

@@ -1,4 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import {
+  ChannelType,
+  Collection,
+  type Client,
+  type GuildMember,
+} from "discord.js";
 import type { DiscordBridgeConfig } from "../src/discord/config.js";
 import {
   DiscordRuntime,
@@ -16,9 +22,11 @@ const enabledConfig: DiscordBridgeConfig = {
 };
 
 function makeAdapter({
+  client,
   login,
   destinationAvailable = true,
 }: {
+  client?: Client;
   login?: () => Promise<void>;
   destinationAvailable?: boolean;
 } = {}): DiscordClientAdapter & {
@@ -27,7 +35,7 @@ function makeAdapter({
   validateDestination: ReturnType<typeof vi.fn>;
 } {
   return {
-    client: null,
+    client: client ?? null,
     login: vi.fn(login ?? (async () => undefined)),
     validateDestination: vi.fn(async () => destinationAvailable),
     destroy: vi.fn(),
@@ -64,6 +72,37 @@ describe("DiscordRuntime", () => {
     runtime.stop();
     expect(adapter.destroy).toHaveBeenCalledTimes(1);
     expect(runtime.status).toBe("stopped");
+  });
+
+  it("counts current voice members without counting the phone radio bot", async () => {
+    const members = new Collection<string, GuildMember>([
+      ["bot-user", { id: "bot-user" } as GuildMember],
+      ["listener-1", { id: "listener-1" } as GuildMember],
+      ["listener-2", { id: "listener-2" } as GuildMember],
+    ]);
+    const fetchChannel = vi.fn(async () => ({
+      members,
+      type: ChannelType.GuildVoice,
+    }));
+    const client = {
+      guilds: {
+        fetch: vi.fn(async () => ({
+          channels: { fetch: fetchChannel },
+        })),
+      },
+      user: { id: "bot-user" },
+    } as unknown as Client;
+    const runtime = new DiscordRuntime(enabledConfig, () =>
+      makeAdapter({ client }),
+    );
+
+    await runtime.start();
+
+    await expect(
+      runtime.getDestinationMemberCount(enabledConfig.destinations[0]!),
+    ).resolves.toBe(2);
+    expect(client.guilds.fetch).toHaveBeenCalledWith("guild-1");
+    expect(fetchChannel).toHaveBeenCalledWith("channel-1");
   });
 
   it("keeps music online when login fails and allows a later retry", async () => {

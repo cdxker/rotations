@@ -164,3 +164,5 @@
 - [X] `02-FixSetToTrackStatOrdering.md` — Validate target track files before committing Redis index changes
 - [X] `02-ExpandPlaylistCatalog.md` — Register the active playlists 1–8 and 11–12 and regenerate the song list
 - [X] `02-PlaylistSelectionRefactor.md` — Add Redis-backed playlist selection by pressing 9 during playback
+- [X] `03-FixDiscordBridgeDigitNineExit.md` — Keep digit 9 subscribed while Discord audio is connected so callers can reopen playlist selection
+- [X] `04-AnnounceDiscordVoiceMemberCount.md` — Announce the selected Discord voice channel's member count before starting the audio bridge
