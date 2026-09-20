@@ -13,6 +13,8 @@ export interface AgentVoiceSession {
 }
 
 export type AgentVoiceSessionOptions = {
+  uuid: string;
+  sessionId: string;
   onAudio: (audio: Buffer) => void;
   onFailure: (reason: string) => void;
 };
@@ -150,6 +152,8 @@ export class AgentBridgeManager {
 
     try {
       active.provider = this.#options.createSession({
+        uuid,
+        sessionId,
         onAudio: (audio) => this.receiveOutput(active, audio),
         onFailure: (reason) => {
           this.track(this.finish(active, "failure", reason));

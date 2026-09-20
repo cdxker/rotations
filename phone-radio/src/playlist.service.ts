@@ -4,9 +4,8 @@ import { stat } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import {
   DEFAULT_PLAYLIST_NUMBER,
-  playlists,
-  type Playlist,
 } from "./playlists/index.js";
+import { playlistCatalog, type PlaylistRevision } from "./playlists/catalog.js";
 
 export type Track = {
   filePath: string;
@@ -17,6 +16,13 @@ export type PlaylistTrack = Track & {
   index: number;
   playlistNumber: string;
   playlistName: string;
+  catalogRevision?: string;
+};
+
+type ListenerTrackState = {
+  playlist: PlaylistRevision;
+  index: number;
+  storedRevision: string | null;
 };
 
 export type ListenerMode = "playing" | "selecting-playlist" | "discord" | "agent";
@@ -66,13 +72,15 @@ const ADVANCE_FINISHED_TRACK_SCRIPT = `
 local mode = redis.call("GET", KEYS[1])
 if (mode and mode ~= ARGV[1])
   or (redis.call("GET", KEYS[2]) or ARGV[5]) ~= ARGV[2]
-  or redis.call("GET", KEYS[3]) ~= ARGV[3] then
+  or redis.call("GET", KEYS[3]) ~= ARGV[3]
+  or (redis.call("GET", KEYS[7]) or "") ~= ARGV[6] then
   return 0
 end
 
 redis.call("SET", KEYS[1], ARGV[1])
 redis.call("SET", KEYS[2], ARGV[2])
 redis.call("SET", KEYS[3], ARGV[4])
+redis.call("SET", KEYS[7], ARGV[7])
 redis.call("DEL", KEYS[4], KEYS[5], KEYS[6])
 return 1
 `;
@@ -81,11 +89,14 @@ class PlaylistService {
   constructor(public readonly redisClient: Redis.Redis) {}
 
   public async startPlaylist(uuid: string): Promise<void> {
+    const playlist = playlistCatalog.current(DEFAULT_PLAYLIST_NUMBER);
+    if (!playlist) throw new Error("Default playlist is unavailable.");
     await this.executeStateTransition(
       this.redisClient
         .multi()
         .set(this.playlistKey(uuid), DEFAULT_PLAYLIST_NUMBER)
         .set(this.trackKey(uuid), "0")
+        .set(this.revisionKey(uuid), playlist.revision)
         .set(`listener:${uuid}:mode`, PLAYBACK_MODE)
         .del(this.discordDestinationKey(uuid))
         .del(this.selectorKey(uuid), this.agentSessionKey(uuid)),
@@ -234,8 +245,9 @@ class PlaylistService {
   public async getTrackPath(
     playlistNumber: string,
     songIndex: number,
+    catalogRevision?: string,
   ): Promise<Track | null> {
-    const playlist = this.getPlaylistByNumber(playlistNumber);
+    const playlist = this.getPlaylistByNumber(playlistNumber, catalogRevision);
 
     if (!playlist) {
       return null;
@@ -263,6 +275,7 @@ class PlaylistService {
     uuid: string,
     completedPlaylistNumber: string,
     completedSongIndex: number,
+    completedRevision?: string,
   ): Promise<PlaylistTrack | null> {
     const playbackMode = await this.getListenerMode(uuid);
 
@@ -278,18 +291,15 @@ class PlaylistService {
 
     if (
       currentState.playlist.number !== completedPlaylistNumber ||
-      currentState.index !== completedSongIndex
+      currentState.index !== completedSongIndex ||
+      (completedRevision !== undefined
+        ? currentState.playlist.revision !== completedRevision
+        : currentState.storedRevision !== null)
     ) {
       return null;
     }
 
-    const nextTrackIndex =
-      (completedSongIndex + 1) % currentState.playlist.tracks.length;
-
-    const nextTrack = await this.getPlaylistTrack({
-      playlist: currentState.playlist,
-      index: nextTrackIndex,
-    });
+    const nextTrack = await this.getAdjacentTrack(currentState, 1);
     if (!nextTrack) {
       return null;
     }
@@ -299,18 +309,21 @@ class PlaylistService {
     try {
       const committed = await this.redisClient.eval(
         ADVANCE_FINISHED_TRACK_SCRIPT,
-        6,
+        7,
         this.modeKey(uuid),
         this.playlistKey(uuid),
         this.trackKey(uuid),
         this.discordDestinationKey(uuid),
         this.selectorKey(uuid),
         this.agentSessionKey(uuid),
+        this.revisionKey(uuid),
         PLAYBACK_MODE,
         currentState.playlist.number,
         completedSongIndex.toString(),
-        nextTrackIndex.toString(),
+        nextTrack.index.toString(),
         DEFAULT_PLAYLIST_NUMBER,
+        currentState.storedRevision ?? "",
+        nextTrack.catalogRevision!,
       );
       return committed === 1 ? nextTrack : null;
     } catch {
@@ -322,8 +335,9 @@ class PlaylistService {
     uuid: string,
     playlistNumber: string,
     index: number,
+    catalogRevision?: string,
   ): Promise<PlaylistTrack | null> {
-    const playlist = this.getPlaylistByNumber(playlistNumber);
+    const playlist = this.getPlaylistByNumber(playlistNumber, catalogRevision);
 
     if (!playlist) {
       return null;
@@ -341,6 +355,7 @@ class PlaylistService {
           .multi()
           .set(this.playlistKey(uuid), playlist.number)
           .set(this.trackKey(uuid), index.toString())
+          .set(this.revisionKey(uuid), playlist.revision)
           .set(this.modeKey(uuid), PLAYBACK_MODE)
           .del(this.discordDestinationKey(uuid))
           .del(this.selectorKey(uuid), this.agentSessionKey(uuid)),
@@ -357,14 +372,7 @@ class PlaylistService {
     if (!currentState) {
       return null;
     }
-    const nextTrackIndex =
-      (currentState.index + 1 + currentState.playlist.tracks.length) %
-      currentState.playlist.tracks.length;
-
-    return this.getPlaylistTrack({
-      playlist: currentState.playlist,
-      index: nextTrackIndex,
-    });
+    return this.getAdjacentTrack(currentState, 1);
   }
 
   public async getPreviousTrack(uuid: string): Promise<PlaylistTrack | null> {
@@ -372,14 +380,7 @@ class PlaylistService {
     if (!currentState) {
       return null;
     }
-    const nextTrackIndex =
-      (currentState.index - 1 + currentState.playlist.tracks.length) %
-      currentState.playlist.tracks.length;
-
-    return this.getPlaylistTrack({
-      playlist: currentState.playlist,
-      index: nextTrackIndex,
-    });
+    return this.getAdjacentTrack(currentState, -1);
   }
 
   public async switchPlaylistByNumber(
@@ -403,7 +404,7 @@ class PlaylistService {
     const nextTrack = await this.getNextTrack(uuid);
 
     return nextTrack
-      ? this.commitTrack(uuid, nextTrack.playlistNumber, nextTrack.index)
+      ? this.commitTrack(uuid, nextTrack.playlistNumber, nextTrack.index, nextTrack.catalogRevision)
       : null;
   }
 
@@ -411,7 +412,7 @@ class PlaylistService {
     const previousTrack = await this.getPreviousTrack(uuid);
 
     return previousTrack
-      ? this.commitTrack(uuid, previousTrack.playlistNumber, previousTrack.index)
+      ? this.commitTrack(uuid, previousTrack.playlistNumber, previousTrack.index, previousTrack.catalogRevision)
       : null;
   }
 
@@ -433,6 +434,10 @@ class PlaylistService {
     return `listener:${uuid}:track`;
   }
 
+  private revisionKey(uuid: string): string {
+    return `listener:${uuid}:catalog-revision`;
+  }
+
   private modeKey(uuid: string): string {
     return `listener:${uuid}:mode`;
   }
@@ -451,10 +456,11 @@ class PlaylistService {
 
   private async getCurrentState(
     uuid: string,
-  ): Promise<{ playlist: Playlist; index: number } | null> {
-    const [storedPlaylistNumber, trackIndex] = await this.redisClient.mget(
+  ): Promise<ListenerTrackState | null> {
+    const [storedPlaylistNumber, trackIndex, storedRevision] = await this.redisClient.mget(
       this.playlistKey(uuid),
       this.trackKey(uuid),
+      this.revisionKey(uuid),
     );
 
     if (!trackIndex) {
@@ -464,6 +470,7 @@ class PlaylistService {
     const index = Number.parseInt(trackIndex, 10);
     const playlist = this.getPlaylistByNumber(
       storedPlaylistNumber ?? DEFAULT_PLAYLIST_NUMBER,
+      storedRevision ?? undefined,
     );
 
     if (!playlist || !Number.isInteger(index)) {
@@ -474,14 +481,46 @@ class PlaylistService {
       return null;
     }
 
-    return { playlist, index };
+    return { playlist, index, storedRevision: storedRevision ?? null };
+  }
+
+  private async getAdjacentTrack(
+    state: ListenerTrackState,
+    direction: 1 | -1,
+  ): Promise<PlaylistTrack | null> {
+    const latest = playlistCatalog.current(state.playlist.number);
+    if (!latest?.tracks.length) return null;
+
+    const currentSongId = state.playlist.songIds[state.index];
+    const currentIndex = latest.songIds.indexOf(currentSongId);
+    if (currentIndex !== -1) {
+      return this.getPlaylistTrack({
+        playlist: latest,
+        index: (currentIndex + direction + latest.tracks.length) % latest.tracks.length,
+      });
+    }
+
+    // Let a removed song finish, then continue with its first surviving neighbor.
+    // Every caller keeps their own immutable queued revision during live edits.
+    for (let offset = 1; offset < state.playlist.tracks.length; offset++) {
+      const oldIndex = (state.index + direction * offset + state.playlist.tracks.length) %
+        state.playlist.tracks.length;
+      const successorIndex = latest.songIds.indexOf(state.playlist.songIds[oldIndex]);
+      if (successorIndex !== -1) {
+        return this.getPlaylistTrack({ playlist: latest, index: successorIndex });
+      }
+    }
+    return this.getPlaylistTrack({
+      playlist: latest,
+      index: direction === 1 ? 0 : latest.tracks.length - 1,
+    });
   }
 
   private async getPlaylistTrack({
     playlist,
     index,
   }: {
-    playlist: Playlist;
+    playlist: PlaylistRevision;
     index: number;
   }): Promise<PlaylistTrack | null> {
     const filePath = playlist.tracks[index];
@@ -499,22 +538,26 @@ class PlaylistService {
         index,
         playlistNumber: playlist.number,
         playlistName: playlist.name,
+        catalogRevision: playlist.revision,
       };
     } catch {
       return null;
     }
   }
 
-  private getPlaylistByNumber(input: string | undefined): Playlist | null {
+  private getPlaylistByNumber(
+    input: string | undefined,
+    catalogRevision?: string,
+  ): PlaylistRevision | null {
     const playlistNumber = this.normalizePlaylistNumber(input);
 
     if (!playlistNumber) {
       return null;
     }
 
-    return (
-      playlists.find((playlist) => playlist.number === playlistNumber) ?? null
-    );
+    return catalogRevision === undefined
+      ? playlistCatalog.current(playlistNumber)
+      : playlistCatalog.revision(playlistNumber, catalogRevision);
   }
 
   private normalizePlaylistNumber(input: string | undefined): string {

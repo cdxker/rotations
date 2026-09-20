@@ -234,6 +234,7 @@ async function returnToMusic(
       uuid,
       playlistNumber: track.playlistNumber,
       trackIndex: track.index,
+      catalogRevision: track.catalogRevision,
       announceTrack: false,
       messages: [message],
     }),

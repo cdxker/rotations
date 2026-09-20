@@ -5,13 +5,19 @@ import { buildPlaylistSelectionNcco } from "../utils/buildPlaylistSelectionNcco.
 import { buildTrackNcco } from "../utils/buildTrackNcco.js";
 import { AgentBridgeManager } from "./bridge-manager.js";
 import { LiveSession } from "./live-session.js";
+import { createPlaylistTools } from "./playlist-tools.js";
 
 const callUrls = new Map<string, string>();
 
 export const agentBridgeManager = new AgentBridgeManager({
-  createSession(callbacks) {
+  createSession({ uuid, sessionId, ...callbacks }) {
     if (!agentConfig.enabled) throw new Error("AI agent is unavailable.");
-    return new LiveSession({ apiKey: agentConfig.apiKey, ...callbacks });
+    return new LiveSession({ apiKey: agentConfig.apiKey, ...callbacks,
+      tools: createPlaylistTools({
+        currentPlaylist: async () => (await playlistService.getCurrentTrack(uuid))?.playlistNumber ?? null,
+        isActive: async () => await playlistService.getAgentSessionId(uuid) === sessionId,
+      }),
+    });
   },
   onExit: leaveAgent,
   onFailure: failAgent,
@@ -46,6 +52,7 @@ async function transferSavedTrack(uuid: string, url: string, message: string): P
   if (!track) throw new Error("Saved track unavailable.");
   await voiceClient.transferCallWithNCCO(uuid, buildTrackNcco({
     url, uuid, playlistNumber: track.playlistNumber, trackIndex: track.index,
+    catalogRevision: track.catalogRevision,
     announceTrack: false, messages: [message],
   }));
 }

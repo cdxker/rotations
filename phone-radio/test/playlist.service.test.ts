@@ -6,6 +6,7 @@ import { Redis } from "ioredis";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { redisClient } from "../src/clients.js";
 import { playlistService } from "../src/playlist.service.js";
+import type { PlaylistRevision } from "../src/playlists/catalog.js";
 
 const playlistFixtures = vi.hoisted(() => ({
   playlists: [
@@ -21,6 +22,32 @@ const playlistFixtures = vi.hoisted(() => ({
     },
   ],
 }));
+const catalogState = vi.hoisted(() => ({
+  current: new Map<string, PlaylistRevision>(),
+  revisions: new Map<string, PlaylistRevision>(),
+}));
+
+vi.mock("../src/playlists/catalog.js", () => ({
+  playlistCatalog: {
+    current: (number: string) => catalogState.current.get(number) ?? null,
+    revision: (number: string, revision: string) => catalogState.revisions.get(`${number}:${revision}`) ?? null,
+  },
+}));
+
+function publishRevision(number: string, paths: string[], revision: string): PlaylistRevision {
+  const fixture = playlistFixtures.playlists.find((playlist) => playlist.number === number)!;
+  const snapshot = Object.freeze({
+    number,
+    name: fixture.name,
+    revision,
+    tracks: Object.freeze([...paths]),
+    songIds: Object.freeze(paths.map((path) => `${number}:${path}`)),
+  });
+  catalogState.current.set(number, snapshot);
+  catalogState.revisions.set(`${number}:${revision}`, snapshot);
+  return snapshot;
+}
+
 const redisTransaction = vi.hoisted(() => ({
   del: vi.fn(),
   exec: vi.fn(),
@@ -49,6 +76,11 @@ vi.mock("node:fs/promises", async (importOriginal) => ({
 }));
 
 beforeEach(() => {
+  catalogState.current.clear();
+  catalogState.revisions.clear();
+  for (const playlist of playlistFixtures.playlists) {
+    publishRevision(playlist.number, playlist.tracks, `revision-${playlist.number}-initial`);
+  }
   vi.mocked(redisClient.get).mockReset();
   vi.mocked(redisClient.mget).mockReset();
   vi.mocked(redisClient.del).mockReset();
@@ -88,12 +120,14 @@ function mockCurrentState({
   mode = "playing",
   playlistNumber = "1",
   trackIndex = "0",
+  catalogRevision = null,
 }: {
   mode?: string | null;
   playlistNumber?: string | null;
   trackIndex?: string | null;
+  catalogRevision?: string | null;
 }) {
-  vi.mocked(redisClient.mget).mockResolvedValue([playlistNumber, trackIndex]);
+  vi.mocked(redisClient.mget).mockResolvedValue([playlistNumber, trackIndex, catalogRevision]);
   vi.mocked(redisClient.get).mockImplementation(async (key) => {
     if (String(key).endsWith(":mode")) {
       return mode;
@@ -296,11 +330,13 @@ describe("getCurrentTrack", () => {
       index: 1,
       playlistNumber: "22",
       playlistName: "Workout",
+      catalogRevision: "revision-22-initial",
     });
     expect(stat).toHaveBeenCalledWith("workout-1.mp3");
     expect(redisClient.mget).toHaveBeenCalledWith(
       "listener:call-1:playlist",
       "listener:call-1:track",
+      "listener:call-1:catalog-revision",
     );
   });
 
@@ -313,6 +349,7 @@ describe("getCurrentTrack", () => {
       index: 2,
       playlistNumber: "1",
       playlistName: "Default",
+      catalogRevision: "revision-1-initial",
     });
   });
 
@@ -373,21 +410,25 @@ describe("trackFinished", () => {
       index: 1,
       playlistNumber: "22",
       playlistName: "Workout",
+      catalogRevision: "revision-22-initial",
     });
     expect(redisClient.eval).toHaveBeenCalledWith(
       expect.stringContaining('redis.call("GET", KEYS[3]) ~= ARGV[3]'),
-      6,
+      7,
       "listener:call-1:mode",
       "listener:call-1:playlist",
       "listener:call-1:track",
       "listener:call-1:discord-destination",
       "listener:call-1:selector-id",
       "listener:call-1:agent-session-id",
+      "listener:call-1:catalog-revision",
       "playing",
       "22",
       "0",
       "1",
       "1",
+      "",
+      "revision-22-initial",
     );
     expect(redisClient.set).not.toHaveBeenCalled();
   });
@@ -525,6 +566,7 @@ describe("switchPlaylistByNumber", () => {
       index: 0,
       playlistNumber: "22",
       playlistName: "Workout",
+      catalogRevision: "revision-22-initial",
     });
     expect(redisTransaction.set).toHaveBeenCalledWith(
       "listener:call-1:playlist",
@@ -538,6 +580,60 @@ describe("switchPlaylistByNumber", () => {
       playlistService.switchPlaylistByNumber("call-1", "99"),
     ).resolves.toBeNull();
     expect(redisClient.set).not.toHaveBeenCalled();
+  });
+});
+
+describe("live playlist revisions", () => {
+  it("keeps queued audio and the saved track on the original revision after a removal", async () => {
+    mockCurrentState({ trackIndex: "1", catalogRevision: "revision-1-initial" });
+    publishRevision("1", ["default-1.mp3", "default-2.mp3"], "edited");
+
+    await expect(playlistService.getCurrentTrack("call-1")).resolves.toMatchObject({
+      filePath: "default-1.mp3", index: 1, catalogRevision: "revision-1-initial",
+    });
+    await expect(playlistService.getTrackPath("1", 1, "revision-1-initial")).resolves.toMatchObject({
+      filePath: "default-1.mp3",
+    });
+    await expect(playlistService.getNextTrack("call-1")).resolves.toMatchObject({
+      filePath: "default-2.mp3", index: 1, catalogRevision: "edited",
+    });
+  });
+
+  it("continues from the nearest surviving old neighbor when the playing song is removed", async () => {
+    mockCurrentState({ trackIndex: "1", catalogRevision: "revision-1-initial" });
+    publishRevision("1", ["default-0.mp3", "default-2.mp3"], "edited");
+
+    await expect(playlistService.getNextTrack("call-1")).resolves.toMatchObject({
+      filePath: "default-2.mp3", index: 1, catalogRevision: "edited",
+    });
+    await expect(playlistService.getPreviousTrack("call-1")).resolves.toMatchObject({
+      filePath: "default-0.mp3", index: 0, catalogRevision: "edited",
+    });
+  });
+
+  it("commits the exact preview after the catalog changes while a call transfer is pending", async () => {
+    mockCurrentState({ catalogRevision: "revision-1-initial" });
+    const preview = (await playlistService.getNextTrack("call-1"))!;
+    publishRevision("1", ["default-0.mp3", "default-2.mp3"], "edited");
+
+    await expect(playlistService.commitTrack("call-1", preview.playlistNumber, preview.index, preview.catalogRevision))
+      .resolves.toMatchObject({ filePath: "default-1.mp3", catalogRevision: "revision-1-initial" });
+    expect(redisTransaction.set).toHaveBeenCalledWith("listener:call-1:catalog-revision", "revision-1-initial");
+  });
+
+  it("rejects a callback with a missing or old revision even when its index matches", async () => {
+    publishRevision("1", ["default-1.mp3", "default-2.mp3"], "edited");
+    mockCurrentState({ catalogRevision: "edited" });
+
+    await expect(playlistService.trackFinished("call-1", "1", 0, "revision-1-initial")).resolves.toBeNull();
+    await expect(playlistService.trackFinished("call-1", "1", 0)).resolves.toBeNull();
+    expect(redisClient.eval).not.toHaveBeenCalled();
+  });
+
+  it("never substitutes current audio for a missing immutable revision", async () => {
+    await expect(playlistService.getTrackPath("1", 0, "unknown")).resolves.toBeNull();
+    await expect(playlistService.commitTrack("call-1", "1", 0, "unknown")).resolves.toBeNull();
+    expect(redisClient.multi).not.toHaveBeenCalled();
   });
 });
 
@@ -738,6 +834,45 @@ describe.skipIf(spawnSync("redis-server", ["--version"]).status !== 0)(
         index: 2,
       });
       await expect(connection.get("listener:call-1:track")).resolves.toBe("2");
+    });
+
+    it("keeps two callers' queued songs stable and advances both into a live edit", async () => {
+      await playlistService.commitTrack("call-1", "1", 0);
+      await playlistService.commitTrack("call-2", "1", 1);
+      publishRevision("1", ["default-1.mp3", "default-2.mp3"], "edited");
+
+      await expect(playlistService.getCurrentTrack("call-1")).resolves.toMatchObject({ filePath: "default-0.mp3" });
+      await expect(playlistService.getCurrentTrack("call-2")).resolves.toMatchObject({ filePath: "default-1.mp3" });
+      await expect(playlistService.trackFinished("call-1", "1", 0, "revision-1-initial"))
+        .resolves.toMatchObject({ filePath: "default-1.mp3", index: 0, catalogRevision: "edited" });
+      await expect(playlistService.getCurrentTrack("call-2")).resolves.toMatchObject({ catalogRevision: "revision-1-initial" });
+      await expect(playlistService.trackFinished("call-2", "1", 1, "revision-1-initial"))
+        .resolves.toMatchObject({ filePath: "default-2.mp3", index: 1, catalogRevision: "edited" });
+      await expect(playlistService.trackFinished("call-1", "1", 0, "revision-1-initial")).resolves.toBeNull();
+      await expect(playlistService.getCurrentTrack("call-1")).resolves.toMatchObject({ filePath: "default-1.mp3" });
+    });
+
+    it("rechecks the queued revision after async lookup even when a newer track has the same index", async () => {
+      await playlistService.commitTrack("call-1", "1", 0);
+      let completeStat!: () => void;
+      let statStarted!: () => void;
+      const started = new Promise<void>((resolve) => { statStarted = resolve; });
+      const pendingStat = new Promise<void>((resolve) => { completeStat = resolve; });
+      vi.mocked(stat).mockImplementationOnce(async () => {
+        statStarted();
+        await pendingStat;
+        return { size: 200 } as Awaited<ReturnType<typeof stat>>;
+      });
+      const finished = playlistService.trackFinished("call-1", "1", 0, "revision-1-initial");
+      await started;
+      publishRevision("1", ["default-1.mp3", "default-2.mp3"], "edited");
+      await playlistService.commitTrack("call-1", "1", 0);
+      completeStat();
+
+      await expect(finished).resolves.toBeNull();
+      await expect(playlistService.getCurrentTrack("call-1")).resolves.toMatchObject({
+        filePath: "default-1.mp3", index: 0, catalogRevision: "edited",
+      });
     });
   },
 );

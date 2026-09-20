@@ -60,6 +60,7 @@ const defaultTrack: PlaylistTrack = {
   index: 2,
   playlistNumber: "1",
   playlistName: "Default",
+  catalogRevision: "default-revision",
 };
 
 const workoutTrack: PlaylistTrack = {
@@ -68,6 +69,7 @@ const workoutTrack: PlaylistTrack = {
   index: 0,
   playlistNumber: "22",
   playlistName: "Workout",
+  catalogRevision: "workout-revision",
 };
 
 beforeEach(() => {
@@ -144,6 +146,8 @@ async function invokeRoute(routePath: string, options: InvokeRouteOptions = {}) 
   const response = {
     body: undefined as unknown,
     statusCode: 200,
+    setHeader: vi.fn(),
+    sendFile: vi.fn(),
     json(payload: unknown) {
       this.body = payload;
       return this;
@@ -304,7 +308,7 @@ describe("POST /input/digit", () => {
         expect.objectContaining({
           action: "stream",
           streamUrl: [
-            "https://radio.example.test/track/22/0?secret=test-secret",
+            "https://radio.example.test/track/22/0?secret=test-secret&catalogRevision=workout-revision",
           ],
         }),
       ]),
@@ -313,6 +317,7 @@ describe("POST /input/digit", () => {
       "call-1",
       "22",
       0,
+      "workout-revision",
     );
     expect(
       vi.mocked(voiceClient.transferCallWithNCCO).mock.invocationCallOrder[0],
@@ -500,7 +505,7 @@ describe("POST /input/playlist", () => {
         expect.objectContaining({
           action: "stream",
           streamUrl: [
-            "https://radio.example.test/track/22/0?secret=test-secret",
+            "https://radio.example.test/track/22/0?secret=test-secret&catalogRevision=workout-revision",
           ],
         }),
       ]),
@@ -527,7 +532,7 @@ describe("POST /input/playlist", () => {
         expect.objectContaining({
           action: "stream",
           streamUrl: [
-            "https://radio.example.test/track/1/2?secret=test-secret",
+            "https://radio.example.test/track/1/2?secret=test-secret&catalogRevision=default-revision",
           ],
         }),
       ]),
@@ -570,6 +575,24 @@ describe("POST /discord/event", () => {
 });
 
 describe("POST /track/finished/:uuid/:playlistNumber/:songIndex", () => {
+  it("carries the immutable revision through completion and the next queued audio", async () => {
+    vi.mocked(playlistService.trackFinished).mockResolvedValue(workoutTrack);
+    const response = await invokeRoute("/track/finished/:uuid/:playlistNumber/:songIndex", {
+      params: { playlistNumber: "22", songIndex: "1", uuid: "call-1" },
+      query: { catalogRevision: "previous-revision" },
+    });
+
+    expect(playlistService.trackFinished).toHaveBeenCalledWith("call-1", "22", 1, "previous-revision");
+    expect(response.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "stream", streamUrl: [
+        "https://radio.example.test/track/22/0?secret=test-secret&catalogRevision=workout-revision",
+      ] }),
+      expect.objectContaining({ action: "notify", eventUrl: [
+        "https://radio.example.test/track/finished/call-1/22/0?catalogRevision=workout-revision",
+      ] }),
+    ]));
+  });
+
   it("passes playlist number through to stale callback protection", async () => {
     vi.mocked(playlistService.trackFinished).mockResolvedValue(null);
 
@@ -589,7 +612,21 @@ describe("POST /track/finished/:uuid/:playlistNumber/:songIndex", () => {
       "call-1",
       "1",
       2,
+      undefined,
     );
+  });
+});
+
+describe("GET /track/:playlistNumber/:index", () => {
+  it("loads the original queued revision instead of resolving the current numeric index", async () => {
+    vi.mocked(playlistService.getTrackPath).mockResolvedValue(defaultTrack);
+    const response = await invokeRoute("/track/:playlistNumber/:index", {
+      params: { playlistNumber: "1", index: "2" },
+      query: { catalogRevision: "old-revision" },
+    });
+
+    expect(playlistService.getTrackPath).toHaveBeenCalledWith("1", 2, "old-revision");
+    expect(response.sendFile).toHaveBeenCalledWith("default-2.mp3");
   });
 });
 

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   options: null as ManagerOptions | null,
   manager: { reserve: vi.fn(), release: vi.fn() },
   liveSession: vi.fn(),
+  playlistTools: vi.fn(),
 }));
 
 vi.mock("../src/agent/bridge-manager.js", () => ({
@@ -26,6 +27,10 @@ vi.mock("../src/agent/live-session.js", () => ({
   LiveSession: class {
     constructor(options: unknown) { mocks.liveSession(options); }
   },
+}));
+
+vi.mock("../src/agent/playlist-tools.js", () => ({
+  createPlaylistTools: (options: unknown) => { mocks.playlistTools(options); return { definitions: [], instructions: "song skill", execute: "test" }; },
 }));
 
 vi.mock("../src/clients.js", () => ({
@@ -45,6 +50,7 @@ vi.mock("../src/playlist.service.js", () => ({
   playlistService: {
     claimPlaylistSelection: vi.fn(),
     getCurrentTrack: vi.fn(),
+    getAgentSessionId: vi.fn(),
     resumePlayback: vi.fn(),
     transitionFromAgent: vi.fn(),
   },
@@ -80,6 +86,7 @@ beforeEach(() => {
     index: 3,
     playlistNumber: "22",
     playlistName: "Saved playlist",
+    catalogRevision: "saved-revision",
   });
 });
 
@@ -139,7 +146,7 @@ describe("agent runtime", () => {
       { action: "talk", text: "The AI connection ended. Returning to music." },
       expect.objectContaining({
         action: "stream",
-        streamUrl: [`${url}/track/22/3?secret=vonage-test-secret`],
+        streamUrl: [`${url}/track/22/3?secret=vonage-test-secret&catalogRevision=saved-revision`],
       }),
     ]));
     expect(playlistService.resumePlayback).not.toHaveBeenCalled();
@@ -159,7 +166,7 @@ describe("agent runtime", () => {
     if (current) {
       expect(voiceClient.transferCallWithNCCO).toHaveBeenLastCalledWith("call-1", expect.arrayContaining([
         { action: "talk", text: "The menu is unavailable. Returning to music." },
-        expect.objectContaining({ action: "stream", streamUrl: [`${url}/track/22/3?secret=vonage-test-secret`] }),
+        expect.objectContaining({ action: "stream", streamUrl: [`${url}/track/22/3?secret=vonage-test-secret&catalogRevision=saved-revision`] }),
       ]));
     }
   });
@@ -211,13 +218,21 @@ describe("agent runtime", () => {
   });
 
   it("passes the provider credential only to the provider session", async () => {
-    const callbacks = { onAudio: vi.fn(), onFailure: vi.fn() };
+    const callbacks = { uuid: "call-1", sessionId: "session-1", onAudio: vi.fn(), onFailure: vi.fn() };
     options().createSession(callbacks);
 
     expect(mocks.liveSession).toHaveBeenCalledExactlyOnceWith({
       apiKey: "provider-api-secret",
-      ...callbacks,
+      onAudio: callbacks.onAudio,
+      onFailure: callbacks.onFailure,
+      tools: { definitions: [], instructions: "song skill", execute: "test" },
     });
+    const toolOptions = mocks.playlistTools.mock.calls[0][0];
+    await expect(toolOptions.currentPlaylist()).resolves.toBe("22");
+    vi.mocked(playlistService.getAgentSessionId).mockResolvedValue("session-1");
+    await expect(toolOptions.isActive()).resolves.toBe(true);
+    vi.mocked(playlistService.getAgentSessionId).mockResolvedValue("new-session");
+    await expect(toolOptions.isActive()).resolves.toBe(false);
     reserveAgent("call-1", "session-1", url);
     await options().onExit("call-1", "session-1");
 
@@ -229,7 +244,7 @@ describe("agent runtime", () => {
 
   it("refuses provider sessions when AI is disabled", () => {
     Object.assign(agentConfig, { enabled: false });
-    expect(() => options().createSession({ onAudio: vi.fn(), onFailure: vi.fn() })).toThrow("AI agent is unavailable.");
+    expect(() => options().createSession({ uuid: "call-1", sessionId: "session-1", onAudio: vi.fn(), onFailure: vi.fn() })).toThrow("AI agent is unavailable.");
     expect(mocks.liveSession).not.toHaveBeenCalled();
   });
 });

@@ -72,12 +72,14 @@ routes.post("/answer", async (req, res) => {
       uuid,
       playlistNumber: currentTrack.playlistNumber,
       trackIndex: currentTrack.index,
+      catalogRevision: currentTrack.catalogRevision,
       announceTrack: false,
     }),
   );
 });
 
 const finishedTrackRequestParser = type({
+  query: { "catalogRevision?": "string" },
   params: {
     uuid: "string",
     playlistNumber: "string",
@@ -116,6 +118,7 @@ routes.post(
       uuid,
       playlistNumber,
       finishedTrackIndex,
+      request.query.catalogRevision,
     );
 
     if (nextTrack === null) {
@@ -133,6 +136,7 @@ routes.post(
         uuid,
         playlistNumber: nextTrack.playlistNumber,
         trackIndex: nextTrack.index,
+        catalogRevision: nextTrack.catalogRevision,
         announceTrack: false,
       }),
     );
@@ -261,6 +265,7 @@ routes.post("/input/digit", async (req, res) => {
         uuid,
         playlistNumber: nextTrack.playlistNumber,
         trackIndex: nextTrack.index,
+        catalogRevision: nextTrack.catalogRevision,
         announceTrack: true,
       }),
     );
@@ -269,6 +274,7 @@ routes.post("/input/digit", async (req, res) => {
       uuid,
       nextTrack.playlistNumber,
       nextTrack.index,
+      nextTrack.catalogRevision,
     );
 
     if (committedTrack === null) {
@@ -407,6 +413,7 @@ routes.post("/input/playlist", async (req, res) => {
         uuid,
         playlistNumber: selectedTrack.playlistNumber,
         trackIndex: selectedTrack.index,
+        catalogRevision: selectedTrack.catalogRevision,
         announceTrack: true,
         messages: [`Playlist ${selectedTrack.playlistName}.`],
       }),
@@ -432,6 +439,7 @@ routes.post("/input/playlist", async (req, res) => {
       uuid,
       playlistNumber: currentTrack.playlistNumber,
       trackIndex: currentTrack.index,
+      catalogRevision: currentTrack.catalogRevision,
       announceTrack: false,
       messages: [playlistNumber ? `Playlist ${playlistNumber} not found.` : "Returning to music."],
     }),
@@ -520,6 +528,7 @@ async function returnToCurrentTrack(
       uuid,
       playlistNumber: currentTrack.playlistNumber,
       trackIndex: currentTrack.index,
+      catalogRevision: currentTrack.catalogRevision,
       announceTrack: false,
       messages: [message],
     }),
@@ -527,6 +536,7 @@ async function returnToCurrentTrack(
 }
 
 const loadTrackRequestParser = type({
+  query: { "catalogRevision?": "string" },
   params: {
     playlistNumber: "string",
     index: "string",
@@ -547,6 +557,7 @@ routes.get("/track/:playlistNumber/:index", async (req, res) => {
   const track = await playlistService.getTrackPath(
     playlistNumber,
     parseInt(index),
+    request.query.catalogRevision,
   );
 
   if (!track) {

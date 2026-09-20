@@ -1,11 +1,13 @@
 import { NCCOBuilder, Notify, Stream } from "@vonage/voice";
 import { vonageApiSecret } from "../clients.js";
+import { playlistCatalog } from "../playlists/catalog.js";
 
 type BuildTrackNccoOptions = {
   url: string;
   uuid: string;
   playlistNumber: string;
   trackIndex: number;
+  catalogRevision?: string;
   announceTrack: boolean;
   messages?: string[];
 };
@@ -15,9 +17,13 @@ export function buildTrackNcco({
   uuid,
   playlistNumber,
   trackIndex,
+  catalogRevision,
   announceTrack,
   messages = [],
 }: BuildTrackNccoOptions) {
+  const revision = catalogRevision ?? playlistCatalog.current(playlistNumber)?.revision;
+  if (!revision) throw new Error("Cannot queue a track without its playlist revision.");
+  const revisionQuery = `catalogRevision=${encodeURIComponent(revision)}`;
   const callControl = new NCCOBuilder();
 
   for (const message of messages) {
@@ -46,7 +52,7 @@ export function buildTrackNcco({
       new Stream(
         `${url}/track/${encodeURIComponent(
           playlistNumber,
-        )}/${trackIndex}?secret=${vonageApiSecret}`,
+        )}/${trackIndex}?secret=${vonageApiSecret}&${revisionQuery}`,
       ),
     )
     .addAction(
@@ -54,7 +60,7 @@ export function buildTrackNcco({
         { uuid },
         `${url}/track/finished/${encodeURIComponent(
           uuid,
-        )}/${encodeURIComponent(playlistNumber)}/${trackIndex}`,
+        )}/${encodeURIComponent(playlistNumber)}/${trackIndex}?${revisionQuery}`,
         "POST",
       ),
     );

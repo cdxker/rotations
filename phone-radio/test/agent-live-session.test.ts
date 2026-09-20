@@ -4,8 +4,10 @@ import WebSocket from "ws";
 import {
   LIVE_MAX_BUFFERED_BYTES,
   LIVE_SESSION_TIMEOUT_MS,
+  LIVE_TOOL_TIMEOUT_MS,
   LiveSession,
   type LiveSessionOptions,
+  type LiveTools,
 } from "../src/agent/live-session.js";
 
 class FakeSocket extends EventEmitter {
@@ -37,7 +39,7 @@ class FakeSocket extends EventEmitter {
   }
 }
 
-function fixture() {
+function fixture(tools?: LiveTools) {
   const socket = new FakeSocket();
   const onAudio = vi.fn();
   const onFailure = vi.fn();
@@ -53,17 +55,46 @@ function fixture() {
     onUsage,
     onFinalization,
     socketFactory,
+    tools,
   });
   return { socket, session, onAudio, onFailure, onUsage, onFinalization, socketFactory };
 }
 
-async function ready() {
-  const context = fixture();
+async function ready(tools?: LiveTools) {
+  const context = fixture(tools);
   const start = context.session.start();
   context.socket.open();
   context.socket.receive({ type: "session.started", session: { id: "session-1" } });
   await start;
   return context;
+}
+
+function backend(socket: FakeSocket, event: Record<string, unknown>, delegationId = "delegation-1") {
+  socket.receive({ type: "response.event", delegation_id: delegationId, event });
+}
+
+function created(socket: FakeSocket, id = "response-1", delegationId = "delegation-1") {
+  backend(socket, { type: "response.created", response: { id, output: [] } }, delegationId);
+}
+
+function called(socket: FakeSocket, id = "call-1", name = "edit_playlist", args = '{"song":"song-1"}', responseId?: string, delegationId = "delegation-1") {
+  backend(socket, {
+    type: "response.output_item.done",
+    ...(responseId ? { response_id: responseId } : {}),
+    item: { type: "function_call", call_id: id, name, arguments: args },
+  }, delegationId);
+}
+
+function completed(socket: FakeSocket, id = "response-1", delegationId = "delegation-1") {
+  backend(socket, { type: "response.completed", response: { id, status: "completed", output: [] } }, delegationId);
+}
+
+function toolFixture(execute = vi.fn<LiveTools["execute"]>().mockResolvedValue({ ok: true })) {
+  return {
+    execute,
+    definitions: [{ type: "function", name: "edit_playlist", parameters: { type: "object" } }],
+    instructions: "Use the add-phone-radio-song skill. Confirm results before reporting success.",
+  };
 }
 
 describe("LiveSession", () => {
@@ -312,5 +343,196 @@ describe("LiveSession", () => {
     expect(onAudio).not.toHaveBeenCalled();
     expect(onFailure).not.toHaveBeenCalled();
     expect(socket.sent).toHaveLength(2);
+  });
+
+  it("configures optional tools and delegates playlist requests", async () => {
+    const tools = toolFixture();
+    const { socket } = await ready(tools);
+    expect(socket.sent[0].session.instructions).toContain("Always delegate playlist requests");
+    expect(socket.sent[0].session.delegation.responses).toMatchObject({
+      tools: tools.definitions,
+      tool_choice: "auto",
+      parallel_tool_calls: false,
+      instructions: expect.stringContaining(tools.instructions),
+    });
+    expect(socket.sent[1].content).toContain("edit playlists");
+  });
+
+  it("collects finished calls, waits for completion, returns every result, then continues once", async () => {
+    const tools = toolFixture();
+    const { socket, onFailure } = await ready(tools);
+    created(socket);
+    backend(socket, { type: "response.function_call_arguments.done", arguments: '{"ignored":true}' });
+    called(socket);
+    called(socket, "call-2", "edit_playlist", '{"song":"song-2"}');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(tools.execute).not.toHaveBeenCalled();
+    completed(socket);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(tools.execute.mock.calls.map(([name, args]) => [name, args])).toEqual([
+      ["edit_playlist", { song: "song-1" }],
+      ["edit_playlist", { song: "song-2" }],
+    ]);
+    expect(socket.sent.slice(2)).toEqual([
+      { type: "response.item.create", event_id: "tool_response-1_call-1", item: { type: "function_call_output", call_id: "call-1", output: '{"ok":true}' } },
+      { type: "response.item.create", event_id: "tool_response-1_call-2", item: { type: "function_call_output", call_id: "call-2", output: '{"ok":true}' } },
+      { type: "response.create", event_id: "continue_response-1" },
+    ]);
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("does not repeat mutations for duplicate items, completions, or call IDs", async () => {
+    const tools = toolFixture();
+    const { socket } = await ready(tools);
+    created(socket);
+    called(socket);
+    called(socket);
+    completed(socket);
+    completed(socket);
+    await vi.advanceTimersByTimeAsync(0);
+    created(socket, "response-2");
+    called(socket);
+    completed(socket, "response-2");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(tools.execute).toHaveBeenCalledOnce();
+    expect(socket.sent.filter((event) => event.type === "response.item.create")).toHaveLength(2);
+    expect(socket.sent.filter((event) => event.type === "response.create")).toHaveLength(2);
+  });
+
+  it("waits for an earlier mutation before starting the next completed batch", async () => {
+    let finishFirst!: (value: unknown) => void;
+    const execute = vi.fn<LiveTools["execute"]>().mockResolvedValue({ ok: true });
+    execute.mockImplementationOnce(() => new Promise((resolve) => { finishFirst = resolve; }));
+    const { socket } = await ready(toolFixture(execute));
+    created(socket);
+    called(socket);
+    completed(socket);
+    created(socket, "response-2", "delegation-2");
+    called(socket, "call-2", "edit_playlist", '{"song":"song-2"}', undefined, "delegation-2");
+    completed(socket, "response-2", "delegation-2");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(execute).toHaveBeenCalledOnce();
+    expect(socket.sent.filter((event) => event.type === "response.create")).toEqual([]);
+    finishFirst({ ok: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(socket.sent.slice(2).map((event) => [event.type, event.item?.call_id])).toEqual([
+      ["response.item.create", "call-1"], ["response.create", undefined],
+      ["response.item.create", "call-2"], ["response.create", undefined],
+    ]);
+  });
+
+  it("rejects reuse of a call ID for a different mutation", async () => {
+    const tools = toolFixture();
+    const { socket, onFailure } = await ready(tools);
+    created(socket);
+    called(socket);
+    completed(socket);
+    await vi.advanceTimersByTimeAsync(0);
+    created(socket, "response-2");
+    called(socket, "call-1", "edit_playlist", '{"song":"different-song"}');
+    completed(socket, "response-2");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(tools.execute).toHaveBeenCalledOnce();
+    expect(onFailure).toHaveBeenCalledExactlyOnceWith("live-invalid-tool-call");
+  });
+
+  it("keeps responses from different delegations separate and ignores mismatched events", async () => {
+    const tools = toolFixture();
+    const { socket } = await ready(tools);
+    created(socket);
+    created(socket, "response-2", "delegation-2");
+    called(socket, "call-wrong", "edit_playlist", "{}", "response-2");
+    called(socket, "call-2", "edit_playlist", '{"song":"song-2"}', undefined, "delegation-2");
+    called(socket);
+    completed(socket, "response-1", "delegation-2");
+    completed(socket, "response-2", "delegation-2");
+    completed(socket);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(tools.execute.mock.calls.map(([, args]) => args)).toEqual([{ song: "song-2" }, { song: "song-1" }]);
+  });
+
+  it("returns safe errors for unknown tools, malformed arguments, and failed operations", async () => {
+    const tools = toolFixture(vi.fn<LiveTools["execute"]>().mockRejectedValue(new Error("secret-key private filesystem path")));
+    const { socket, onFailure } = await ready(tools);
+    created(socket);
+    called(socket, "unknown", "run_shell", "{}");
+    called(socket, "malformed", "edit_playlist", "not JSON");
+    called(socket);
+    completed(socket);
+    await vi.advanceTimersByTimeAsync(0);
+    const results = socket.sent.filter((event) => event.type === "response.item.create").map((event) => JSON.parse(event.item.output));
+    expect(results.map((result) => result.error)).toEqual(["unknown_tool", "invalid_arguments", "tool_failed"]);
+    expect(JSON.stringify(socket.sent)).not.toContain("secret-key");
+    expect(tools.execute).toHaveBeenCalledOnce();
+    expect(socket.sent.at(-1)?.type).toBe("response.create");
+    expect(onFailure).not.toHaveBeenCalled();
+  });
+
+  it.each(["close", "provider failure"])("aborts an in-flight tool on %s and skips queued mutations", async (reason) => {
+    let finishTool!: (value: unknown) => void;
+    const tools = toolFixture(vi.fn<LiveTools["execute"]>(() => new Promise((resolve) => { finishTool = resolve; })));
+    const { session, socket, onAudio } = await ready(tools);
+    created(socket);
+    called(socket);
+    called(socket, "call-2");
+    completed(socket);
+    await vi.advanceTimersByTimeAsync(0);
+    socket.receive({ type: "session.output_audio.delta", delta: "AQI=" });
+    expect(onAudio).toHaveBeenCalledOnce();
+    const signal = tools.execute.mock.calls[0][2];
+    expect(signal.aborted).toBe(false);
+    if (reason === "close") {
+      const closed = session.close();
+      socket.receive({ type: "session.closed" });
+      await closed;
+    } else {
+      socket.receive({ type: "error" });
+    }
+    expect(signal.aborted).toBe(true);
+    finishTool({ ok: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(tools.execute).toHaveBeenCalledOnce();
+    expect(socket.sent.filter((event) => event.type === "response.item.create")).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("bounds slow tools, aborts their work, and reports an unconfirmed outcome", async () => {
+    const tools = toolFixture(vi.fn<LiveTools["execute"]>(() => new Promise(() => {})));
+    const { socket, onFailure } = await ready(tools);
+    created(socket);
+    called(socket);
+    completed(socket);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(LIVE_TOOL_TIMEOUT_MS);
+    expect(tools.execute.mock.calls[0][2].aborted).toBe(true);
+    const result = socket.sent.find((event) => event.type === "response.item.create");
+    expect(JSON.parse(result?.item.output)).toMatchObject({ ok: false, error: "tool_timeout" });
+    expect(socket.sent.at(-1)?.type).toBe("response.create");
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("never executes calls from incomplete responses", async () => {
+    const tools = toolFixture();
+    const { socket } = await ready(tools);
+    created(socket);
+    called(socket);
+    backend(socket, { type: "response.incomplete", response: { id: "response-1" } });
+    completed(socket);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(tools.execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects oversized arguments before they reach a tool", async () => {
+    const tools = toolFixture();
+    const { socket, onFailure } = await ready(tools);
+    created(socket);
+    called(socket, "call-1", "edit_playlist", JSON.stringify({ data: "x".repeat(16 * 1024) }));
+    completed(socket);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(tools.execute).not.toHaveBeenCalled();
+    expect(onFailure).toHaveBeenCalledExactlyOnceWith("live-tool-limit");
   });
 });

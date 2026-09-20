@@ -97,7 +97,7 @@ Set `OPENAI_API_KEY` and `VONAGE_WEBSOCKET_SECRET` in the phone-radio server
 environment. The OpenAI project must have access to `gpt-live-1` and
 `gpt-5.6-luna`. Inherited environment values take precedence over `.env`.
 If replacing a stale inherited key with the value in `phone-radio/.env`, launch
-from the repository root with `env -u OPENAI_API_KEY pnpm phone-radio:loop`.
+from the repository root with `env -u OPENAI_API_KEY pnpm phone-radio` in tmux pane `0:0.0`.
 
 This works without Discord; leave both `DISCORD_BOT_TOKEN` and
 `DISCORD_VOICE_DESTINATIONS` empty for an AI-only setup. A missing AI key leaves
@@ -105,9 +105,40 @@ this option unavailable and sends callers back to music.
 
 The server connects to OpenAI's Live WebSocket API using Marin and mono 16 kHz
 PCM. Each caller gets a separate conversation. GPT-Live handles continuous
-speech and interruptions; harder questions use a managed Responses backend
-with tools disabled. The agent answers questions and chats. It cannot change
-music, download tracks, browse the web, or transfer calls to a person.
+speech and interruptions; harder questions and playlist requests use a managed
+Responses backend. The agent can search for songs, download/add a song, move
+a song between playlists, or remove a playlist entry.
+
+Examples: "Search for SZA Snooze", "Add Snooze to playlist 2", "Move that song
+from playlist 2 to playlist 3", and "Remove Snooze from playlist 3". The agent
+asks a short question when a song or playlist is ambiguous. Search alone does
+not change anything. Playlists are shared; edits affect upcoming playback for
+all callers. Additions append unless a position is requested. Existing songs
+are not duplicated, and removal keeps the MP3 file. Each playlist must retain
+at least one song.
+
+The tool backend reads `.agents/skills/add-phone-radio-song/SKILL.md` when a
+conversation starts. It uses the skill's `yt-dlp` search and `new-music`
+download workflow in `/home/cdxker/Music/Ricky`. YouTube results have private
+IDs for each conversation; explicit YouTube video links are also supported.
+The downloader requires the installed `yt-dlp`, `new-music`, and FFmpeg.
+Search times out after 30 seconds and downloads after 120 seconds. Leaving the
+AI session cancels pending work before playlist commit.
+
+The owner approved adapting the skill's obsolete `src/tracks.ts` path to
+`src/playlists/*.ts` and applying changes live. Tools preserve surrounding
+source, serialize edits, refresh `song-list.txt`, and publish the catalog only
+after saving succeeds. No rebuild or restart occurs for a song edit. Startup
+reads the saved sources, so edits survive a restart before the next build.
+Queued audio and completion URLs carry immutable playlist revisions. A
+removed song can finish for another caller, then playback finds its next
+surviving neighbor in the updated playlist. Out-of-process track edits require
+a service restart before further voice edits.
+
+To deploy code changes, build first, stop the exact old server, then run
+`env -u OPENAI_API_KEY pnpm phone-radio` in tmux pane `0:0.0`. Confirm the pane
+reports `Phone radio server listening`. The agent cannot transfer calls to a
+person or run arbitrary shell commands.
 
 The server authenticates `/agent/audio` using the WebSocket secret and a
 single-use, per-call reservation. Connection setup times out after 15 seconds.
