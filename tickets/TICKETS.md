@@ -168,3 +168,4 @@
 - [X] `04-AnnounceDiscordVoiceMemberCount.md` — Announce the selected Discord voice channel's member count before starting the audio bridge
 - [X] `05-LiveAiAgent99.md` — Live AI voice on 99; user verified conversation and digit-9 return to menu
 - [X] `06-VoicePlaylistTools.md` — Voice AI search, download/add, move, and remove tools; live updates and public voice verified
+- [X] `07-FixDiscordAudioResourceListenerLeak.md` — Prevent repeated Discord audio recovery from accumulating stream listeners and killing phone-radio

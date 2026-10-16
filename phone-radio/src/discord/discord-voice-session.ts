@@ -40,7 +40,7 @@ function createOpusDecoder() {
 
 /** A real Discord media transport; the manager supplies its 20 ms caller set. */
 export class DiscordVoiceSession implements DiscordBridgeSession {
-  readonly #audioStream = new PassThrough();
+  #audioStream: PassThrough | null = null;
   readonly #callers = new Map<string, PhoneCaller>();
   readonly #connection: VoiceConnection;
   readonly #mixer = new DiscordAudioSessionMixer();
@@ -115,23 +115,18 @@ export class DiscordVoiceSession implements DiscordBridgeSession {
     for (const caller of this.#callers.values()) caller.assembler.close();
     this.#callers.clear();
     this.#mixer.close();
-    this.#audioStream.end();
+    this.#audioStream?.destroy();
+    this.#audioStream = null;
     this.#player.stop();
     this.#connection.destroy();
   }
 
   private start(): void {
     this.#connection.subscribe(this.#player);
-    this.#player.play(
-      createAudioResource(this.#audioStream, { inputType: StreamType.Raw }),
-    );
+    this.startAudioOutput();
     this.#player.on("error", () => undefined);
     this.#player.on(AudioPlayerStatus.Idle, () => {
-      if (!this.#closed) {
-        this.#player.play(
-          createAudioResource(this.#audioStream, { inputType: StreamType.Raw }),
-        );
-      }
+      if (!this.#closed) this.startAudioOutput();
     });
     this.#connection.receiver.speaking.on("start", (userId) => {
       this.startSpeaker(userId);
@@ -144,7 +139,7 @@ export class DiscordVoiceSession implements DiscordBridgeSession {
     const mix = this.#mixer.mixNextFrame();
     const discordFrame = convert16kMonoTo48kStereoPcm(mix.discordOutput);
     if (discordFrame.byteLength === DISCORD_PCM_FRAME_BYTES) {
-      this.#audioStream.write(discordFrame);
+      this.#audioStream?.write(discordFrame);
     }
     for (const [uuid, frame] of mix.phoneOutputs) {
       const peer = this.#callers.get(uuid)?.peer;
@@ -160,6 +155,14 @@ export class DiscordVoiceSession implements DiscordBridgeSession {
       }
       peer.send(frame);
     }
+  }
+
+  private startAudioOutput(): void {
+    this.#audioStream?.destroy();
+    this.#audioStream = new PassThrough();
+    this.#player.play(
+      createAudioResource(this.#audioStream, { inputType: StreamType.Raw }),
+    );
   }
 
   private startSpeaker(userId: string): void {
