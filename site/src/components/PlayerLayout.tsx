@@ -1,6 +1,7 @@
 import { useState, useEffect, type ReactNode } from "react"
-import type { FuckingPlaylist, FuckingTrack } from "../shared/types"
+import type { FuckingPlaylist, FuckingTrack, PlaylistId } from "../shared/types"
 import { db } from "@/lib/store"
+import { DEFAULT_PLAYLIST_ID, defaultPlaylist, defaultTracks } from "@/lib/defaultPlaylist"
 import { musicCache } from "@/lib/musicCache"
 import { shuffleAssociations } from "@/lib/associations"
 import { PlayerProvider } from "@/hooks/PlayerContext"
@@ -21,8 +22,15 @@ export default function PlayerLayout({ children }: { children: ReactNode }) {
             await musicCache.init()
             const playerState = db.getPlayerState()
 
-            let playlist: FuckingPlaylist | undefined = undefined
-            let tracks: FuckingTrack[] = []
+            // insertPlaylist moves lastPlaylistId, so put it back and a returning listener keeps their spot
+            if (!db.getPlaylist(DEFAULT_PLAYLIST_ID)) {
+                db.insertPlaylist(defaultPlaylist)
+                db.insertTracks(defaultTracks, DEFAULT_PLAYLIST_ID)
+                db.setPlayerState({ lastPlaylistId: playerState?.lastPlaylistId ?? ("" as PlaylistId) })
+            }
+
+            let playlist: FuckingPlaylist | undefined = defaultPlaylist
+            let tracks: FuckingTrack[] = defaultTracks
             let initialTrackIndex = 0
             let initialTimeMs = 0
 
