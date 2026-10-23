@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { type } from "arktype";
 import { Router } from "express";
 import type { Router as ExpressRouter } from "express";
@@ -6,9 +6,10 @@ import {
   discordBridgeManager,
   discordRuntime,
   voiceClient,
+  vonageApiSecret,
 } from "./clients.js";
 import { agentConfig, discordBridgeConfig, discordDestinationRegistry } from "./env.js";
-import { finishAgent, reserveAgent } from "./agent/runtime.js";
+import { finishAgent, handleSongTransferDigit, reserveAgent } from "./agent/runtime.js";
 import { buildAgentNcco } from "./utils/buildAgentNcco.js";
 import { playlistService, type PlaylistTrack } from "./playlist.service.js";
 import { buildPlaylistSelectionNcco } from "./utils/buildPlaylistSelectionNcco.js";
@@ -143,6 +144,33 @@ routes.post(
   },
 );
 
+const requestedSongFinishedRequestParser = type({
+  params: { uuid: "string", requestId: "string" },
+  locals: { baseUrl: "string" },
+});
+
+routes.post("/requested-song/finished/:uuid/:requestId", async (req, res) => {
+  const request = requestedSongFinishedRequestParser(req);
+  if (request instanceof type.errors) {
+    res.status(400).json({ error: request.summary });
+    return;
+  }
+  const { uuid, requestId } = request.params;
+  const track = await playlistService.finishRequestedSong(uuid, requestId);
+  if (!track) {
+    res.status(204).send();
+    return;
+  }
+  res.json(buildTrackNcco({
+    url: request.locals.baseUrl,
+    uuid,
+    playlistNumber: track.playlistNumber,
+    trackIndex: track.index,
+    catalogRevision: track.catalogRevision,
+    announceTrack: false,
+  }));
+});
+
 const digitInputRequestParser = type({
   query: {
     uuid: "string",
@@ -173,6 +201,11 @@ routes.post("/input/digit", async (req, res) => {
   } = request;
 
   const digit = request.body.digit ?? request.body.dtmf?.digits;
+
+  if (digit && await handleSongTransferDigit(uuid, digit)) {
+    res.status(204).send();
+    return;
+  }
 
   const mode = await playlistService.getListenerMode(uuid);
   if (mode === "selecting-playlist" || mode === "agent") {
@@ -572,4 +605,33 @@ routes.get("/track/:playlistNumber/:index", async (req, res) => {
   } catch {
     res.status(404).send("Track file not found.");
   }
+});
+
+const requestedSongRequestParser = type({
+  params: { uuid: "string", requestId: "string" },
+  query: { "secret?": "string" },
+});
+
+routes.get("/requested-song/:uuid/:requestId", async (req, res) => {
+  const request = requestedSongRequestParser(req);
+  if (request instanceof type.errors) {
+    res.status(400).json({ error: request.summary });
+    return;
+  }
+  const actual = Buffer.from(request.query.secret ?? "");
+  const expected = Buffer.from(vonageApiSecret);
+  if (!actual.length || actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+    res.status(401).send("Unauthorized.");
+    return;
+  }
+  const track = await playlistService.getRequestedSong(request.params.uuid, request.params.requestId);
+  if (!track) {
+    res.status(404).send("Track not found.");
+    return;
+  }
+  res.setHeader("Content-Type", "audio/mpeg");
+  res.setHeader("Content-Length", track.fileSize.toString());
+  res.sendFile(track.filePath, (error) => {
+    if (error && !res.headersSent) res.status(404).send("Track file not found.");
+  });
 });

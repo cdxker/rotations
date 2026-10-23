@@ -1,9 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import express from "express";
 import { discordBridgeManager, discordRuntime, voiceClient } from "../src/clients.js";
 import { agentConfig, discordBridgeConfig, discordDestinationRegistry } from "../src/env.js";
-import { finishAgent, reserveAgent } from "../src/agent/runtime.js";
+import { finishAgent, handleSongTransferDigit, reserveAgent } from "../src/agent/runtime.js";
 import { playlistService, type PlaylistTrack } from "../src/playlist.service.js";
 import { routes } from "../src/routes.js";
+import { buildRequestedSongNcco } from "../src/utils/buildRequestedSongNcco.js";
 
 vi.mock("../src/clients.js", () => ({
   discordBridgeManager: {
@@ -23,7 +29,9 @@ vi.mock("../src/clients.js", () => ({
   },
 }));
 
-vi.mock("../src/agent/runtime.js", () => ({ finishAgent: vi.fn(), reserveAgent: vi.fn() }));
+vi.mock("../src/agent/runtime.js", () => ({
+  finishAgent: vi.fn(), handleSongTransferDigit: vi.fn(), reserveAgent: vi.fn(),
+}));
 
 vi.mock("../src/env.js", () => ({
   agentConfig: { enabled: false, apiKey: "test", websocketSecret: "agent-secret" },
@@ -46,6 +54,8 @@ vi.mock("../src/playlist.service.js", () => ({
     getNextTrack: vi.fn(),
     getPreviousTrack: vi.fn(),
     getTrackPath: vi.fn(),
+    getRequestedSong: vi.fn(),
+    finishRequestedSong: vi.fn(),
     resumePlayback: vi.fn(),
     startPlaylist: vi.fn(),
     startPlaylistSelection: vi.fn(),
@@ -75,6 +85,7 @@ const workoutTrack: PlaylistTrack = {
 beforeEach(() => {
   Object.assign(agentConfig, { enabled: false });
   vi.mocked(finishAgent).mockReset().mockResolvedValue(true);
+  vi.mocked(handleSongTransferDigit).mockReset().mockResolvedValue(false);
   vi.mocked(reserveAgent).mockReset();
   vi.mocked(playlistService.beginAgent).mockReset().mockResolvedValue();
   vi.mocked(playlistService.claimPlaylistSelection).mockReset().mockResolvedValue(true);
@@ -104,6 +115,8 @@ beforeEach(() => {
   vi.mocked(playlistService.getNextTrack).mockReset();
   vi.mocked(playlistService.getPreviousTrack).mockReset();
   vi.mocked(playlistService.getTrackPath).mockReset();
+  vi.mocked(playlistService.getRequestedSong).mockReset();
+  vi.mocked(playlistService.finishRequestedSong).mockReset();
   vi.mocked(playlistService.resumePlayback).mockReset();
   vi.mocked(playlistService.startPlaylist).mockReset();
   vi.mocked(playlistService.startPlaylistSelection).mockReset();
@@ -187,6 +200,33 @@ async function invokeRoute(routePath: string, options: InvokeRouteOptions = {}) 
 }
 
 describe("POST /input/digit", () => {
+  it("forwards digit 9 to an in-flight song handoff before starting a competing menu transfer", async () => {
+    let completeHandoff!: (handled: boolean) => void;
+    let receivedDigit!: () => void;
+    const received = new Promise<void>((resolve) => { receivedDigit = resolve; });
+    vi.mocked(handleSongTransferDigit).mockImplementation(() => {
+      receivedDigit();
+      return new Promise<boolean>((resolve) => { completeHandoff = resolve; });
+    });
+    const response = invokeRoute("/input/digit", { body: { digit: "9" }, query: { uuid: "call-1" } });
+    await received;
+    expect(handleSongTransferDigit).toHaveBeenCalledWith("call-1", "9");
+    expect(playlistService.getListenerMode).not.toHaveBeenCalled();
+    expect(playlistService.startPlaylistSelection).not.toHaveBeenCalled();
+    expect(voiceClient.transferCallWithNCCO).not.toHaveBeenCalled();
+    completeHandoff(true);
+    expect((await response).statusCode).toBe(204);
+    expect(voiceClient.transferCallWithNCCO).not.toHaveBeenCalled();
+  });
+
+  it.each(["1", "2"])("consumes digit %s while a song handoff is pending", async (digit) => {
+    vi.mocked(handleSongTransferDigit).mockResolvedValue(true);
+    const response = await invokeRoute("/input/digit", { body: { digit }, query: { uuid: "call-1" } });
+    expect(response.statusCode).toBe(204);
+    expect(playlistService.getListenerMode).not.toHaveBeenCalled();
+    expect(voiceClient.transferCallWithNCCO).not.toHaveBeenCalled();
+  });
+
   it("deduplicates simultaneous digit-9 playlist-selector transfers", async () => {
     let completeTransfer: (() => void) | undefined;
     vi.mocked(voiceClient.transferCallWithNCCO).mockImplementation(
@@ -627,6 +667,115 @@ describe("GET /track/:playlistNumber/:index", () => {
 
     expect(playlistService.getTrackPath).toHaveBeenCalledWith("1", 2, "old-revision");
     expect(response.sendFile).toHaveBeenCalledWith("default-2.mp3");
+  });
+});
+
+describe("requested-song playback", () => {
+  it("builds a song announcement, interactive stream, and per-request completion callback", () => {
+    expect(buildRequestedSongNcco({
+      url: "https://radio.example.test", uuid: "call-1", requestId: "request-1", title: "A song",
+    })).toEqual([
+      { action: "talk", text: "Playing A song." },
+      {
+        action: "input", type: ["dtmf"], mode: "asynchronous", eventMethod: "POST",
+        eventUrl: ["https://radio.example.test/input/digit?uuid=call-1"],
+      },
+      { action: "stream", streamUrl: ["https://radio.example.test/requested-song/call-1/request-1?secret=test-secret"] },
+      {
+        action: "notify", payload: { uuid: "call-1" }, eventMethod: "POST",
+        eventUrl: ["https://radio.example.test/requested-song/finished/call-1/request-1"],
+      },
+    ]);
+  });
+
+  it.each([undefined, "wrong-secret"])("rejects unauthorized media before looking up any song", async (secret) => {
+    const response = await invokeRoute("/requested-song/:uuid/:requestId", {
+      params: { uuid: "call-1", requestId: "request-1" },
+      query: secret ? { secret } : {},
+    });
+    expect(response.statusCode).toBe(401);
+    expect(playlistService.getRequestedSong).not.toHaveBeenCalled();
+    expect(response.sendFile).not.toHaveBeenCalled();
+  });
+
+  it("serves only the current caller's matching song and rejects expired requests", async () => {
+    vi.mocked(playlistService.getRequestedSong).mockResolvedValueOnce({ filePath: "/music/song.mp3", fileSize: 600 });
+    const options = { params: { uuid: "call-1", requestId: "request-1" }, query: { secret: "test-secret" } };
+    const response = await invokeRoute("/requested-song/:uuid/:requestId", options);
+    expect(playlistService.getRequestedSong).toHaveBeenCalledWith("call-1", "request-1");
+    expect(response.setHeader).toHaveBeenCalledWith("Content-Type", "audio/mpeg");
+    expect(response.setHeader).toHaveBeenCalledWith("Content-Length", "600");
+    expect(response.sendFile).toHaveBeenCalledWith("/music/song.mp3", expect.any(Function));
+    vi.mocked(playlistService.getRequestedSong).mockResolvedValueOnce(null);
+    const expired = await invokeRoute("/requested-song/:uuid/:requestId", options);
+    expect(expired.statusCode).toBe(404);
+    expect(expired.sendFile).not.toHaveBeenCalled();
+  });
+
+  it("supports authenticated HTTP byte ranges for requested MP3 audio", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "phone-radio-media-"));
+    const path = join(directory, "requested.mp3");
+    const audio = Buffer.from("ID3requested-audio-data");
+    await writeFile(path, audio);
+    vi.mocked(playlistService.getRequestedSong).mockResolvedValue({ filePath: path, fileSize: audio.length });
+    const app = express();
+    app.use(routes);
+    const server = createServer(app);
+    try {
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Missing test server address");
+      const response = await fetch(`http://127.0.0.1:${address.port}/requested-song/call-1/request-1?secret=test-secret`, {
+        headers: { Range: "bytes=3-11" },
+      });
+      expect(response.status).toBe(206);
+      expect(response.headers.get("content-type")).toContain("audio/mpeg");
+      expect(response.headers.get("content-range")).toBe(`bytes 3-11/${audio.length}`);
+      expect(response.headers.get("content-length")).toBe("9");
+      expect(Buffer.from(await response.arrayBuffer())).toEqual(audio.subarray(3, 12));
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("returns to the saved playlist track after a matching requested song finishes", async () => {
+    vi.mocked(playlistService.finishRequestedSong).mockResolvedValue(defaultTrack);
+    const response = await invokeRoute("/requested-song/finished/:uuid/:requestId", {
+      params: { uuid: "call-1", requestId: "request-1" },
+    });
+    expect(playlistService.finishRequestedSong).toHaveBeenCalledWith("call-1", "request-1");
+    expect(response.body).toEqual(expect.arrayContaining([{
+      action: "stream", streamUrl: ["https://radio.example.test/track/1/2?secret=test-secret&catalogRevision=default-revision"],
+    }]));
+  });
+
+  it("ignores stale requested-song completion callbacks", async () => {
+    vi.mocked(playlistService.finishRequestedSong).mockResolvedValue(null);
+    const response = await invokeRoute("/requested-song/finished/:uuid/:requestId", {
+      params: { uuid: "call-1", requestId: "old-request" },
+    });
+    expect(response.statusCode).toBe(204);
+    expect(playlistService.getCurrentTrack).not.toHaveBeenCalled();
+  });
+
+  it.each(["1", "2"])("lets digit %s leave a requested song for an adjacent saved track", async (digit) => {
+    vi.mocked(playlistService.getListenerMode).mockResolvedValue("requested-song");
+    vi.mocked(playlistService.getNextTrack).mockResolvedValue(workoutTrack);
+    vi.mocked(playlistService.getPreviousTrack).mockResolvedValue(workoutTrack);
+    vi.mocked(playlistService.commitTrack).mockResolvedValue(workoutTrack);
+    const response = await invokeRoute("/input/digit", { body: { digit }, query: { uuid: "call-1" } });
+    expect(response.statusCode).toBe(204);
+    expect(voiceClient.transferCallWithNCCO).toHaveBeenCalledOnce();
+    expect(playlistService.commitTrack).toHaveBeenCalledWith("call-1", "22", 0, "workout-revision");
+  });
+
+  it("lets digit 9 open the menu during a requested song", async () => {
+    vi.mocked(playlistService.getListenerMode).mockResolvedValue("requested-song");
+    const response = await invokeRoute("/input/digit", { body: { digit: "9" }, query: { uuid: "call-1" } });
+    expect(response.statusCode).toBe(204);
+    expect(playlistService.startPlaylistSelection).toHaveBeenCalledWith("call-1");
+    expect(voiceClient.transferCallWithNCCO).toHaveBeenCalledOnce();
   });
 });
 

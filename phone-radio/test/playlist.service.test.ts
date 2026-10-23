@@ -105,6 +105,9 @@ beforeEach(() => {
       "default-2.mp3": 300,
       "workout-0.mp3": 400,
       "workout-1.mp3": 500,
+      "/music/workout-0.mp3": 400,
+      "/music/workout-1.mp3": 500,
+      "/music/requested.mp3": 600,
     };
     const size = fileSizesByPath[String(filePath)];
 
@@ -112,7 +115,7 @@ beforeEach(() => {
       throw new Error(`Missing mocked stat for ${String(filePath)}`);
     }
 
-    return { size } as Awaited<ReturnType<typeof stat>>;
+    return { size, isFile: () => true } as Awaited<ReturnType<typeof stat>>;
   });
 });
 
@@ -304,11 +307,14 @@ describe("Discord bridge listener state", () => {
 
     expect(redisClient.eval).toHaveBeenCalledWith(
       expect.stringContaining('redis.call("DEL", KEYS[2])'),
-      4,
+      7,
       "listener:call-1:mode",
       "listener:call-1:discord-destination",
       "listener:call-1:selector-id",
       "listener:call-1:agent-session-id",
+      "listener:call-1:requested-song-id",
+      "listener:call-1:requested-song-path",
+      "listener:call-1:requested-song-continuation",
       "discord",
       "playing",
     );
@@ -414,7 +420,7 @@ describe("trackFinished", () => {
     });
     expect(redisClient.eval).toHaveBeenCalledWith(
       expect.stringContaining('redis.call("GET", KEYS[3]) ~= ARGV[3]'),
-      7,
+      10,
       "listener:call-1:mode",
       "listener:call-1:playlist",
       "listener:call-1:track",
@@ -422,6 +428,9 @@ describe("trackFinished", () => {
       "listener:call-1:selector-id",
       "listener:call-1:agent-session-id",
       "listener:call-1:catalog-revision",
+      "listener:call-1:requested-song-id",
+      "listener:call-1:requested-song-path",
+      "listener:call-1:requested-song-continuation",
       "playing",
       "22",
       "0",
@@ -637,6 +646,34 @@ describe("live playlist revisions", () => {
   });
 });
 
+describe("requested-song validation", () => {
+  it.each(["relative.mp3", "/music/requested.wav", "https://example.test/song.mp3", "/music/missing.mp3"])(
+    "does not alter listener state for an invalid file: %s", async (path) => {
+      await expect(playlistService.beginRequestedSong("call-1", "agent-1", path)).resolves.toBeNull();
+      expect(redisClient.eval).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([{ size: 0, isFile: () => true }, { size: 600, isFile: () => false }])(
+    "rejects empty files and directories", async (metadata) => {
+      vi.mocked(stat).mockResolvedValueOnce(metadata as Awaited<ReturnType<typeof stat>>);
+      await expect(playlistService.beginRequestedSong("call-1", "agent-1", "/music/requested.mp3")).resolves.toBeNull();
+      expect(redisClient.eval).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not start playback when a request is aborted during file validation", async () => {
+    const controller = new AbortController();
+    vi.mocked(stat).mockImplementationOnce(async () => {
+      controller.abort(new Error("Song request timed out"));
+      return { size: 600, isFile: () => true } as Awaited<ReturnType<typeof stat>>;
+    });
+    await expect(playlistService.beginRequestedSong("call-1", "agent-1", "/music/requested.mp3", controller.signal))
+      .rejects.toThrow("Song request timed out");
+    expect(redisClient.eval).not.toHaveBeenCalled();
+  });
+});
+
 // Exercise the actual Lua against an isolated Redis when the test host provides it.
 // The existing mocked unit tests still run on machines without redis-server.
 describe.skipIf(spawnSync("redis-server", ["--version"]).status !== 0)(
@@ -711,6 +748,157 @@ describe.skipIf(spawnSync("redis-server", ["--version"]).status !== 0)(
       expect(claims.filter(Boolean)).toHaveLength(1);
       await expect(playlistService.getListenerMode("call-1")).resolves.toBe("selecting-playlist");
       await expect(connection.get("listener:call-1:selector-id")).resolves.toBeNull();
+    });
+
+    it("plays one request without changing the saved playlist and resumes it once", async () => {
+      await playlistService.commitTrack("call-1", "22", 1);
+      await playlistService.beginAgent("call-1", "agent-1");
+      const request = (await playlistService.beginRequestedSong("call-1", "agent-1", "/music/requested.mp3"))!;
+
+      expect(request).toMatchObject({ filePath: "/music/requested.mp3", fileSize: 600 });
+      await expect(playlistService.getListenerMode("call-1")).resolves.toBe("requested-song");
+      await expect(playlistService.getAgentSessionId("call-1")).resolves.toBeNull();
+      await expect(playlistService.getRequestedSong("call-1", request.id)).resolves.toEqual({
+        filePath: "/music/requested.mp3", fileSize: 600,
+      });
+      expect(await connection.ttl("listener:call-1:requested-song-id")).toBeGreaterThan(86_000);
+      expect(await connection.ttl("listener:call-1:requested-song-path")).toBeGreaterThan(86_000);
+      await expect(playlistService.trackFinished("call-1", "22", 1, "revision-22-initial")).resolves.toBeNull();
+      await expect(playlistService.transitionFromAgent("call-1", "agent-1", "playing")).resolves.toBeNull();
+
+      const completed = await Promise.all([
+        playlistService.finishRequestedSong("call-1", request.id),
+        playlistService.finishRequestedSong("call-1", request.id),
+      ]);
+      expect(completed.filter(Boolean)).toEqual([expect.objectContaining({
+        playlistNumber: "22", index: 1, catalogRevision: "revision-22-initial",
+      })]);
+      await expect(playlistService.getListenerMode("call-1")).resolves.toBe("playing");
+      await expect(playlistService.getRequestedSong("call-1", request.id)).resolves.toBeNull();
+      await expect(connection.get("listener:call-1:requested-song-path")).resolves.toBeNull();
+    });
+
+    it("continues after a requested library song instead of restarting its playlist", async () => {
+      const playlist = publishRevision(
+        "22",
+        ["/music/workout-0.mp3", "/music/workout-1.mp3"],
+        "playable-workout",
+      );
+      await playlistService.commitTrack("call-1", "1", 0);
+      await playlistService.beginAgent("call-1", "agent-1");
+      const request = await playlistService.beginRequestedSong(
+        "call-1",
+        "agent-1",
+        "/music/workout-0.mp3",
+        undefined,
+        { playlistNumber: "22", trackIndex: 0, catalogRevision: playlist.revision },
+      );
+
+      await expect(
+        playlistService.finishRequestedSong("call-1", request!.id),
+      ).resolves.toMatchObject({
+        filePath: "/music/workout-1.mp3",
+        playlistNumber: "22",
+        index: 1,
+      });
+      await expect(playlistService.getCurrentTrack("call-1")).resolves.toMatchObject({
+        filePath: "/music/workout-1.mp3",
+        playlistNumber: "22",
+        index: 1,
+      });
+      await expect(
+        connection.get("listener:call-1:requested-song-continuation"),
+      ).resolves.toBeNull();
+    });
+
+    it("accepts only one request from the current agent and rejects stale or cross-caller access", async () => {
+      await playlistService.beginAgent("call-1", "agent-1");
+      await playlistService.beginAgent("call-2", "agent-2");
+      await expect(playlistService.beginRequestedSong("call-1", "agent-2", "/music/requested.mp3")).resolves.toBeNull();
+      const requests = await Promise.all([
+        playlistService.beginRequestedSong("call-1", "agent-1", "/music/requested.mp3"),
+        playlistService.beginRequestedSong("call-1", "agent-1", "/music/requested.mp3"),
+      ]);
+      expect(requests.filter(Boolean)).toHaveLength(1);
+      const request = requests.find(Boolean)!;
+      await expect(playlistService.getRequestedSong("call-2", request.id)).resolves.toBeNull();
+      await expect(playlistService.finishRequestedSong("call-2", request.id)).resolves.toBeNull();
+      await expect(playlistService.finishRequestedSong("call-1", "old-request")).resolves.toBeNull();
+      await expect(playlistService.getListenerMode("call-1")).resolves.toBe("requested-song");
+      await expect(playlistService.getListenerMode("call-2")).resolves.toBe("agent");
+    });
+
+    it.each(["start", "resume", "menu", "agent", "discord", "commit"])(
+      "invalidates a requested song after %s and ignores its delayed completion", async (operation) => {
+        await playlistService.beginAgent("call-1", "agent-1");
+        const request = (await playlistService.beginRequestedSong("call-1", "agent-1", "/music/requested.mp3"))!;
+        if (operation === "start") await playlistService.startPlaylist("call-1");
+        else if (operation === "resume") await playlistService.resumePlayback("call-1");
+        else if (operation === "menu") await playlistService.startPlaylistSelection("call-1");
+        else if (operation === "agent") await playlistService.beginAgent("call-1", "agent-2");
+        else if (operation === "discord") await playlistService.beginDiscordBridge("call-1", "80");
+        else await playlistService.commitTrack("call-1", "22", 0);
+        const mode = await playlistService.getListenerMode("call-1");
+
+        await expect(playlistService.getRequestedSong("call-1", request.id)).resolves.toBeNull();
+        await expect(playlistService.finishRequestedSong("call-1", request.id)).resolves.toBeNull();
+        await expect(playlistService.getListenerMode("call-1")).resolves.toBe(mode);
+        await expect(connection.mget("listener:call-1:requested-song-id", "listener:call-1:requested-song-path"))
+          .resolves.toEqual([null, null]);
+      },
+    );
+
+    it("opens the menu once when digit 9 arrives during a requested-song handoff", async () => {
+      await playlistService.beginAgent("call-1", "agent-1");
+      const request = (await playlistService.beginRequestedSong("call-1", "agent-1", "/music/requested.mp3"))!;
+      await expect(playlistService.selectRequestedSong("call-1", "stale-id")).resolves.toBeNull();
+      const selectorId = await playlistService.selectRequestedSong("call-1", request.id);
+      expect(selectorId).toMatch(/^[0-9a-f-]{36}$/);
+      await expect(playlistService.selectRequestedSong("call-1", request.id)).resolves.toBeNull();
+      await expect(playlistService.finishRequestedSong("call-1", request.id)).resolves.toBeNull();
+      await expect(playlistService.getRequestedSong("call-1", request.id)).resolves.toBeNull();
+      await expect(playlistService.claimPlaylistSelection("call-1", selectorId!)).resolves.toBe(true);
+      await expect(playlistService.getCurrentTrack("call-1")).resolves.toMatchObject({ playlistNumber: "22", index: 1 });
+    });
+
+    it("restores the same agent after a rejected transfer without changing the saved song", async () => {
+      await playlistService.commitTrack("call-1", "22", 1);
+      await playlistService.beginAgent("call-1", "agent-1");
+      const request = (await playlistService.beginRequestedSong("call-1", "agent-1", "/music/requested.mp3"))!;
+      await expect(playlistService.restoreRequestedSongAgent("call-2", request.id, "agent-1")).resolves.toBe(false);
+      await expect(playlistService.restoreRequestedSongAgent("call-1", "stale-request", "agent-1")).resolves.toBe(false);
+      await expect(playlistService.restoreRequestedSongAgent("call-1", request.id, "agent-1")).resolves.toBe(true);
+      await expect(playlistService.getListenerMode("call-1")).resolves.toBe("agent");
+      await expect(playlistService.getAgentSessionId("call-1")).resolves.toBe("agent-1");
+      await expect(playlistService.getCurrentTrack("call-1")).resolves.toMatchObject({
+        playlistNumber: "22", index: 1, catalogRevision: "revision-22-initial",
+      });
+      await expect(connection.mget("listener:call-1:requested-song-id", "listener:call-1:requested-song-path"))
+        .resolves.toEqual([null, null]);
+      await expect(playlistService.finishRequestedSong("call-1", request.id)).resolves.toBeNull();
+      await expect(playlistService.restoreRequestedSongAgent("call-1", request.id, "agent-1")).resolves.toBe(false);
+      await expect(playlistService.beginRequestedSong("call-1", "agent-1", "/music/requested.mp3"))
+        .resolves.toMatchObject({ filePath: "/music/requested.mp3" });
+    });
+
+    it("does not restore an agent when a newer mode has already replaced its requested song", async () => {
+      await playlistService.beginAgent("call-1", "agent-1");
+      const request = (await playlistService.beginRequestedSong("call-1", "agent-1", "/music/requested.mp3"))!;
+      const selectorId = await playlistService.startPlaylistSelection("call-1");
+      await expect(playlistService.restoreRequestedSongAgent("call-1", request.id, "agent-1")).resolves.toBe(false);
+      await expect(playlistService.getListenerMode("call-1")).resolves.toBe("selecting-playlist");
+      await expect(playlistService.getAgentSessionId("call-1")).resolves.toBeNull();
+      await expect(playlistService.claimPlaylistSelection("call-1", selectorId)).resolves.toBe(true);
+    });
+
+    it("does not serve requested audio when the listener leaves during file validation", async () => {
+      await playlistService.beginAgent("call-1", "agent-1");
+      const request = (await playlistService.beginRequestedSong("call-1", "agent-1", "/music/requested.mp3"))!;
+      vi.mocked(stat).mockImplementationOnce(async () => {
+        await playlistService.startPlaylistSelection("call-1");
+        return { size: 600, isFile: () => true } as Awaited<ReturnType<typeof stat>>;
+      });
+      await expect(playlistService.getRequestedSong("call-1", request.id)).resolves.toBeNull();
     });
 
     it("preserves the saved track and creates one menu when exiting the current agent", async () => {

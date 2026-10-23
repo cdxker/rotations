@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
@@ -36,6 +36,14 @@ export type PlaylistMutationResult = {
   sourcePlaylistNumber?: string;
 };
 
+export type PlaylistCreation = {
+  name: string;
+  number?: string;
+  filePath: string;
+  /** Dial destinations, such as Discord rooms, that must remain available. */
+  reservedNumbers?: readonly string[];
+};
+
 type CatalogOptions = {
   playlists?: Playlist[];
   sourceDir?: string;
@@ -46,6 +54,14 @@ type ParsedPlaylist = {
   source: ts.SourceFile;
   array: ts.ArrayLiteralExpression;
   tracks: string[];
+  name?: string;
+};
+
+type ParsedRegistry = {
+  source: ts.SourceFile;
+  array: ts.ArrayLiteralExpression;
+  numbers: string[];
+  importedNumbers: string[];
 };
 
 type FileChange = { path: string; before: string | null; after: string };
@@ -96,7 +112,7 @@ function parsePlaylist(content: string, number: string): ParsedPlaylist {
       }
     }
   }
-  const candidates: ts.ArrayLiteralExpression[] = [];
+  const candidates: { array: ts.ArrayLiteralExpression; name?: string }[] = [];
   for (const initializer of declarations.values()) {
     if (!ts.isObjectLiteralExpression(initializer)) continue;
     const properties = new Map<string, ts.Expression>();
@@ -110,19 +126,99 @@ function parsePlaylist(content: string, number: string): ParsedPlaylist {
     if (!playlistNumber || !ts.isStringLiteral(playlistNumber) || playlistNumber.text !== number) continue;
     let tracks = properties.get("tracks");
     if (tracks && ts.isIdentifier(tracks)) tracks = declarations.get(tracks.text);
-    if (tracks && ts.isArrayLiteralExpression(tracks)) candidates.push(tracks);
+    const name = properties.get("name");
+    if (tracks && ts.isArrayLiteralExpression(tracks)) candidates.push({
+      array: tracks,
+      ...(name && ts.isStringLiteral(name) ? { name: name.text } : {}),
+    });
   }
   if (candidates.length !== 1) {
     throw new CatalogError("This playlist source cannot be edited safely. No songs were changed.");
   }
-  const array = candidates[0];
+  const { array, name } = candidates[0];
   const tracks = array.elements.map((element) => {
     if (!ts.isStringLiteral(element)) {
       throw new CatalogError("This playlist contains an unsupported song entry. No songs were changed.");
     }
     return element.text;
   });
-  return { source, array, tracks };
+  return { source, array, tracks, name };
+}
+
+/** Read only the literal registry shape; never execute playlist source. */
+function parseRegistry(content: string): ParsedRegistry {
+  const source = ts.createSourceFile("index.ts", content, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const diagnostics = (source as ts.SourceFile & { parseDiagnostics: readonly ts.Diagnostic[] }).parseDiagnostics;
+  const fail = () => new CatalogError("The playlist registry cannot be edited safely. No playlists were added.");
+  if (diagnostics.length) throw fail();
+  const imports = new Map<string, string>();
+  const arrays: ts.ArrayLiteralExpression[] = [];
+  for (const statement of source.statements) {
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier) && statement.importClause?.name) {
+      const module = statement.moduleSpecifier.text;
+      const number = module === "./default.js" ? "1" : /^\.\/playlist-([1-9]\d*)\.js$/.exec(module)?.[1];
+      if (number) imports.set(statement.importClause.name.text, number);
+    }
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== "playlists" || !declaration.initializer) continue;
+      const initializer = unwrap(declaration.initializer);
+      if (!ts.isArrayLiteralExpression(initializer)) throw fail();
+      arrays.push(initializer);
+    }
+  }
+  if (arrays.length !== 1) throw fail();
+  const array = arrays[0];
+  const numbers = array.elements.map((element) => {
+    if (!ts.isIdentifier(element)) throw fail();
+    const number = imports.get(element.text);
+    if (!number) throw fail();
+    return number;
+  });
+  if (new Set(numbers).size !== numbers.length) throw fail();
+  return { source, array, numbers, importedNumbers: [...imports.values()] };
+}
+
+function registerPlaylist(content: string, number: string): string {
+  const { source, array } = parseRegistry(content);
+  const newline = content.includes("\r\n") ? "\r\n" : "\n";
+  const identifiers = new Set<string>();
+  const collect = (node: ts.Node): void => {
+    if (ts.isIdentifier(node)) identifiers.add(node.text);
+    ts.forEachChild(node, collect);
+  };
+  collect(source);
+  let identifier = `playlist${number}`;
+  while (identifiers.has(identifier)) identifier = `_${identifier}`;
+  const last = array.elements.at(-1);
+  let entryAt: number;
+  let entry: string;
+  if (last) {
+    const comma = commaBetween(content, last.end, array.end - 1);
+    entryAt = comma === null ? last.end : comma + 1;
+    const lineStart = content.lastIndexOf("\n", last.getStart(source) - 1) + 1;
+    const indent = /^[\t ]*/.exec(content.slice(lineStart, last.getStart(source)))![0] || "  ";
+    entry = `${comma === null ? "," : ""}${newline}${indent}${identifier}${comma === null ? "" : ","}`;
+  } else {
+    entryAt = array.getStart(source) + 1;
+    entry = `${newline}  ${identifier},${newline}`;
+  }
+  const lastImport = source.statements.filter(ts.isImportDeclaration).at(-1);
+  const lineEnd = lastImport ? content.indexOf("\n", lastImport.end) : -1;
+  const importAt = lastImport ? (lineEnd === -1 ? content.length : lineEnd + 1) : source.statements[0]?.getStart(source) ?? content.length;
+  const importText = `${lastImport && lineEnd === -1 ? newline : ""}import ${identifier} from ${JSON.stringify(number === "1" ? "./default.js" : `./playlist-${number}.js`)};${newline}`;
+  for (const insertion of [{ at: entryAt, text: entry }, { at: importAt, text: importText }].sort((a, b) => b.at - a.at)) {
+    content = content.slice(0, insertion.at) + insertion.text + content.slice(insertion.at);
+  }
+  if (!parseRegistry(content).numbers.includes(number)) throw new CatalogError("The new playlist registration could not be verified.");
+  return content;
+}
+
+function songList(playlists: readonly PlaylistRevision[]): string {
+  return playlists.flatMap((playlist) => [
+    `# ${playlist.number}. ${playlist.name}`,
+    ...playlist.tracks.map((path, index) => `${index + 1}. ${path.startsWith("/home/cdxker/Music/Ricky/") ? path.slice("/home/cdxker/Music/Ricky/".length) : path}`),
+  ]).join("\n\n") + "\n";
 }
 
 function commaBetween(content: string, start: number, end: number): number | null {
@@ -206,14 +302,34 @@ export class PlaylistCatalog {
     this.#songListPath = options.songListPath ?? fileURLToPath(new URL("../../song-list.txt", import.meta.url));
     for (const playlist of this.#mirrors) {
       let tracks = playlist.tracks;
+      let name = playlist.name;
       try {
         // Runtime edits remain authoritative across restarts before the next build.
-        tracks = parsePlaylist(readFileSync(this.sourcePath(playlist.number), "utf8"), playlist.number).tracks;
+        const parsed = parsePlaylist(readFileSync(this.sourcePath(playlist.number), "utf8"), playlist.number);
+        tracks = parsed.tracks;
+        name = parsed.name ?? name;
       } catch {
         // Source-less installs can still play their compiled playlists. Mutations
         // must subsequently validate the actual source before changing anything.
       }
-      this.publish(makeRevision({ ...playlist, tracks }));
+      this.publish(makeRevision({ ...playlist, name, tracks }));
+    }
+    try {
+      // A running compiled server can create modules its build does not yet import.
+      const registry = parseRegistry(readFileSync(join(this.#sourceDir, "index.ts"), "utf8"));
+      for (const number of registry.numbers) {
+        if (this.#current.has(number)) continue;
+        try {
+          const parsed = parsePlaylist(readFileSync(this.sourcePath(number), "utf8"), number);
+          if (parsed.name?.trim() && parsed.tracks.length) {
+            this.publish(makeRevision({ number, name: parsed.name, tracks: parsed.tracks }));
+          }
+        } catch {
+          // An incomplete external edit must not prevent existing stations playing.
+        }
+      }
+    } catch {
+      // Source-less installs retain the compiled registry.
     }
   }
 
@@ -242,6 +358,19 @@ export class PlaylistCatalog {
     return operation;
   }
 
+  public create(change: PlaylistCreation, signal?: AbortSignal): Promise<PlaylistRevision> {
+    const operation = this.#pending.then(async () => {
+      try {
+        return await this.applyCreation(change, signal);
+      } catch (error) {
+        if (error instanceof CatalogError) throw error;
+        throw new CatalogError("The playlist could not be created. No playlists were added.");
+      }
+    });
+    this.#pending = operation.then(() => undefined, () => undefined);
+    return operation;
+  }
+
   private sourcePath(number: string): string {
     if (!/^[1-9]\d*$/.test(number)) throw new CatalogError("That playlist does not exist.");
     return join(this.#sourceDir, number === "1" ? "default.ts" : `playlist-${number}.ts`);
@@ -256,8 +385,66 @@ export class PlaylistCatalog {
     history.set(revision.revision, canonical);
     this.#revisions.set(revision.number, history);
     const mirror = this.#mirrors.find((playlist) => playlist.number === revision.number);
-    if (mirror) mirror.tracks.splice(0, mirror.tracks.length, ...canonical.tracks);
+    if (mirror) {
+      mirror.name = canonical.name;
+      mirror.tracks.splice(0, mirror.tracks.length, ...canonical.tracks);
+    } else {
+      this.#mirrors.push({ number: canonical.number, name: canonical.name, tracks: [...canonical.tracks] });
+    }
     return canonical;
+  }
+
+  private async applyCreation(change: PlaylistCreation, signal?: AbortSignal): Promise<PlaylistRevision> {
+    if (this.#needsRepair) throw new CatalogError("An operator must check the playlist files before more changes.");
+    checkAbort(signal);
+    const name = change.name.trim();
+    if (!name || name.length > 120 || /[\u0000-\u001f\u007f]/.test(name)) {
+      throw new CatalogError("Choose a playlist name of 1 to 120 characters on one line.");
+    }
+    if (this.list().some((playlist) => playlist.name.trim().toLowerCase() === name.toLowerCase())) {
+      throw new CatalogError("A playlist with that name already exists. Choose it or use a different name.");
+    }
+    if (!change.filePath || !isAbsolute(change.filePath) || !change.filePath.toLowerCase().endsWith(".mp3")) {
+      throw new CatalogError("Choose a downloaded MP3 song to start the playlist.");
+    }
+    if (!(await stat(change.filePath)).isFile()) throw new CatalogError("That downloaded song is unavailable.");
+    const registryPath = join(this.#sourceDir, "index.ts");
+    const originalRegistry = await readFile(registryPath, "utf8");
+    const registry = parseRegistry(originalRegistry);
+    if (registry.numbers.length !== this.#current.size || registry.numbers.some((number) => !this.#current.has(number))) {
+      throw new CatalogError("The playlist registry was edited outside the agent. Reload the catalog before trying again.");
+    }
+    for (const playlist of this.list()) {
+      const parsed = parsePlaylist(await readFile(this.sourcePath(playlist.number), "utf8"), playlist.number);
+      if (!sameTracks(parsed.tracks, playlist.tracks) || (parsed.name !== undefined && parsed.name !== playlist.name)) {
+        throw new CatalogError("A playlist was edited outside the agent. Reload the catalog before trying again.");
+      }
+    }
+    const unavailable = new Set([...registry.importedNumbers, ...this.#current.keys(), ...(change.reservedNumbers ?? []), "99"]);
+    for (const file of await readdir(this.#sourceDir)) {
+      const number = file === "default.ts" ? "1" : /^playlist-([1-9]\d*)\.ts$/.exec(file)?.[1];
+      if (number) unavailable.add(number);
+    }
+    let number = change.number;
+    if (number !== undefined) {
+      if (!/^[1-9]\d?$/.test(number) || Number(number) > 98) {
+        throw new CatalogError("Choose a playlist number from 1 to 98. Number 99 is reserved for the agent.");
+      }
+      if (unavailable.has(number)) throw new CatalogError("That number is already used by a playlist or another dial destination.");
+    } else {
+      number = Array.from({ length: 98 }, (_, index) => String(index + 1)).find((candidate) => !unavailable.has(candidate));
+      if (!number) throw new CatalogError("There are no available playlist numbers from 1 to 98.");
+    }
+    const next = makeRevision({ number, name, tracks: [change.filePath] });
+    const newSource = `import type { Playlist } from "./index.js";\n\nconst playlist = {\n  number: ${JSON.stringify(number)},\n  name: ${JSON.stringify(name)},\n  tracks: [\n    ${JSON.stringify(change.filePath)},\n  ],\n} satisfies Playlist;\n\nexport default playlist;\n`;
+    const updatedRegistry = registerPlaylist(originalRegistry, number);
+    const changes: FileChange[] = [
+      { path: this.sourcePath(number), before: null, after: newSource },
+      { path: registryPath, before: originalRegistry, after: updatedRegistry },
+      { path: this.#songListPath, before: await this.readOptional(this.#songListPath), after: songList([...this.list(), next]) },
+    ];
+    await this.writeTransaction(changes, signal);
+    return this.publish(next);
   }
 
   private async applyMutation(change: PlaylistMutation, signal?: AbortSignal): Promise<PlaylistMutationResult> {
@@ -350,13 +537,9 @@ export class PlaylistCatalog {
       if (before !== after) fileChanges.push({ path: this.sourcePath(playlist.number), before, after });
     }
     const nextByNumber = new Map(next.map((playlist) => [playlist.number, playlist]));
-    const songList = this.list().flatMap((playlist) => {
-      const current = nextByNumber.get(playlist.number) ?? playlist;
-      return [`# ${current.number}. ${current.name}`, ...current.tracks.map((path, index) =>
-        `${index + 1}. ${path.startsWith("/home/cdxker/Music/Ricky/") ? path.slice("/home/cdxker/Music/Ricky/".length) : path}`)];
-    }).join("\n\n") + "\n";
+    const nextSongList = songList(this.list().map((playlist) => nextByNumber.get(playlist.number) ?? playlist));
     const oldSongList = await this.readOptional(this.#songListPath);
-    if (oldSongList !== songList) fileChanges.push({ path: this.#songListPath, before: oldSongList, after: songList });
+    if (oldSongList !== nextSongList) fileChanges.push({ path: this.#songListPath, before: oldSongList, after: nextSongList });
     await this.writeTransaction(fileChanges, signal);
     // No await between the successful transaction and publishing all revisions.
     const published = next.map((revision) => this.publish(revision));
