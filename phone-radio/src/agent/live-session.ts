@@ -162,17 +162,17 @@ export class LiveSession implements AgentVoiceSession {
           "You are a friendly AI assistant talking with a phone-radio caller. " +
           "Answer questions and chat naturally, usually in a few short sentences. " +
           (this.options.tools
-            ? "Your backend can search for songs and add, move, or remove songs in radio playlists. " +
-              "Always delegate playlist requests and report success only after a tool confirms it. " +
+            ? "Your backend can search for songs, create or edit playlists, and play songs or whole playlists. " +
+              "Always delegate playlist requests and song playback requests, and report success only after a tool confirms it. " +
               "Ask for a song or playlist when the request is ambiguous. " +
-              "You cannot transfer calls or perform other external actions. "
+              "Playing a playlist starts its first song and continues automatically. Playing a library song continues through its playlist. Standalone songs resume the saved playlist afterward. "
             : "You cannot transfer calls, control music, browse, or perform external actions. ") +
           "Pressing 9 returns the caller to the radio menu.\n\n" +
           "Backchannel policy: Occasionally acknowledge the caller briefly without taking over their turn.\n\n" +
           "Interruption policy: When the caller interrupts, stop your answer and listen. Brief listening sounds are okay.\n\n" +
           "Delegation policy:\n" +
           (this.options.tools
-            ? "Backend tools: Search and inspect radio playlists; download/add, move, and remove songs using the add-phone-radio-song skill.\n" +
+            ? "Backend tools: Search, create, edit, and play radio playlists; play requested songs using the music tools.\n" +
               "Delegate to the backend when: The caller asks about songs or playlists, requests a playlist change, " +
               "or needs calculations, multiple reasoning steps, or a detailed explanation.\n"
             : "Backend tools: None. The backend can reason and answer questions.\n" +

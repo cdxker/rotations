@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentBridgeManager } from "../src/agent/bridge-manager.js";
-import { finishAgent, reserveAgent } from "../src/agent/runtime.js";
+import { finishAgent, handleSongTransferDigit, reserveAgent } from "../src/agent/runtime.js";
 import { voiceClient } from "../src/clients.js";
 import { agentConfig } from "../src/env.js";
 import { playlistService } from "../src/playlist.service.js";
@@ -39,6 +39,7 @@ vi.mock("../src/clients.js", () => ({
 }));
 
 vi.mock("../src/env.js", () => ({
+  discordDestinationRegistry: { getAll: () => [{ code: "50" }] },
   agentConfig: {
     enabled: true,
     apiKey: "provider-api-secret",
@@ -53,6 +54,10 @@ vi.mock("../src/playlist.service.js", () => ({
     getAgentSessionId: vi.fn(),
     resumePlayback: vi.fn(),
     transitionFromAgent: vi.fn(),
+    beginRequestedSong: vi.fn(),
+    finishRequestedSong: vi.fn(),
+    selectRequestedSong: vi.fn(),
+    restoreRequestedSongAgent: vi.fn(),
   },
 }));
 
@@ -88,9 +93,140 @@ beforeEach(() => {
     playlistName: "Saved playlist",
     catalogRevision: "saved-revision",
   });
+  vi.mocked(playlistService.beginRequestedSong).mockResolvedValue({ id: "request-1", filePath: "/music/request.mp3", fileSize: 100 });
+  vi.mocked(playlistService.selectRequestedSong).mockResolvedValue("song-menu");
 });
 
 describe("agent runtime", () => {
+  it("plays a requested song for its caller and releases Live only after transfer succeeds", async () => {
+    reserveAgent("call-1", "session-1", url);
+    options().createSession({ uuid: "call-1", sessionId: "session-1", onAudio: vi.fn(), onFailure: vi.fn() });
+    const toolOptions = mocks.playlistTools.mock.calls[0][0];
+    expect(toolOptions.reservedPlaylistNumbers).toEqual(["50"]);
+    const transfer = deferred<any>();
+    vi.mocked(voiceClient.transferCallWithNCCO).mockReturnValueOnce(transfer.promise);
+    const signal = new AbortController().signal;
+    const playing = toolOptions.playSong("/music/request.mp3", "Requested song", signal);
+    await vi.waitFor(() => expect(voiceClient.transferCallWithNCCO).toHaveBeenCalledOnce());
+    expect(playlistService.beginRequestedSong).toHaveBeenCalledWith("call-1", "session-1", "/music/request.mp3", signal);
+    expect(mocks.manager.release).not.toHaveBeenCalled();
+    expect(voiceClient.transferCallWithNCCO).toHaveBeenCalledWith("call-1", expect.arrayContaining([
+      { action: "talk", text: "Playing Requested song." },
+      expect.objectContaining({ action: "stream", streamUrl: [expect.stringContaining("/requested-song/call-1/request-1?secret=")] }),
+    ]));
+    transfer.resolve({});
+    await playing;
+    expect(mocks.manager.release).toHaveBeenCalledExactlyOnceWith("call-1", "session-1");
+    expect(playlistService.finishRequestedSong).not.toHaveBeenCalled();
+  });
+
+  it("keeps a library song's playlist position for automatic continuation", async () => {
+    reserveAgent("call-1", "session-1", url);
+    options().createSession({ uuid: "call-1", sessionId: "session-1", onAudio: vi.fn(), onFailure: vi.fn() });
+    const signal = new AbortController().signal;
+    const position = { playlistNumber: "22", trackIndex: 4, catalogRevision: "revision-22" };
+
+    await mocks.playlistTools.mock.calls[0][0].playSong(
+      "/music/request.mp3",
+      "Requested song",
+      signal,
+      position,
+    );
+
+    expect(playlistService.beginRequestedSong).toHaveBeenCalledWith(
+      "call-1",
+      "session-1",
+      "/music/request.mp3",
+      signal,
+      position,
+    );
+  });
+
+  it.each([true, false])("recovers a rejected song transfer only if its request still owns playback (%s)", async current => {
+    reserveAgent("call-1", "session-1", url);
+    options().createSession({ uuid: "call-1", sessionId: "session-1", onAudio: vi.fn(), onFailure: vi.fn() });
+    vi.mocked(voiceClient.transferCallWithNCCO).mockRejectedValueOnce(new Error("provider failure"));
+    vi.mocked(playlistService.restoreRequestedSongAgent).mockResolvedValue(current);
+    await expect(mocks.playlistTools.mock.calls[0][0].playSong("/music/request.mp3", "Song", new AbortController().signal)).rejects.toThrow("could not be played");
+    expect(playlistService.restoreRequestedSongAgent).toHaveBeenCalledExactlyOnceWith("call-1", "request-1", "session-1");
+    expect(voiceClient.transferCallWithNCCO).toHaveBeenCalledOnce();
+    expect(mocks.manager.release).toHaveBeenCalledTimes(current ? 0 : 1);
+  });
+
+  it.each(["websocket", "http"])("honors %s digit nine during a song transfer after that transfer settles", async transport => {
+    reserveAgent("call-1", "session-1", url);
+    options().createSession({ uuid: "call-1", sessionId: "session-1", onAudio: vi.fn(), onFailure: vi.fn() });
+    const transfer = deferred<any>();
+    vi.mocked(voiceClient.transferCallWithNCCO).mockReturnValueOnce(transfer.promise);
+    const controller = new AbortController();
+    const playing = mocks.playlistTools.mock.calls[0][0].playSong("/music/request.mp3", "Song", controller.signal);
+    await vi.waitFor(() => expect(voiceClient.transferCallWithNCCO).toHaveBeenCalledOnce());
+    controller.abort(); // Bridge shutdown cancels the Live tools before onExit.
+    if (transport === "http") options().onClosed?.("call-1", "session-1");
+    const leaving = transport === "websocket" ? options().onExit("call-1", "session-1") : handleSongTransferDigit("call-1", "9");
+    expect(playlistService.selectRequestedSong).not.toHaveBeenCalled();
+    transfer.resolve({});
+    await Promise.all([playing, leaving]);
+    expect(playlistService.selectRequestedSong).toHaveBeenCalledExactlyOnceWith("call-1", "request-1");
+    expect(voiceClient.transferCallWithNCCO).toHaveBeenLastCalledWith("call-1", expect.arrayContaining([
+      expect.objectContaining({ action: "input", eventUrl: [`${url}/input/playlist?uuid=call-1&selectorId=song-menu`] }),
+    ]));
+    expect(playlistService.finishRequestedSong).not.toHaveBeenCalled();
+  });
+
+  it("opens the menu when nine arrives during restoration after a rejected transfer", async () => {
+    reserveAgent("call-1", "session-1", url);
+    options().createSession({ uuid: "call-1", sessionId: "session-1", onAudio: vi.fn(), onFailure: vi.fn() });
+    vi.mocked(voiceClient.transferCallWithNCCO).mockRejectedValueOnce(new Error("failed"));
+    const restored = deferred<boolean>();
+    vi.mocked(playlistService.restoreRequestedSongAgent).mockReturnValueOnce(restored.promise);
+    const playing = mocks.playlistTools.mock.calls[0][0].playSong("/music/request.mp3", "Song", new AbortController().signal);
+    const rejected = expect(playing).rejects.toThrow("could not be played");
+    await vi.waitFor(() => expect(playlistService.restoreRequestedSongAgent).toHaveBeenCalledOnce());
+    const leaving = handleSongTransferDigit("call-1", "9");
+    restored.resolve(true);
+    await Promise.all([rejected, leaving]);
+    expect(playlistService.transitionFromAgent).toHaveBeenCalledExactlyOnceWith("call-1", "session-1", "selecting-playlist");
+    expect(playlistService.selectRequestedSong).not.toHaveBeenCalled();
+    expect(voiceClient.transferCallWithNCCO).toHaveBeenLastCalledWith("call-1", expect.arrayContaining([
+      expect.objectContaining({ action: "input", eventUrl: [`${url}/input/playlist?uuid=call-1&selectorId=selector-1`] }),
+    ]));
+  });
+
+  it("settles a rejected transfer before recovering a failed Live connection", async () => {
+    reserveAgent("call-1", "session-1", url);
+    options().createSession({ uuid: "call-1", sessionId: "session-1", onAudio: vi.fn(), onFailure: vi.fn() });
+    let reject!: (error: Error) => void;
+    vi.mocked(voiceClient.transferCallWithNCCO).mockReturnValueOnce(new Promise((_resolve, fail) => { reject = fail; }));
+    vi.mocked(playlistService.restoreRequestedSongAgent).mockResolvedValue(true);
+    const playing = mocks.playlistTools.mock.calls[0][0].playSong("/music/request.mp3", "Song", new AbortController().signal);
+    const rejected = expect(playing).rejects.toThrow("could not be played");
+    await vi.waitFor(() => expect(voiceClient.transferCallWithNCCO).toHaveBeenCalledOnce());
+    const failed = options().onFailure("call-1", "session-1", "provider closed");
+    expect(playlistService.transitionFromAgent).not.toHaveBeenCalled();
+    reject(new Error("transfer rejected"));
+    await Promise.all([rejected, failed]);
+    expect(playlistService.restoreRequestedSongAgent).toHaveBeenCalledExactlyOnceWith("call-1", "request-1", "session-1");
+    expect(playlistService.transitionFromAgent).toHaveBeenCalledExactlyOnceWith("call-1", "session-1", "playing");
+    expect(voiceClient.transferCallWithNCCO).toHaveBeenLastCalledWith("call-1", expect.arrayContaining([
+      expect.objectContaining({ action: "stream", streamUrl: [`${url}/track/22/3?secret=vonage-test-secret&catalogRevision=saved-revision`] }),
+    ]));
+  });
+
+  it("leaves stale or cancelled song requests alone", async () => {
+    reserveAgent("call-1", "session-1", url);
+    options().createSession({ uuid: "call-1", sessionId: "session-1", onAudio: vi.fn(), onFailure: vi.fn() });
+    const playSong = mocks.playlistTools.mock.calls[0][0].playSong;
+    vi.mocked(playlistService.beginRequestedSong).mockResolvedValue(null);
+    await expect(playSong("/music/request.mp3", "Song", new AbortController().signal)).rejects.toThrow();
+    const controller = new AbortController();
+    controller.abort();
+    await expect(playSong("/music/request.mp3", "Song", controller.signal)).rejects.toThrow();
+    expect(playlistService.beginRequestedSong).toHaveBeenCalledTimes(1);
+    expect(voiceClient.transferCallWithNCCO).not.toHaveBeenCalled();
+    expect(mocks.manager.release).not.toHaveBeenCalled();
+  });
+
   it("claims the exit before transport cleanup or transferring to a fresh menu", async () => {
     reserveAgent("call-1", "session-1", url);
     const transition = deferred<string | null>();

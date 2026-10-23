@@ -2,6 +2,7 @@ import { redisClient } from "./clients.js";
 import Redis, { type ChainableCommander } from "ioredis";
 import { stat } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { extname, isAbsolute } from "node:path";
 import {
   DEFAULT_PLAYLIST_NUMBER,
 } from "./playlists/index.js";
@@ -10,6 +11,14 @@ import { playlistCatalog, type PlaylistRevision } from "./playlists/catalog.js";
 export type Track = {
   filePath: string;
   fileSize: number;
+};
+
+export type RequestedSong = Track & { id: string };
+
+export type RequestedSongPosition = {
+  playlistNumber: string;
+  trackIndex: number;
+  catalogRevision: string;
 };
 
 export type PlaylistTrack = Track & {
@@ -25,12 +34,72 @@ type ListenerTrackState = {
   storedRevision: string | null;
 };
 
-export type ListenerMode = "playing" | "selecting-playlist" | "discord" | "agent";
+export type ListenerMode = "playing" | "selecting-playlist" | "discord" | "agent" | "requested-song";
 
 const PLAYBACK_MODE = "playing";
 const PLAYLIST_SELECTION_MODE = "selecting-playlist";
 const DISCORD_MODE = "discord";
 const AGENT_MODE = "agent";
+const REQUESTED_SONG_MODE = "requested-song";
+
+const BEGIN_REQUESTED_SONG_SCRIPT = `
+if redis.call("GET", KEYS[1]) ~= ARGV[1]
+  or redis.call("GET", KEYS[2]) ~= ARGV[2] then
+  return 0
+end
+
+redis.call("SET", KEYS[1], ARGV[3])
+redis.call("SET", KEYS[3], ARGV[4], "EX", 86400)
+redis.call("SET", KEYS[4], ARGV[5], "EX", 86400)
+if ARGV[6] ~= "" then
+  redis.call("SET", KEYS[7], ARGV[6], "EX", 86400)
+else
+  redis.call("DEL", KEYS[7])
+end
+redis.call("DEL", KEYS[2], KEYS[5], KEYS[6])
+return 1
+`;
+
+const FINISH_REQUESTED_SONG_SCRIPT = `
+if redis.call("GET", KEYS[1]) ~= ARGV[1]
+  or redis.call("GET", KEYS[2]) ~= ARGV[2]
+  or (redis.call("GET", KEYS[4]) or "") ~= ARGV[4] then
+  return 0
+end
+
+redis.call("SET", KEYS[1], ARGV[3])
+if ARGV[5] ~= "" then
+  redis.call("SET", KEYS[5], ARGV[5])
+  redis.call("SET", KEYS[6], ARGV[6])
+  redis.call("SET", KEYS[7], ARGV[7])
+end
+redis.call("DEL", KEYS[2], KEYS[3], KEYS[4])
+return 1
+`;
+
+const SELECT_AFTER_REQUESTED_SONG_SCRIPT = `
+if redis.call("GET", KEYS[1]) ~= ARGV[1]
+  or redis.call("GET", KEYS[2]) ~= ARGV[2] then
+  return 0
+end
+
+redis.call("SET", KEYS[1], ARGV[3])
+redis.call("SET", KEYS[4], ARGV[4])
+redis.call("DEL", KEYS[2], KEYS[3], KEYS[5])
+return 1
+`;
+
+const RESTORE_REQUESTED_SONG_AGENT_SCRIPT = `
+if redis.call("GET", KEYS[1]) ~= ARGV[1]
+  or redis.call("GET", KEYS[2]) ~= ARGV[2] then
+  return 0
+end
+
+redis.call("SET", KEYS[1], ARGV[3])
+redis.call("SET", KEYS[4], ARGV[4])
+redis.call("DEL", KEYS[2], KEYS[3], KEYS[5])
+return 1
+`;
 
 const RETURN_TO_PLAYBACK_IF_DISCORD_SCRIPT = `
 if redis.call("GET", KEYS[1]) ~= ARGV[1] then
@@ -39,7 +108,7 @@ end
 
 redis.call("SET", KEYS[1], ARGV[2])
 redis.call("DEL", KEYS[2])
-redis.call("DEL", KEYS[3], KEYS[4])
+redis.call("DEL", KEYS[3], KEYS[4], KEYS[5], KEYS[6], KEYS[7])
 return 1
 `;
 
@@ -60,7 +129,7 @@ if redis.call("GET", KEYS[1]) ~= ARGV[1]
 end
 
 redis.call("SET", KEYS[1], ARGV[3])
-redis.call("DEL", KEYS[2], KEYS[3], KEYS[4])
+redis.call("DEL", KEYS[2], KEYS[3], KEYS[4], KEYS[5], KEYS[6], KEYS[7])
 if ARGV[3] == ARGV[5] then
   redis.call("SET", KEYS[3], ARGV[4])
   return ARGV[4]
@@ -81,7 +150,7 @@ redis.call("SET", KEYS[1], ARGV[1])
 redis.call("SET", KEYS[2], ARGV[2])
 redis.call("SET", KEYS[3], ARGV[4])
 redis.call("SET", KEYS[7], ARGV[7])
-redis.call("DEL", KEYS[4], KEYS[5], KEYS[6])
+redis.call("DEL", KEYS[4], KEYS[5], KEYS[6], KEYS[8], KEYS[9], KEYS[10])
 return 1
 `;
 
@@ -99,7 +168,8 @@ class PlaylistService {
         .set(this.revisionKey(uuid), playlist.revision)
         .set(`listener:${uuid}:mode`, PLAYBACK_MODE)
         .del(this.discordDestinationKey(uuid))
-        .del(this.selectorKey(uuid), this.agentSessionKey(uuid)),
+        .del(this.selectorKey(uuid), this.agentSessionKey(uuid))
+        .del(this.requestedSongKey(uuid), this.requestedSongPathKey(uuid), this.requestedSongContinuationKey(uuid)),
     );
   }
 
@@ -111,7 +181,8 @@ class PlaylistService {
         .set(this.modeKey(uuid), PLAYLIST_SELECTION_MODE)
         .set(this.selectorKey(uuid), selectorId)
         .del(this.discordDestinationKey(uuid))
-        .del(this.agentSessionKey(uuid)),
+        .del(this.agentSessionKey(uuid))
+        .del(this.requestedSongKey(uuid), this.requestedSongPathKey(uuid), this.requestedSongContinuationKey(uuid)),
     );
 
     return selectorId;
@@ -143,7 +214,8 @@ class PlaylistService {
         .multi()
         .set(this.modeKey(uuid), PLAYBACK_MODE)
         .del(this.discordDestinationKey(uuid))
-        .del(this.selectorKey(uuid), this.agentSessionKey(uuid)),
+        .del(this.selectorKey(uuid), this.agentSessionKey(uuid))
+        .del(this.requestedSongKey(uuid), this.requestedSongPathKey(uuid), this.requestedSongContinuationKey(uuid)),
     );
   }
 
@@ -154,7 +226,8 @@ class PlaylistService {
         .set(this.modeKey(uuid), AGENT_MODE)
         .set(this.agentSessionKey(uuid), sessionId)
         .del(this.discordDestinationKey(uuid))
-        .del(this.selectorKey(uuid)),
+        .del(this.selectorKey(uuid))
+        .del(this.requestedSongKey(uuid), this.requestedSongPathKey(uuid), this.requestedSongContinuationKey(uuid)),
     );
   }
 
@@ -169,11 +242,14 @@ class PlaylistService {
   ): Promise<string | null> {
     const result = await this.redisClient.eval(
       TRANSITION_FROM_AGENT_SCRIPT,
-      4,
+      7,
       this.modeKey(uuid),
       this.agentSessionKey(uuid),
       this.selectorKey(uuid),
       this.discordDestinationKey(uuid),
+      this.requestedSongKey(uuid),
+      this.requestedSongPathKey(uuid),
+      this.requestedSongContinuationKey(uuid),
       AGENT_MODE,
       sessionId,
       nextMode,
@@ -182,6 +258,156 @@ class PlaylistService {
     );
 
     return typeof result === "string" ? result : null;
+  }
+
+  public async beginRequestedSong(
+    uuid: string,
+    sessionId: string,
+    filePath: string,
+    signal?: AbortSignal,
+    position?: RequestedSongPosition,
+  ): Promise<RequestedSong | null> {
+    const track = await this.getRequestedSongFile(filePath);
+    signal?.throwIfAborted();
+    if (!track || !sessionId) return null;
+
+    let continuation = "";
+    if (position) {
+      const playlist = this.getPlaylistByNumber(
+        position.playlistNumber,
+        position.catalogRevision,
+      );
+      if (
+        !playlist ||
+        playlist.tracks[position.trackIndex] !== track.filePath ||
+        !playlist.songIds[position.trackIndex]
+      ) {
+        return null;
+      }
+      continuation = JSON.stringify(position);
+    }
+
+    const id = randomUUID();
+    const changed = await this.redisClient.eval(
+      BEGIN_REQUESTED_SONG_SCRIPT,
+      7,
+      this.modeKey(uuid),
+      this.agentSessionKey(uuid),
+      this.requestedSongKey(uuid),
+      this.requestedSongPathKey(uuid),
+      this.selectorKey(uuid),
+      this.discordDestinationKey(uuid),
+      this.requestedSongContinuationKey(uuid),
+      AGENT_MODE,
+      sessionId,
+      REQUESTED_SONG_MODE,
+      id,
+      track.filePath,
+      continuation,
+    );
+    return changed === 1 ? { ...track, id } : null;
+  }
+
+  public async getRequestedSong(uuid: string, id: string): Promise<Track | null> {
+    if (!id) return null;
+    const [mode, currentId, filePath] = await this.redisClient.mget(
+      this.modeKey(uuid),
+      this.requestedSongKey(uuid),
+      this.requestedSongPathKey(uuid),
+    );
+    if (mode !== REQUESTED_SONG_MODE || currentId !== id || !filePath) return null;
+
+    const track = await this.getRequestedSongFile(filePath);
+    if (!track) return null;
+    const [latestMode, latestId] = await this.redisClient.mget(
+      this.modeKey(uuid), this.requestedSongKey(uuid),
+    );
+    return latestMode === REQUESTED_SONG_MODE && latestId === id ? track : null;
+  }
+
+  public async finishRequestedSong(uuid: string, id: string): Promise<PlaylistTrack | null> {
+    if (!id) return null;
+    const continuation = await this.redisClient.get(
+      this.requestedSongContinuationKey(uuid),
+    ) ?? "";
+    let nextTrack: PlaylistTrack | null = null;
+    if (continuation) {
+      try {
+        const position = JSON.parse(continuation) as RequestedSongPosition;
+        const playlist = this.getPlaylistByNumber(
+          position.playlistNumber,
+          position.catalogRevision,
+        );
+        if (playlist && Number.isInteger(position.trackIndex)) {
+          nextTrack = await this.getAdjacentTrack(
+            { playlist, index: position.trackIndex, storedRevision: playlist.revision },
+            1,
+          );
+        }
+      } catch {
+        nextTrack = null;
+      }
+    }
+    const changed = await this.redisClient.eval(
+      FINISH_REQUESTED_SONG_SCRIPT,
+      7,
+      this.modeKey(uuid),
+      this.requestedSongKey(uuid),
+      this.requestedSongPathKey(uuid),
+      this.requestedSongContinuationKey(uuid),
+      this.playlistKey(uuid),
+      this.trackKey(uuid),
+      this.revisionKey(uuid),
+      REQUESTED_SONG_MODE,
+      id,
+      PLAYBACK_MODE,
+      continuation,
+      nextTrack?.playlistNumber ?? "",
+      nextTrack?.index.toString() ?? "",
+      nextTrack?.catalogRevision ?? "",
+    );
+    return changed === 1 ? nextTrack ?? this.getCurrentTrack(uuid) : null;
+  }
+
+  public async selectRequestedSong(uuid: string, id: string): Promise<string | null> {
+    if (!id) return null;
+    const selectorId = randomUUID();
+    const changed = await this.redisClient.eval(
+      SELECT_AFTER_REQUESTED_SONG_SCRIPT,
+      5,
+      this.modeKey(uuid),
+      this.requestedSongKey(uuid),
+      this.requestedSongPathKey(uuid),
+      this.selectorKey(uuid),
+      this.requestedSongContinuationKey(uuid),
+      REQUESTED_SONG_MODE,
+      id,
+      PLAYLIST_SELECTION_MODE,
+      selectorId,
+    );
+    return changed === 1 ? selectorId : null;
+  }
+
+  public async restoreRequestedSongAgent(
+    uuid: string,
+    id: string,
+    sessionId: string,
+  ): Promise<boolean> {
+    if (!id || !sessionId) return false;
+    const changed = await this.redisClient.eval(
+      RESTORE_REQUESTED_SONG_AGENT_SCRIPT,
+      5,
+      this.modeKey(uuid),
+      this.requestedSongKey(uuid),
+      this.requestedSongPathKey(uuid),
+      this.agentSessionKey(uuid),
+      this.requestedSongContinuationKey(uuid),
+      REQUESTED_SONG_MODE,
+      id,
+      AGENT_MODE,
+      sessionId,
+    );
+    return changed === 1;
   }
 
   public async beginDiscordBridge(
@@ -193,7 +419,8 @@ class PlaylistService {
         .multi()
         .set(this.discordDestinationKey(uuid), destinationCode)
         .set(this.modeKey(uuid), DISCORD_MODE)
-        .del(this.selectorKey(uuid), this.agentSessionKey(uuid)),
+        .del(this.selectorKey(uuid), this.agentSessionKey(uuid))
+        .del(this.requestedSongKey(uuid), this.requestedSongPathKey(uuid), this.requestedSongContinuationKey(uuid)),
     );
   }
 
@@ -203,7 +430,8 @@ class PlaylistService {
     if (
       storedMode === PLAYLIST_SELECTION_MODE ||
       storedMode === DISCORD_MODE ||
-      storedMode === AGENT_MODE
+      storedMode === AGENT_MODE ||
+      storedMode === REQUESTED_SONG_MODE
     ) {
       return storedMode;
     }
@@ -220,11 +448,14 @@ class PlaylistService {
   public async returnToPlaybackIfDiscord(uuid: string): Promise<boolean> {
     const result = await this.redisClient.eval(
       RETURN_TO_PLAYBACK_IF_DISCORD_SCRIPT,
-      4,
+      7,
       this.modeKey(uuid),
       this.discordDestinationKey(uuid),
       this.selectorKey(uuid),
       this.agentSessionKey(uuid),
+      this.requestedSongKey(uuid),
+      this.requestedSongPathKey(uuid),
+      this.requestedSongContinuationKey(uuid),
       DISCORD_MODE,
       PLAYBACK_MODE,
     );
@@ -309,7 +540,7 @@ class PlaylistService {
     try {
       const committed = await this.redisClient.eval(
         ADVANCE_FINISHED_TRACK_SCRIPT,
-        7,
+        10,
         this.modeKey(uuid),
         this.playlistKey(uuid),
         this.trackKey(uuid),
@@ -317,6 +548,9 @@ class PlaylistService {
         this.selectorKey(uuid),
         this.agentSessionKey(uuid),
         this.revisionKey(uuid),
+        this.requestedSongKey(uuid),
+        this.requestedSongPathKey(uuid),
+        this.requestedSongContinuationKey(uuid),
         PLAYBACK_MODE,
         currentState.playlist.number,
         completedSongIndex.toString(),
@@ -358,7 +592,8 @@ class PlaylistService {
           .set(this.revisionKey(uuid), playlist.revision)
           .set(this.modeKey(uuid), PLAYBACK_MODE)
           .del(this.discordDestinationKey(uuid))
-          .del(this.selectorKey(uuid), this.agentSessionKey(uuid)),
+          .del(this.selectorKey(uuid), this.agentSessionKey(uuid))
+          .del(this.requestedSongKey(uuid), this.requestedSongPathKey(uuid), this.requestedSongContinuationKey(uuid)),
       );
 
       return playlistTrack;
@@ -452,6 +687,28 @@ class PlaylistService {
 
   private agentSessionKey(uuid: string): string {
     return `listener:${uuid}:agent-session-id`;
+  }
+
+  private requestedSongKey(uuid: string): string {
+    return `listener:${uuid}:requested-song-id`;
+  }
+
+  private requestedSongPathKey(uuid: string): string {
+    return `listener:${uuid}:requested-song-path`;
+  }
+
+  private requestedSongContinuationKey(uuid: string): string {
+    return `listener:${uuid}:requested-song-continuation`;
+  }
+
+  private async getRequestedSongFile(filePath: string): Promise<Track | null> {
+    if (!isAbsolute(filePath) || extname(filePath).toLowerCase() !== ".mp3") return null;
+    try {
+      const file = await stat(filePath);
+      return file.isFile() && file.size > 0 ? { filePath, fileSize: file.size } : null;
+    } catch {
+      return null;
+    }
   }
 
   private async getCurrentState(
